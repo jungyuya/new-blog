@@ -1,0 +1,36 @@
+{
+  "version": "45.0.0",
+  "files": {
+    "92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c": {
+      "displayName": "HelloLambda/Code",
+      "source": {
+        "path": "asset.92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "786382940028-ap-northeast-2-43fab92f": {
+          "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+          "objectKey": "92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c.zip",
+          "region": "ap-northeast-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
+        }
+      }
+    },
+    "f16b0ce487a56e76f333f23b5ec948aebe2bb744f3969bdc9b5706ecc72e7645": {
+      "displayName": "BlogInfraStack Template",
+      "source": {
+        "path": "BlogInfraStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "786382940028-ap-northeast-2-b9784f35": {
+          "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+          "objectKey": "f16b0ce487a56e76f333f23b5ec948aebe2bb744f3969bdc9b5706ecc72e7645.json",
+          "region": "ap-northeast-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

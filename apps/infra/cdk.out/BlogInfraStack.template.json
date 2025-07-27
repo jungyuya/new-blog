@@ -1,0 +1,483 @@
+{
+ "Resources": {
+  "HelloLambdaServiceRoleE071F162": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/HelloLambda/ServiceRole/Resource"
+   }
+  },
+  "HelloLambda3D9C82D6": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+     "S3Key": "92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "production",
+      "MY_VARIABLE": "hello from cdk"
+     }
+    },
+    "FunctionName": "blog-hello-lambda",
+    "Handler": "index.handler",
+    "MemorySize": 128,
+    "Role": {
+     "Fn::GetAtt": [
+      "HelloLambdaServiceRoleE071F162",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs20.x",
+    "Timeout": 10
+   },
+   "DependsOn": [
+    "HelloLambdaServiceRoleE071F162"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/HelloLambda/Resource",
+    "aws:asset:path": "asset.92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "BlogApi17ECE3AB": {
+   "Type": "AWS::ApiGateway::RestApi",
+   "Properties": {
+    "Description": "API Gateway for Blog Backend",
+    "Name": "BlogService"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Resource"
+   }
+  },
+  "BlogApiCloudWatchRole66A88900": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "apigateway.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+       ]
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/CloudWatchRole/Resource"
+   }
+  },
+  "BlogApiAccountD776435D": {
+   "Type": "AWS::ApiGateway::Account",
+   "Properties": {
+    "CloudWatchRoleArn": {
+     "Fn::GetAtt": [
+      "BlogApiCloudWatchRole66A88900",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "BlogApi17ECE3AB"
+   ],
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Account"
+   }
+  },
+  "BlogApiDeploymentB3254DE312e23235f7780e6a57526bfbd071bb49": {
+   "Type": "AWS::ApiGateway::Deployment",
+   "Properties": {
+    "Description": "API Gateway for Blog Backend",
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "DependsOn": [
+    "BlogApihelloGET0036A32C",
+    "BlogApihelloOPTIONSD6940375",
+    "BlogApihelloF514243D",
+    "BlogApiOPTIONSDA3C7AF0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Deployment/Resource",
+    "aws:cdk:do-not-refactor": true
+   }
+  },
+  "BlogApiDeploymentStagedevA4FFDC89": {
+   "Type": "AWS::ApiGateway::Stage",
+   "Properties": {
+    "DeploymentId": {
+     "Ref": "BlogApiDeploymentB3254DE312e23235f7780e6a57526bfbd071bb49"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    },
+    "StageName": "dev"
+   },
+   "DependsOn": [
+    "BlogApiAccountD776435D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/DeploymentStage.dev/Resource"
+   }
+  },
+  "BlogApiOPTIONSDA3C7AF0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Max-Age": "'86400'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Max-Age": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Fn::GetAtt": [
+      "BlogApi17ECE3AB",
+      "RootResourceId"
+     ]
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/OPTIONS/Resource"
+   }
+  },
+  "BlogApihelloF514243D": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "BlogApi17ECE3AB",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "hello",
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/Resource"
+   }
+  },
+  "BlogApihelloOPTIONSD6940375": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Max-Age": "'86400'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Max-Age": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "BlogApihelloF514243D"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/OPTIONS/Resource"
+   }
+  },
+  "BlogApihelloGETApiPermissionBlogInfraStackBlogApi78739CBCGEThello6A1452B0": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/GET/hello"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..hello"
+   }
+  },
+  "BlogApihelloGETApiPermissionTestBlogInfraStackBlogApi78739CBCGEThelloBC3CB090": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/GET/hello"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/GET/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.GET..hello"
+   }
+  },
+  "BlogApihelloGET0036A32C": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApihelloF514243D"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/GET/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/01Qy26DQAz8ltwXl5JKVY8kVW99iHwAchZDlscuwt6iCPHv1S5p09OMx9Z47Ayy9BnSHc6c6KpLenOG5SSoO4Uzl0uPw7nC0rqKWoaPCG/eajHOKoMDLIXrSR1rG3BVvC+RmYQhD6B4DwevO5IDMqnNDZZjbf9MjrX9omkwzMbZVeFoGhSa8QpLQSz5aKL7neZaO29FvdLYu+tAVoL6rzoJNjHSRgpi5ydNMcE7ycVVoXljv93bksjX9S7HM4KRsU2Y+fQyellV+Ai0/PCdpfD4Ak+7lo1JJm/FDATFhj9ZPQAXXgEAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "BlogApiEndpointAFF8BF23": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "BlogApi17ECE3AB"
+      },
+      ".execute-api.ap-northeast-2.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "ApiGatewayEndpoint": {
+   "Description": "The URL for the Hello Lambda API endpoint",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "BlogApi17ECE3AB"
+      },
+      ".execute-api.ap-northeast-2.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+      },
+      "/hello"
+     ]
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}
