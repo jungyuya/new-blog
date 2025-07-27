@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/f16b0ce487a56e76f333f23b5ec948aebe2bb744f3969bdc9b5706ecc72e7645.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/b56bb96d55ec12179cbc939fff74ba13634b23be25fbbf1a84ab83334cdb8974.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -44,7 +44,7 @@
               "new Bundling (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:3909)",
               "Function.bundle (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:1135)",
               "new NodejsFunction (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:2352)",
-              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:14:25)",
+              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:28:25)",
               "Object.<anonymous> (/home/jungyu/projects/new-blog/apps/infra/bin/infra.ts:16:1)",
               "Module._compile (node:internal/modules/cjs/loader:1529:14)",
               "Module.m._compile (/home/jungyu/projects/new-blog/node_modules/.pnpm/ts-node@10.9.2_@types+node@24.1.0_typescript@5.8.3/node_modules/ts-node/src/index.ts:1618:23)",
@@ -66,10 +66,30 @@
             ]
           }
         ],
+        "/BlogInfraStack/PostsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PostsTableC82B36F0"
+            }
+          }
+        ],
+        "/BlogInfraStack/PostsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PostsTableC82B36F0"
+          }
+        ],
         "/BlogInfraStack/HelloLambda/ServiceRole/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "HelloLambdaServiceRoleE071F162"
+          }
+        ],
+        "/BlogInfraStack/HelloLambda/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "HelloLambdaServiceRoleDefaultPolicyB69CB62C"
           }
         ],
         "/BlogInfraStack/HelloLambda/Resource": [
@@ -99,7 +119,7 @@
         "/BlogInfraStack/BlogApi/Deployment/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "BlogApiDeploymentB3254DE312e23235f7780e6a57526bfbd071bb49"
+            "data": "BlogApiDeploymentB3254DE33bc92d544fba40acabed792d110c5492"
           }
         ],
         "/BlogInfraStack/BlogApi/DeploymentStage.dev/Resource": [
@@ -148,6 +168,120 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "BlogApihelloGET0036A32C"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsC4C4C4BC"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsOPTIONSCF6C9BA3"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsGETApiPermissionBlogInfraStackBlogApi78739CBCGETposts265C8EB1"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/GET/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.GET..posts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsGETApiPermissionTestBlogInfraStackBlogApi78739CBCGETposts87C619ED"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsGETF3CCB1FA"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/POST/ApiPermission.BlogInfraStackBlogApi78739CBC.POST..posts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsPOSTApiPermissionBlogInfraStackBlogApi78739CBCPOSTposts359DDBDF"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/POST/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.POST..posts": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsPOSTApiPermissionTestBlogInfraStackBlogApi78739CBCPOSTposts6A25E998"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsPOST036ADAF0"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyFAA9D487"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyOPTIONS243C61AA"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyGETApiPermissionBlogInfraStackBlogApi78739CBCGETpostsproxy2C60264C"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.GET..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyGETApiPermissionTestBlogInfraStackBlogApi78739CBCGETpostsproxyD4B27F0E"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyGET6E68C572"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/ApiPermission.BlogInfraStackBlogApi78739CBC.PUT..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyPUTApiPermissionBlogInfraStackBlogApi78739CBCPUTpostsproxyF5DAA1E9"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.PUT..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyPUTApiPermissionTestBlogInfraStackBlogApi78739CBCPUTpostsproxy97B43264"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyPUTFC03A0C4"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/ApiPermission.BlogInfraStackBlogApi78739CBC.DELETE..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyDELETEApiPermissionBlogInfraStackBlogApi78739CBCDELETEpostsproxy519D7E29"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.DELETE..posts.{proxy+}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyDELETEApiPermissionTestBlogInfraStackBlogApi78739CBCDELETEpostsproxyE4373C24"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApipostsproxyDELETE8FB14243"
           }
         ],
         "/BlogInfraStack/ApiGatewayEndpoint": [

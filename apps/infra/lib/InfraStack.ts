@@ -1,13 +1,27 @@
 import { Stack, StackProps, Duration, CfnOutput } from 'aws-cdk-lib';
+import * as cdk from 'aws-cdk-lib'; // <-- 이 줄 추가!
 import { Construct } from 'constructs';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import * as path from 'path';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    // --- DynamoDB Table 정의 시작 ---
+    const postsTable = new dynamodb.Table(this, 'PostsTable', {
+      tableName: 'BlogPosts', // 테이블 이름 지정 (원하는 이름으로 변경 가능)
+      partitionKey: { // 파티션 키(Primary Key) 정의
+        name: 'postId', // 키 이름
+        type: dynamodb.AttributeType.STRING, // 키 타입 (문자열)
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // 개발 전용 (임시) => 스택 삭제시 테이블 전부 삭제됨.
+    });
+    // --- DynamoDB Table 정의 끝 ---
+
 
     // 1. Lambda 함수 정의
     // 백엔드 워크스페이스의 빌드 결과물(dist)을 Lambda 코드로 사용합니다.
@@ -21,15 +35,20 @@ export class InfraStack extends Stack {
       environment: { // 람다 환경 변수 (필요시 추가)
         NODE_ENV: 'production',
         MY_VARIABLE: 'hello from cdk',
+        TABLE_NAME: postsTable.tableName,
       },
       bundling: { // Lambda 함수 배포 시 종속성 번들링 설정
         externalModules: ['aws-sdk'], // AWS Lambda 런타임에 기본 포함된 aws-sdk는 번들링에서 제외하여 배포 크기 최적화
         forceDockerBundling: false, // 로컬 환경에 Docker가 없을 경우 false로 설정하여 로컬 Node.js로 번들링 시도
-                                   // Docker가 설치되어 있고 일관된 환경을 원하면 true
+        // Docker가 설치되어 있고 일관된 환경을 원하면 true
       },
       // 로그 그룹 생성 및 보존 기간 설정
-      // logRetention: RetentionDays.ONE_WEEK, // CloudWatch Logs 보존 기간 (선택 사항)
+      // logRetention: RetentionDays.ONE_WEEK, // CloudWatch Logs 보존 기간 
     });
+
+    // --- Lambda에 DynamoDB 권한 부여 시작 ---
+    postsTable.grantReadWriteData(helloLambda); // <-- 이 줄 추가! Lambda에게 postsTable에 대한 읽기/쓰기 권한 부여
+    // --- Lambda에 DynamoDB 권한 부여 끝 ---
 
     // 2. API Gateway 정의
     // Lambda 함수를 HTTP 엔드포인트로 노출합니다.
@@ -51,6 +70,20 @@ export class InfraStack extends Stack {
     // "/hello" 경로로 들어오는 GET 요청을 위에서 정의한 Lambda 함수와 연결합니다.
     const helloResource = api.root.addResource('hello'); // /hello 경로 추가
     helloResource.addMethod('GET', new LambdaIntegration(helloLambda)); // GET 메서드와 Lambda 통합
+
+    // --- 새롭게 추가되는 API Gateway 리소스 정의 시작 ---
+    const postsResource = api.root.addResource('posts'); // /posts 경로 생성
+    // 모든 HTTP 메서드 (GET, POST)를 posts 경로에 연결
+    postsResource.addMethod('GET', new LambdaIntegration(helloLambda)); // 모든 게시물 조회
+    postsResource.addMethod('POST', new LambdaIntegration(helloLambda)); // 새 게시물 생성
+
+    // /posts/{proxy+} 경로 생성: /{postId}와 같은 가변 경로를 처리하기 위함
+    const proxyResource = postsResource.addResource('{proxy+}');
+    // 모든 HTTP 메서드 (GET, PUT, DELETE)를 {proxy+} 경로에 연결
+    proxyResource.addMethod('GET', new LambdaIntegration(helloLambda));    // 특정 게시물 조회
+    proxyResource.addMethod('PUT', new LambdaIntegration(helloLambda));    // 특정 게시물 업데이트
+    proxyResource.addMethod('DELETE', new LambdaIntegration(helloLambda)); // 특정 게시물 삭제
+    // --- 새롭게 추가되는 API Gateway 리소스 정의 끝 ---
 
     // 4. 배포 후 API Gateway 엔드포인트 URL 출력
     // 배포가 완료되면 이 URL을 통해 Lambda 함수를 호출할 수 있습니다.

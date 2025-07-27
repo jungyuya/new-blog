@@ -1,5 +1,32 @@
 {
  "Resources": {
+  "PostsTableC82B36F0": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "postId",
+      "AttributeType": "S"
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "postId",
+      "KeyType": "HASH"
+     }
+    ],
+    "ProvisionedThroughput": {
+     "ReadCapacityUnits": 5,
+     "WriteCapacityUnits": 5
+    },
+    "TableName": "BlogPosts"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/PostsTable/Resource"
+   }
+  },
   "HelloLambdaServiceRoleE071F162": {
    "Type": "AWS::IAM::Role",
    "Properties": {
@@ -34,17 +61,67 @@
     "aws:cdk:path": "BlogInfraStack/HelloLambda/ServiceRole/Resource"
    }
   },
+  "HelloLambdaServiceRoleDefaultPolicyB69CB62C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PostsTableC82B36F0",
+          "Arn"
+         ]
+        },
+        {
+         "Ref": "AWS::NoValue"
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "HelloLambdaServiceRoleDefaultPolicyB69CB62C",
+    "Roles": [
+     {
+      "Ref": "HelloLambdaServiceRoleE071F162"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/HelloLambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
   "HelloLambda3D9C82D6": {
    "Type": "AWS::Lambda::Function",
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-     "S3Key": "92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c.zip"
+     "S3Key": "e336b7d5d81038aab66f2edc5133cfe73ba7c98f4e08b6b260db5b69c259d9bb.zip"
     },
     "Environment": {
      "Variables": {
       "NODE_ENV": "production",
-      "MY_VARIABLE": "hello from cdk"
+      "MY_VARIABLE": "hello from cdk",
+      "TABLE_NAME": {
+       "Ref": "PostsTableC82B36F0"
+      }
      }
     },
     "FunctionName": "blog-hello-lambda",
@@ -60,11 +137,12 @@
     "Timeout": 10
    },
    "DependsOn": [
+    "HelloLambdaServiceRoleDefaultPolicyB69CB62C",
     "HelloLambdaServiceRoleE071F162"
    ],
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/HelloLambda/Resource",
-    "aws:asset:path": "asset.92fc9a2d77792d15a2e21253630ef17d42d91ad882ddff918915e316f897541c",
+    "aws:asset:path": "asset.e336b7d5d81038aab66f2edc5133cfe73ba7c98f4e08b6b260db5b69c259d9bb",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -134,7 +212,7 @@
     "aws:cdk:path": "BlogInfraStack/BlogApi/Account"
    }
   },
-  "BlogApiDeploymentB3254DE312e23235f7780e6a57526bfbd071bb49": {
+  "BlogApiDeploymentB3254DE33bc92d544fba40acabed792d110c5492": {
    "Type": "AWS::ApiGateway::Deployment",
    "Properties": {
     "Description": "API Gateway for Blog Backend",
@@ -146,7 +224,16 @@
     "BlogApihelloGET0036A32C",
     "BlogApihelloOPTIONSD6940375",
     "BlogApihelloF514243D",
-    "BlogApiOPTIONSDA3C7AF0"
+    "BlogApiOPTIONSDA3C7AF0",
+    "BlogApipostsproxyDELETE8FB14243",
+    "BlogApipostsproxyGET6E68C572",
+    "BlogApipostsproxyOPTIONS243C61AA",
+    "BlogApipostsproxyPUTFC03A0C4",
+    "BlogApipostsproxyFAA9D487",
+    "BlogApipostsGETF3CCB1FA",
+    "BlogApipostsOPTIONSCF6C9BA3",
+    "BlogApipostsPOST036ADAF0",
+    "BlogApipostsC4C4C4BC"
    ],
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/BlogApi/Deployment/Resource",
@@ -157,7 +244,7 @@
    "Type": "AWS::ApiGateway::Stage",
    "Properties": {
     "DeploymentId": {
-     "Ref": "BlogApiDeploymentB3254DE312e23235f7780e6a57526bfbd071bb49"
+     "Ref": "BlogApiDeploymentB3254DE33bc92d544fba40acabed792d110c5492"
     },
     "RestApiId": {
      "Ref": "BlogApi17ECE3AB"
@@ -389,10 +476,668 @@
     "aws:cdk:path": "BlogInfraStack/BlogApi/Default/hello/GET/Resource"
    }
   },
+  "BlogApipostsC4C4C4BC": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "BlogApi17ECE3AB",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "posts",
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/Resource"
+   }
+  },
+  "BlogApipostsOPTIONSCF6C9BA3": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Max-Age": "'86400'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Max-Age": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "BlogApipostsC4C4C4BC"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/OPTIONS/Resource"
+   }
+  },
+  "BlogApipostsGETApiPermissionBlogInfraStackBlogApi78739CBCGETposts265C8EB1": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/GET/posts"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts"
+   }
+  },
+  "BlogApipostsGETApiPermissionTestBlogInfraStackBlogApi78739CBCGETposts87C619ED": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/GET/posts"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/GET/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.GET..posts"
+   }
+  },
+  "BlogApipostsGETF3CCB1FA": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApipostsC4C4C4BC"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/GET/Resource"
+   }
+  },
+  "BlogApipostsPOSTApiPermissionBlogInfraStackBlogApi78739CBCPOSTposts359DDBDF": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/POST/posts"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/POST/ApiPermission.BlogInfraStackBlogApi78739CBC.POST..posts"
+   }
+  },
+  "BlogApipostsPOSTApiPermissionTestBlogInfraStackBlogApi78739CBCPOSTposts6A25E998": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/POST/posts"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/POST/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.POST..posts"
+   }
+  },
+  "BlogApipostsPOST036ADAF0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApipostsC4C4C4BC"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/POST/Resource"
+   }
+  },
+  "BlogApipostsproxyFAA9D487": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "BlogApipostsC4C4C4BC"
+    },
+    "PathPart": "{proxy+}",
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/Resource"
+   }
+  },
+  "BlogApipostsproxyOPTIONS243C61AA": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        "method.response.header.Access-Control-Max-Age": "'86400'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Max-Age": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "BlogApipostsproxyFAA9D487"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/OPTIONS/Resource"
+   }
+  },
+  "BlogApipostsproxyGETApiPermissionBlogInfraStackBlogApi78739CBCGETpostsproxy2C60264C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/GET/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyGETApiPermissionTestBlogInfraStackBlogApi78739CBCGETpostsproxyD4B27F0E": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/GET/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.GET..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyGET6E68C572": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApipostsproxyFAA9D487"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/Resource"
+   }
+  },
+  "BlogApipostsproxyPUTApiPermissionBlogInfraStackBlogApi78739CBCPUTpostsproxyF5DAA1E9": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/PUT/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/ApiPermission.BlogInfraStackBlogApi78739CBC.PUT..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyPUTApiPermissionTestBlogInfraStackBlogApi78739CBCPUTpostsproxy97B43264": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/PUT/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.PUT..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyPUTFC03A0C4": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApipostsproxyFAA9D487"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/PUT/Resource"
+   }
+  },
+  "BlogApipostsproxyDELETEApiPermissionBlogInfraStackBlogApi78739CBCDELETEpostsproxy519D7E29": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/",
+       {
+        "Ref": "BlogApiDeploymentStagedevA4FFDC89"
+       },
+       "/DELETE/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/ApiPermission.BlogInfraStackBlogApi78739CBC.DELETE..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyDELETEApiPermissionTestBlogInfraStackBlogApi78739CBCDELETEpostsproxyE4373C24": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloLambda3D9C82D6",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogApi17ECE3AB"
+       },
+       "/test-invoke-stage/DELETE/posts/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.DELETE..posts.{proxy+}"
+   }
+  },
+  "BlogApipostsproxyDELETE8FB14243": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:ap-northeast-2:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "HelloLambda3D9C82D6",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "BlogApipostsproxyFAA9D487"
+    },
+    "RestApiId": {
+     "Ref": "BlogApi17ECE3AB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogApi/Default/posts/{proxy+}/DELETE/Resource"
+   }
+  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/01Qy26DQAz8ltwXl5JKVY8kVW99iHwAchZDlscuwt6iCPHv1S5p09OMx9Z47Ayy9BnSHc6c6KpLenOG5SSoO4Uzl0uPw7nC0rqKWoaPCG/eajHOKoMDLIXrSR1rG3BVvC+RmYQhD6B4DwevO5IDMqnNDZZjbf9MjrX9omkwzMbZVeFoGhSa8QpLQSz5aKL7neZaO29FvdLYu+tAVoL6rzoJNjHSRgpi5ydNMcE7ycVVoXljv93bksjX9S7HM4KRsU2Y+fQyellV+Ai0/PCdpfD4Ak+7lo1JJm/FDATFhj9ZPQAXXgEAAA=="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/02QTW+DMAyGf0vvwWN00rRj22m3fYjujkxwWfhIEHaGEOK/TwndutP72I5f28kgSx8h3eHEia7apDMlLGdB3SqcuFiq2WLvqhKWTyw7UqeLjbCqDvuywsK6ihqGtygv3moxziqDPSy52xqifrjO6DmEG62K9wUykzAcgijew9HrluSITFd7WE4X++cammnsDbNxdlU4mBqFJpxhyYnlMJg47oYHrZ23op5p6Nzck5WQ/RedBeu44wY5sfOjprjBK8mXq0LxSr/V65DI63pLxzOCkbF1ePPuZfCyqvBF0PDdd5bC/RM87Bo2Jhm9FdMT5Jv+ACEjrFCJAQAA"
    },
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/CDKMetadata/Default"
