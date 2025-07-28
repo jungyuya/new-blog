@@ -241,7 +241,7 @@ export class InfraStack extends Stack {
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       alarmDescription: 'DynamoDB PostsTable write throttled!',
-      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], //TODO: SNS Topic 생성 후 연결
     });
 
     // TODO: SNS Topic 정의 (알람을 받을 이메일 주소 연결)

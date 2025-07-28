@@ -60,19 +60,20 @@ jobs:
         run: npm install -g aws-cdk
 
       - name: Build Infra
-        run: pnpm --filter infra build # ⭐ 변경: --filter infra 유지, working-directory 제거
-        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
+        run: pnpm exec tsc # 또는 pnpm run build (apps/infra/package.json에 "build": "tsc"가 정의되어 있다면)
+        working-directory: ./apps/infra
 
       - name: CDK Diff (Optional but Recommended for Review)
-        run: pnpm --filter infra cdk diff # ⭐ 변경: --filter infra 유지, working-directory 제거
-        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
+        run: pnpm exec cdk diff
+        working-directory: ./apps/infra
 
       - name: CDK Deploy Infrastructure (with forced logging)
         run: |
           set -euxo pipefail
-          DEPLOY_LOG_FILE="apps/infra/cdk_deploy_output.log" # ⭐ 변경: 로그 파일 경로 수정 (루트 기준)
+          DEPLOY_LOG_FILE="cdk_deploy_output.log"
           
-          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter infra cdk deploy --require-approval never --outputs-file apps/infra/cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true # ⭐ 변경: outputs-file 경로 수정 (루트 기준)
+          # ⭐ 최종 변경: pnpm exec cdk deploy
+          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm exec cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true
           
           echo "--- CDK Deploy Output ---"
           cat "${DEPLOY_LOG_FILE}"
@@ -86,7 +87,7 @@ jobs:
             echo "CDK deploy command failed. Check the output above for errors."
             exit 1
           fi
-        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
+        working-directory: ./apps/infra
         env:
           GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
@@ -95,7 +96,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          path: apps/infra/cdk-outputs.json # ⭐ 이 경로는 계속 리포지토리 루트 기준
+          path: apps/infra/cdk-outputs.json
           if-no-files-found: warn
           compression-level: 6
           overwrite: false
