@@ -1,4 +1,4 @@
-# .github/workflows/backend-ci.yml (예시 - 실제 파일과 비교하며 확인)
+# .github/workflows/backend-ci.yml (최종 수정 제안)
 name: Backend CI (Build & Upload Lambda Artifact)
 
 on:
@@ -18,17 +18,21 @@ jobs:
       contents: read
     env:
       AWS_REGION: ap-northeast-2
-      # ⭐ 이 환경 변수 이름이 InfraStack에서 Lambda 코드를 참조할 때 사용되는 S3 버킷 이름과 일치해야 합니다.
-      # InfraStack에서 HelloLambda를 정의할 때 사용한 S3 버킷 이름/Ref와 일치하는지 확인.
-      # 여기서는 BlogInfraStack.ArtifactBucketName 출력 값을 참조해야 합니다.
-      # InfraStack에서 ArtifactBucketName을 출력하고 있으므로, 이 값을 CI에서 사용할 수 있도록 전달해야 합니다.
-      # 가장 좋은 방법은 CDK deploy 이후에 Infra CD 워크플로우에서 출력 값을 아티팩트로 저장하고,
-      # Backend CI 워크플로우에서 해당 아티팩트를 다운로드하여 ARTIFACT_BUCKET_NAME을 얻는 것입니다.
-      # 하지만 우선은 하드코딩된 이름을 사용하고 있다고 가정하고 진행합니다.
+      # Job 레벨에서 ARTIFACT_BUCKET_NAME을 올바르게 정의했습니다.
       ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} 
       
     steps:
-      # ... (생략: checkout, pnpm setup, node setup, install dependencies) ...
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --no-frozen-lockfile # CI에서는 lockfile이 변경될 수 있으므로 --no-frozen-lockfile 사용
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -38,24 +42,22 @@ jobs:
 
       - name: Build Lambda Code
         run: pnpm --filter backend build # backend 워크스페이스 빌드
-        # 이 빌드 스텝이 dist/src/index.js (또는 .zip) 같은 Lambda 아티팩트를 생성해야 합니다.
-        # 예: apps/backend/dist/lambda.zip 또는 apps/backend/dist/index.js
+
+      - name: Zip Lambda Artifact
+        working-directory: ./apps/backend # apps/backend 디렉토리로 이동
+        run: zip -r backend.zip dist # dist 폴더를 backend.zip으로 압축
 
       - name: Upload Lambda Artifact to S3
+        # 이 스텝에서는 job 레벨의 환경 변수 (ARTIFACT_BUCKET_NAME)를 바로 사용합니다.
+        # 별도의 'env' 블록을 이곳에 추가하지 않습니다.
+        working-directory: ./apps/backend
         run: |
-          # ⭐ Lambda 아티팩트의 실제 경로와 파일 이름을 확인하고 정확히 지정해야 합니다.
-          # 예시: apps/backend/dist/index.js 또는 apps/backend/dist/lambda.zip
-          LAMBDA_ARTIFACT_PATH="apps/backend/dist/index.js" # 실제 Lambda 코드 파일 경로
-          LAMBDA_ARTIFACT_KEY="hello-lambda.zip" # S3 버킷 내의 파일 이름 (CDK 코드에서 참조하는 이름)
+          LAMBDA_ARTIFACT_PATH="backend.zip" # 앞에서 생성된 backend.zip
+          LAMBDA_ARTIFACT_KEY="backend/${{ github.sha }}.zip" # CDK에서 참조하는 키 형식
           
-          # 아티팩트가 실제로 존재하는지 확인 (매우 중요)
           if [ ! -f "$LAMBDA_ARTIFACT_PATH" ]; then
-            echo "Error: Lambda artifact not found at $LAMBDA_ARTIFACT_PATH"
+            echo "Error: Lambda artifact not found at $LAMBDA_ARTIFACT_PATH. Build step might have failed or path is incorrect."
             exit 1
           fi
 
           aws s3 cp "${LAMBDA_ARTIFACT_PATH}" "s3://${{ env.ARTIFACT_BUCKET_NAME }}/${LAMBDA_ARTIFACT_KEY}"
-        env:
-          # `HelloLambda`의 코드 정의가 사용하는 버킷 이름과 키가 여기 `ARTIFACT_BUCKET_NAME` 및 `LAMBDA_ARTIFACT_KEY`와 일치해야 합니다.
-          # 특히 ARTIFACT_BUCKET_NAME_BASE 환경 변수가 Backend CI에도 정확히 전달되어야 합니다.
-          ARTIFACT_BUCKET_NAME_BASE: ${{ secrets.AWS_ACCOUNT_ID }}
