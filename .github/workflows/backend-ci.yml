@@ -19,7 +19,7 @@ jobs:
 
     env: # 이 env 블록은 job 아래에 위치해야 합니다!
       AWS_REGION: ap-northeast-2 
-      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} # S3 버킷 이름 (환경 변수)
+      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ vars.AWS_REGION }} # S3 버킷 이름 (환경 변수)
 
     steps:
       - name: Checkout repository
