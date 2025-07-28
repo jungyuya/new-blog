@@ -82,4 +82,4 @@ jobs:
           compression-level: 6
           overwrite: false
           include-hidden-files: false
-        working-directory: ./apps/infra # ⭐ 추가
+          working-directory: ./apps/infra # ⭐ 추가

@@ -6,7 +6,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
-import * as path from 'path'; // path 모듈은 더 이상 NodejsFunction의 entry에 직접 사용되지 않지만, 다른 용도로 남아있을 수 있습니다.
+import * as path from 'path'; //path 모듈은 더 이상 NodejsFunction의 entry에 직접 사용되지 않지만, 다른 용도로 남아있을 수 있습니다.
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
