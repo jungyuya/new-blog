@@ -22,7 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 const ddbClient = new DynamoDBClient({});
 const ddbDocClient = new (require('@aws-sdk/lib-dynamodb')).DynamoDBDocumentClient(ddbClient);
 
-const cognitoClient = new CognitoIdentityProviderClient({}); // <-- 이 줄 추가!
+const cognitoClient = new CognitoIdentityProviderClient({}); 
 
 export const handler = async (event: any) => {
   console.log('Lambda function invoked with event:', event);
