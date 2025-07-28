@@ -23,9 +23,10 @@ jobs:
       id-token: write # OIDC 토큰을 요청할 권한
       contents: read # 리포지토리 내용을 읽을 권한
 
-    env: # 이 env 블록은 job 아래에 위치해야 합니다!
+    env: # 이 env 블록은 job 아래에 2칸 들여쓰기 되어야 합니다.
       AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경
-      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ vars.AWS_REGION }} # S3 버킷 이름 (환경 변수)
+      # ARTIFACT_BUCKET_NAME 정의 방식 변경
+      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }} 
 
     steps:
       - name: Checkout repository
@@ -63,9 +64,9 @@ jobs:
         run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
         working-directory: ./apps/infra
         env: # 이 env 블록은 step 안에 정의될 수도 있습니다.
-          # InfraStack.ts에서 참조하는 환경 변수 (Lambda 코드의 S3 키 결정)
           GITHUB_SHA: ${{ github.sha }} # 현재 커밋 SHA를 Lambda 코드 S3 키에 사용
-          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME }} # S3 버킷 이름 환경 변수 전달
+          # ARTIFACT_BUCKET_NAME 환경 변수를 최종 조합하여 전달
+          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }} 
 
       - name: Save CDK Outputs
         uses: actions/upload-artifact@v4

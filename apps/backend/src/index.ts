@@ -1,4 +1,4 @@
-// 경로: ~/projects/new-blog/apps/backend/src/index.ts
+// 경로: ~/projects/new-blog/apps/backend/src/index.ts 
 
 import { DynamoDBClient, ReturnValue } from '@aws-sdk/client-dynamodb';
 import {
@@ -48,7 +48,7 @@ export const handler = async (event: any) => {
   const userEmail = requestContext?.authorizer?.claims?.email; // User Pool에서 사용자 이메일
 
   try {
-    // 기존 Hello World 경로 유지
+    // 기존 Hello World 경로 유지.
     if (path === '/hello' && httpMethod === 'GET') {
       return {
         statusCode: 200,
