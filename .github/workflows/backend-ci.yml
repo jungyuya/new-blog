@@ -10,16 +10,16 @@ on:
       - 'pnpm-workspace.yaml' # 워크스페이스 설정 파일 변경 시 트리거
       - 'pnpm-lock.yaml' # 의존성 파일 변경 시 트리거
 
-env:
-  AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경 (예: ap-northeast-2)
-  ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} # S3 버킷 이름 (환경 변수)
-
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     permissions:
       id-token: write # OIDC 토큰을 요청할 권한
       contents: read # 리포지토리 내용을 읽을 권한
+
+    env: # 이 env 블록은 job 아래에 위치해야 합니다!
+      AWS_REGION: ap-northeast-2 
+      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} # S3 버킷 이름 (환경 변수)
 
     steps:
       - name: Checkout repository

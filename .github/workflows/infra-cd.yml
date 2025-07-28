@@ -1,0 +1,74 @@
+# .github/workflows/infra-cd.yml
+name: Infra CD (Deploy AWS CDK)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/infra/**' # apps/infra 디렉토리 내의 파일 변경 시 트리거
+      - 'pnpm-workspace.yaml' # 워크스페이스 설정 파일 변경 시 트리거
+      - 'pnpm-lock.yaml' # 의존성 파일 변경 시 트리거
+  workflow_run: # backend-ci.yml 워크플로우가 성공적으로 완료되면 트리거
+    workflows: ["Backend CI (Build & Upload Lambda Artifact)"] # backend-ci.yml의 name
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC 토큰을 요청할 권한
+      contents: read # 리포지토리 내용을 읽을 권한
+
+    env: # 이 env 블록은 job 아래에 위치해야 합니다!
+      AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경
+      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} # S3 버킷 이름 (환경 변수)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole # 4.2에서 생성한 IAM 역할 ARN
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install AWS CDK CLI
+        run: npm install -g aws-cdk # CDK CLI 설치 (runner에 없을 수 있으므로)
+
+      - name: CDK Diff (Optional but Recommended for Review)
+        run: pnpm --filter infra cdk diff
+        working-directory: ./apps/infra
+
+      - name: CDK Deploy Infrastructure
+        run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
+        working-directory: ./apps/infra
+        env: # 이 env 블록은 step 안에 정의될 수도 있습니다.
+          # InfraStack.ts에서 참조하는 환경 변수 (Lambda 코드의 S3 키 결정)
+          GITHUB_SHA: ${{ github.sha }} # 현재 커밋 SHA를 Lambda 코드 S3 키에 사용
+          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME }} # S3 버킷 이름 환경 변수 전달
+
+      - name: Save CDK Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs
+          path: apps/infra/cdk-outputs.json
