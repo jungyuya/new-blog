@@ -1,0 +1,27 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend Lambda function for the blog service",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx esbuild src/index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/src/index.js",
+    "zip": "cd dist && zip -r ../backend.zip .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152",
+    "@types/node": "^24.1.0",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.8.3",
+    "esbuild": "^0.21.0"  
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.848.0",
+    "@aws-sdk/client-dynamodb": "^3.848.0",
+    "@aws-sdk/lib-dynamodb": "^3.850.0",
+    "uuid": "^11.1.0"
+  }
+}

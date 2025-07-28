@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/b56bb96d55ec12179cbc939fff74ba13634b23be25fbbf1a84ab83334cdb8974.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -34,17 +34,41 @@
         "BlogInfraStack.assets"
       ],
       "metadata": {
-        "/BlogInfraStack": [
+        "/BlogInfraStack/BlogUserPool/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogUserPoolBB1AE2CC"
+          }
+        ],
+        "/BlogInfraStack/BlogUserPool/BlogAppClient/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogUserPoolBlogAppClientFC769CAF"
+          }
+        ],
+        "/BlogInfraStack/PostsTable": [
+          {
+            "type": "aws:cdk:hasPhysicalName",
+            "data": {
+              "Ref": "PostsTableC82B36F0"
+            }
+          }
+        ],
+        "/BlogInfraStack/PostsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PostsTableC82B36F0"
+          }
+        ],
+        "/BlogInfraStack/ExistingBlogArtifactBucket": [
           {
             "type": "aws:cdk:warning",
-            "data": "If you are relying on AWS SDK v2 to be present in the Lambda environment already, please explicitly configure a NodeJS runtime of Node 16 or lower. [ack: @aws-cdk/aws-lambda-nodejs:sdkV2NotInRuntime]",
+            "data": "objectVersion is not defined for S3Code.fromBucket(). The lambda will not be updated automatically if the code in the bucket is updated. This is because CDK/Cloudformation does not track changes on the source S3 Bucket. It is recommended to either use S3Code.fromAsset() instead or set objectVersion. [ack: @aws-cdk/aws-lambda:codeFromBucketObjectVersionNotSpecified]",
             "trace": [
               "Annotations.addMessage (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/core/lib/annotations.js:1:1978)",
               "Annotations.addWarningV2 (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/core/lib/annotations.js:1:896)",
-              "new Bundling (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:3909)",
-              "Function.bundle (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:1135)",
-              "new NodejsFunction (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:2352)",
-              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:28:25)",
+              "Function.fromBucket (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda/lib/code.js:1:1218)",
+              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:80:25)",
               "Object.<anonymous> (/home/jungyu/projects/new-blog/apps/infra/bin/infra.ts:16:1)",
               "Module._compile (node:internal/modules/cjs/loader:1529:14)",
               "Module.m._compile (/home/jungyu/projects/new-blog/node_modules/.pnpm/ts-node@10.9.2_@types+node@24.1.0_typescript@5.8.3/node_modules/ts-node/src/index.ts:1618:23)",
@@ -64,20 +88,6 @@
               "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)",
               "node:internal/main/run_main_module:28:49"
             ]
-          }
-        ],
-        "/BlogInfraStack/PostsTable": [
-          {
-            "type": "aws:cdk:hasPhysicalName",
-            "data": {
-              "Ref": "PostsTableC82B36F0"
-            }
-          }
-        ],
-        "/BlogInfraStack/PostsTable/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "PostsTableC82B36F0"
           }
         ],
         "/BlogInfraStack/HelloLambda/ServiceRole/Resource": [
@@ -104,22 +114,10 @@
             "data": "BlogApi17ECE3AB"
           }
         ],
-        "/BlogInfraStack/BlogApi/CloudWatchRole/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApiCloudWatchRole66A88900"
-          }
-        ],
-        "/BlogInfraStack/BlogApi/Account": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApiAccountD776435D"
-          }
-        ],
         "/BlogInfraStack/BlogApi/Deployment/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "BlogApiDeploymentB3254DE33bc92d544fba40acabed792d110c5492"
+            "data": "BlogApiDeploymentB3254DE336d2077f0763de7811b0b997009e701d"
           }
         ],
         "/BlogInfraStack/BlogApi/DeploymentStage.dev/Resource": [
@@ -134,22 +132,10 @@
             "data": "BlogApiEndpointAFF8BF23"
           }
         ],
-        "/BlogInfraStack/BlogApi/Default/OPTIONS/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApiOPTIONSDA3C7AF0"
-          }
-        ],
         "/BlogInfraStack/BlogApi/Default/hello/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "BlogApihelloF514243D"
-          }
-        ],
-        "/BlogInfraStack/BlogApi/Default/hello/OPTIONS/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApihelloOPTIONSD6940375"
           }
         ],
         "/BlogInfraStack/BlogApi/Default/hello/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..hello": [
@@ -174,12 +160,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "BlogApipostsC4C4C4BC"
-          }
-        ],
-        "/BlogInfraStack/BlogApi/Default/posts/OPTIONS/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApipostsOPTIONSCF6C9BA3"
           }
         ],
         "/BlogInfraStack/BlogApi/Default/posts/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts": [
@@ -222,12 +202,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "BlogApipostsproxyFAA9D487"
-          }
-        ],
-        "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/OPTIONS/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogApipostsproxyOPTIONS243C61AA"
           }
         ],
         "/BlogInfraStack/BlogApi/Default/posts/{proxy+}/GET/ApiPermission.BlogInfraStackBlogApi78739CBC.GET..posts.{proxy+}": [
@@ -284,10 +258,136 @@
             "data": "BlogApipostsproxyDELETE8FB14243"
           }
         ],
+        "/BlogInfraStack/BlogApi/Default/auth/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauth9879E332"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/signup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthsignupDE98835C"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/signup/POST/ApiPermission.BlogInfraStackBlogApi78739CBC.POST..auth.signup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthsignupPOSTApiPermissionBlogInfraStackBlogApi78739CBCPOSTauthsignup7E1B70D3"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/signup/POST/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.POST..auth.signup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthsignupPOSTApiPermissionTestBlogInfraStackBlogApi78739CBCPOSTauthsignup272BB313"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/signup/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthsignupPOSTE2FDFD1E"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/login/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthlogin7B617F3F"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/login/POST/ApiPermission.BlogInfraStackBlogApi78739CBC.POST..auth.login": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthloginPOSTApiPermissionBlogInfraStackBlogApi78739CBCPOSTauthloginD8A1F550"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/login/POST/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.POST..auth.login": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthloginPOSTApiPermissionTestBlogInfraStackBlogApi78739CBCPOSTauthlogin3BC3D0FB"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/login/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthloginPOST31B50DCD"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/logout/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthlogoutD07F8414"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/logout/POST/ApiPermission.BlogInfraStackBlogApi78739CBC.POST..auth.logout": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthlogoutPOSTApiPermissionBlogInfraStackBlogApi78739CBCPOSTauthlogout87A4E98C"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/logout/POST/ApiPermission.Test.BlogInfraStackBlogApi78739CBC.POST..auth.logout": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthlogoutPOSTApiPermissionTestBlogInfraStackBlogApi78739CBCPOSTauthlogout9748FE9D"
+          }
+        ],
+        "/BlogInfraStack/BlogApi/Default/auth/logout/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogApiauthlogoutPOST42B2EA16"
+          }
+        ],
+        "/BlogInfraStack/CognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoAuthorizerF3215DBC"
+          }
+        ],
         "/BlogInfraStack/ApiGatewayEndpoint": [
           {
             "type": "aws:cdk:logicalId",
             "data": "ApiGatewayEndpoint"
+          }
+        ],
+        "/BlogInfraStack/ApiGatewayId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayId"
+          }
+        ],
+        "/BlogInfraStack/UserPoolIdOutput": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolIdOutput"
+          }
+        ],
+        "/BlogInfraStack/UserPoolClientIdOutput": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClientIdOutput"
+          }
+        ],
+        "/BlogInfraStack/HelloLambdaErrorsAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "HelloLambdaErrorsAlarmA97342BE"
+          }
+        ],
+        "/BlogInfraStack/ApiGatewayServerErrorAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiGatewayServerErrorAlarm002176CB"
+          }
+        ],
+        "/BlogInfraStack/PostsTableReadThrottleAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PostsTableReadThrottleAlarmC428D038"
+          }
+        ],
+        "/BlogInfraStack/PostsTableWriteThrottleAlarm/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PostsTableWriteThrottleAlarm4D2161A4"
           }
         ],
         "/BlogInfraStack/CDKMetadata/Default": [
@@ -327,6 +427,7 @@
             "explanation": "Allow multiple stacks with the same name"
           },
           "aws-cdk:enableDiffNoFail": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Make `cdk diff` not fail when there are differences"
           },
@@ -351,6 +452,7 @@
             "explanation": "Tighten default KMS key policies"
           },
           "@aws-cdk/aws-s3:grantWriteWithoutAcl": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Remove `PutObjectAcl` from Bucket.grantWrite"
           },
@@ -359,14 +461,17 @@
             "explanation": "Do not specify a default DesiredCount for ECS services"
           },
           "@aws-cdk/aws-rds:lowercaseDbIdentifier": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Force lowercasing of RDS Cluster names in CDK"
           },
           "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Allow adding/removing multiple UsagePlanKeys independently"
           },
           "@aws-cdk/aws-efs:defaultEncryptionAtRest": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Enable this feature flag to have elastic file systems encrypted at rest by default."
           },
@@ -379,14 +484,20 @@
             "explanation": "Enable this feature flag to opt in to the updated logical id calculation for Lambda Version created using the `fn.currentVersion`."
           },
           "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Enable this feature flag to have cloudfront distributions use the security policy TLSv1.2_2021 by default."
           },
           "@aws-cdk/core:checkSecretUsage": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Enable this flag to make it impossible to accidentally use SecretValues in unsafe locations"
           },
           "@aws-cdk/core:target-partitions": {
+            "userValue": [
+              "aws",
+              "aws-cn"
+            ],
             "recommendedValue": [
               "aws",
               "aws-cn"
@@ -394,18 +505,22 @@
             "explanation": "What regions to include in lookup tables of environment agnostic stacks"
           },
           "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "ECS extensions will automatically add an `awslogs` driver if no logging is specified"
           },
           "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Enable this feature flag to have Launch Templates generated by the `InstanceRequireImdsv2Aspect` use unique names."
           },
           "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "ARN format used by ECS. In the new ARN format, the cluster name is part of the resource ID."
           },
           "@aws-cdk/aws-iam:minimizePolicies": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Minimize IAM policies by combining Statements"
           },
@@ -426,6 +541,7 @@
             "explanation": "Restrict KMS key policy for encrypted Queues a bit more"
           },
           "@aws-cdk/aws-apigateway:disableCloudWatchRole": {
+            "userValue": true,
             "recommendedValue": true,
             "explanation": "Make default CloudWatch Role behavior safe for multiple API Gateways in one environment"
           },

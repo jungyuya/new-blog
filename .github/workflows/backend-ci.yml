@@ -1,0 +1,63 @@
+# .github/workflows/backend-ci.yml
+name: Backend CI (Build & Upload Lambda Artifact)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/backend/**' # apps/backend 디렉토리 내의 파일 변경 시 트리거
+      - 'pnpm-workspace.yaml' # 워크스페이스 설정 파일 변경 시 트리거
+      - 'pnpm-lock.yaml' # 의존성 파일 변경 시 트리거
+
+env:
+  AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경 (예: ap-northeast-2)
+  ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} # S3 버킷 이름 (환경 변수)
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC 토큰을 요청할 권한
+      contents: read # 리포지토리 내용을 읽을 권한
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          run_install: false # pnpm install은 다음 단계에서 실행
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm' # pnpm 캐시 사용
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile # pnpm-lock.yaml에 고정된 버전으로 설치
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole # 4.2에서 생성한 IAM 역할 ARN
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build Backend Lambda
+        run: pnpm --filter backend build # Turborepo를 사용하여 backend 앱 빌드
+        working-directory: ./apps/backend # apps/backend 디렉토리에서 실행
+
+      - name: Zip Lambda Artifact
+        run: zip -r backend.zip dist node_modules # 빌드된 코드와 의존성을 포함하여 zip 압축
+        working-directory: ./apps/backend # apps/backend 디렉토리에서 실행
+
+      - name: Upload Lambda Artifact to S3
+        run: aws s3 cp backend.zip s3://${{ env.ARTIFACT_BUCKET_NAME }}/backend/${{ github.sha }}.zip
+        working-directory: ./apps/backend # apps/backend 디렉토리에서 실행
+
+      - name: Clean up
+        run: rm backend.zip # 생성된 zip 파일 삭제
+        working-directory: ./apps/backend # apps/backend 디렉토리에서 실행

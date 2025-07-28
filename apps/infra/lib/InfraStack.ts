@@ -1,95 +1,255 @@
 import { Stack, StackProps, Duration, CfnOutput } from 'aws-cdk-lib';
-import * as cdk from 'aws-cdk-lib'; // <-- 이 줄 추가!
+import * as cdk from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LambdaIntegration, RestApi } from 'aws-cdk-lib/aws-apigateway';
-import * as path from 'path';
+import * as apigw from 'aws-cdk-lib/aws-apigateway';
+import * as path from 'path'; // path 모듈은 더 이상 NodejsFunction의 entry에 직접 사용되지 않지만, 다른 용도로 남아있을 수 있습니다.
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3'; // S3 모듈 임포트
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'; // CloudWatch 모듈 임포트
+// import * as sns from 'aws-cdk-lib/aws-sns'; // SNS 알림을 위한 모듈 (추후 SNS 설정 시 주석 해제)
+// import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'; // SNS 구독을 위한 모듈 (추후 SNS 설정 시 주석 해제)
+// import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions'; // CloudWatch 알람 액션을 위한 모듈 (추후 SNS 설정 시 주석 해제)
+
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // --- DynamoDB Table 정의 시작 ---
-    const postsTable = new dynamodb.Table(this, 'PostsTable', {
-      tableName: 'BlogPosts', // 테이블 이름 지정 (원하는 이름으로 변경 가능)
-      partitionKey: { // 파티션 키(Primary Key) 정의
-        name: 'postId', // 키 이름
-        type: dynamodb.AttributeType.STRING, // 키 타입 (문자열)
+    // --- Cognito User Pool 정의 ---
+    const userPool = new cognito.UserPool(this, 'BlogUserPool', {
+      userPoolName: 'BlogUserPool',
+      selfSignUpEnabled: true,
+      signInAliases: {
+        email: true,
+        username: false,
       },
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // 개발 전용 (임시) => 스택 삭제시 테이블 전부 삭제됨.
+      autoVerify: {
+        email: true,
+      },
+      standardAttributes: {
+        email: {
+          required: true,
+          mutable: true,
+        },
+      },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+        requireUppercase: true,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-    // --- DynamoDB Table 정의 끝 ---
 
+    const userPoolClient = userPool.addClient('BlogAppClient', {
+      userPoolClientName: 'WebAppClient',
+      generateSecret: false,
+      authFlows: {
+        userPassword: true,
+      },
+    });
 
-    // 1. Lambda 함수 정의
-    // 백엔드 워크스페이스의 빌드 결과물(dist)을 Lambda 코드로 사용합니다.
+    // --- DynamoDB Posts Table 정의 ---
+    const postsTable = new dynamodb.Table(this, 'PostsTable', {
+      tableName: 'BlogPosts',
+      partitionKey: {
+        name: 'postId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // --- Lambda 코드 저장을 위한 S3 버킷 정의 (CI/CD 아티팩트 저장소) ---
+    // S3 버킷 이름을 환경 변수에서 가져오거나, 환경 변수가 없으면 CDK에서 제공하는 계정 정보로 기본 이름을 구성합니다.
+    // 이렇게 하면 코드에 AWS 계정 ID를 하드코딩하지 않아도 됩니다.
+    // GitHub Actions에서 ARTIFACT_BUCKET_NAME 환경 변수를 설정하여 이 버킷 이름을 주입할 것입니다.
+    const artifactBucketName = process.env.ARTIFACT_BUCKET_NAME || `blog-lambda-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
+    
+    // 이 버킷은 이제 CDK가 직접 생성하고 관리하게 됩니다.
+    // 따라서, 이전에 'Day 0'에서 수동으로 생성했던 버킷이 이와 이름이 같다면,
+    // CI/CD 배포 전에 수동으로 생성한 버킷을 삭제해야 합니다. (아래 팁 참조)
+    const artifactBucket = new s3.Bucket(this, 'BlogArtifactBucket', {
+      bucketName: artifactBucketName, // 환경 변수 또는 기본값 사용
+      versioned: true, // 버전 관리 활성화: Lambda 롤백 등 안정성 향상에 중요
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // 스택 삭제 시 버킷과 내용도 함께 삭제 (개발 환경에서 편리)
+      autoDeleteObjects: true, // 버킷 내 객체 자동 삭제 (removalPolicy: DESTROY와 함께 사용)
+    });
+
+    // --- Lambda Function 정의 (S3 버킷에서 코드 로드하도록 변경) ---
+    // GITHUB_SHA는 GitHub Actions에서 제공하는 환경 변수입니다.
+    // 로컬에서 테스트할 때는 'latest'로 폴백됩니다.
+    const lambdaCodeS3Key = `backend/${process.env.GITHUB_SHA || 'latest'}.zip`;
+
     const helloLambda = new NodejsFunction(this, 'HelloLambda', {
-      functionName: 'blog-hello-lambda', // Lambda 함수 이름 (원하는 이름으로 변경 가능)
-      entry: path.join(__dirname, '../../backend/dist/src/index.js'), // 백엔드 워크스페이스의 컴파일된 파일 경로
-      handler: 'handler', // Lambda 함수 내에서 export 한 핸들러 함수의 이름 (index.ts의 export const handler)
-      runtime: Runtime.NODEJS_20_X, // Node.js 20 런타임 사용
-      memorySize: 128, // 람다 메모리 (기본값)
-      timeout: Duration.seconds(10), // 람다 타임아웃
-      environment: { // 람다 환경 변수 (필요시 추가)
+      functionName: 'blog-hello-lambda',
+      code: lambda.Code.fromBucket(artifactBucket, lambdaCodeS3Key), // S3 버킷과 키를 통해 코드 참조
+      handler: 'index.handler', // apps/backend/src/index.ts의 handler 함수
+      runtime: Runtime.NODEJS_20_X,
+      memorySize: 128,
+      timeout: Duration.seconds(10),
+      environment: {
         NODE_ENV: 'production',
         MY_VARIABLE: 'hello from cdk',
         TABLE_NAME: postsTable.tableName,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
-      bundling: { // Lambda 함수 배포 시 종속성 번들링 설정
-        externalModules: ['aws-sdk'], // AWS Lambda 런타임에 기본 포함된 aws-sdk는 번들링에서 제외하여 배포 크기 최적화
-        forceDockerBundling: false, // 로컬 환경에 Docker가 없을 경우 false로 설정하여 로컬 Node.js로 번들링 시도
-        // Docker가 설치되어 있고 일관된 환경을 원하면 true
-      },
-      // 로그 그룹 생성 및 보존 기간 설정
-      // logRetention: RetentionDays.ONE_WEEK, // CloudWatch Logs 보존 기간 
+      tracing: lambda.Tracing.ACTIVE, // X-Ray 트레이싱 활성화 (Observability)
     });
 
-    // --- Lambda에 DynamoDB 권한 부여 시작 ---
-    postsTable.grantReadWriteData(helloLambda); // <-- 이 줄 추가! Lambda에게 postsTable에 대한 읽기/쓰기 권한 부여
-    // --- Lambda에 DynamoDB 권한 부여 끝 ---
+    // --- Lambda 함수에 권한 부여 ---
+    postsTable.grantReadWriteData(helloLambda);
 
-    // 2. API Gateway 정의
-    // Lambda 함수를 HTTP 엔드포인트로 노출합니다.
+    helloLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'cognito-idp:SignUp',
+        'cognito-idp:InitiateAuth',
+        'cognito-idp:RespondToAuthChallenge',
+        'cognito-idp:GlobalSignOut',
+      ],
+      resources: [userPool.userPoolArn],
+    }));
+
+    // --- API Gateway 정의 ---
     const api = new RestApi(this, 'BlogApi', {
-      restApiName: 'BlogService', // API Gateway 이름
-      description: 'API Gateway for Blog Backend',
+      restApiName: 'BlogService',
       deployOptions: {
-        stageName: 'dev', // 배포 스테이지 이름 (개발 환경)
-      },
-      defaultCorsPreflightOptions: { // 모든 API Gateway 경로에 대한 CORS 사전 검사 옵션 (개발용)
-        allowOrigins: ['*'], // 모든 Origin 허용
-        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
-        maxAge: Duration.days(1),
+        stageName: 'dev',
+        tracingEnabled: true, // API Gateway X-Ray 트레이싱 활성화 (Observability)
       },
     });
 
-    // 3. API Gateway에 Lambda 통합 (GET /hello)
-    // "/hello" 경로로 들어오는 GET 요청을 위에서 정의한 Lambda 함수와 연결합니다.
-    const helloResource = api.root.addResource('hello'); // /hello 경로 추가
-    helloResource.addMethod('GET', new LambdaIntegration(helloLambda)); // GET 메서드와 Lambda 통합
+    // --- Cognito Authorizer 정의 ---
+    const cognitoAuthorizer = new apigw.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+      cognitoUserPools: [userPool],
+      identitySource: 'method.request.header.Authorization',
+    });
 
-    // --- 새롭게 추가되는 API Gateway 리소스 정의 시작 ---
-    const postsResource = api.root.addResource('posts'); // /posts 경로 생성
-    // 모든 HTTP 메서드 (GET, POST)를 posts 경로에 연결
-    postsResource.addMethod('GET', new LambdaIntegration(helloLambda)); // 모든 게시물 조회
-    postsResource.addMethod('POST', new LambdaIntegration(helloLambda)); // 새 게시물 생성
+    // --- Method Options 정의 ---
+    const publicMethodOptions: apigw.MethodOptions = {};
 
-    // /posts/{proxy+} 경로 생성: /{postId}와 같은 가변 경로를 처리하기 위함
+    const privateMethodOptions: apigw.MethodOptions = {
+      authorizer: cognitoAuthorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
+    };
+
+    // --- Lambda 통합 ---
+    const lambdaIntegration = new LambdaIntegration(helloLambda);
+
+    // --- 리소스 및 메서드 등록 ---
+    const helloResource = api.root.addResource('hello');
+    helloResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+
+    const postsResource = api.root.addResource('posts');
+    postsResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+    postsResource.addMethod('POST', lambdaIntegration, privateMethodOptions);
+
     const proxyResource = postsResource.addResource('{proxy+}');
-    // 모든 HTTP 메서드 (GET, PUT, DELETE)를 {proxy+} 경로에 연결
-    proxyResource.addMethod('GET', new LambdaIntegration(helloLambda));    // 특정 게시물 조회
-    proxyResource.addMethod('PUT', new LambdaIntegration(helloLambda));    // 특정 게시물 업데이트
-    proxyResource.addMethod('DELETE', new LambdaIntegration(helloLambda)); // 특정 게시물 삭제
-    // --- 새롭게 추가되는 API Gateway 리소스 정의 끝 ---
+    proxyResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+    proxyResource.addMethod('PUT', lambdaIntegration, privateMethodOptions);
+    proxyResource.addMethod('DELETE', lambdaIntegration, privateMethodOptions);
 
-    // 4. 배포 후 API Gateway 엔드포인트 URL 출력
-    // 배포가 완료되면 이 URL을 통해 Lambda 함수를 호출할 수 있습니다.
+    const authResource = api.root.addResource('auth');
+    authResource.addResource('signup')
+      .addMethod('POST', lambdaIntegration, publicMethodOptions);
+    authResource.addResource('login')
+      .addMethod('POST', lambdaIntegration, publicMethodOptions);
+    authResource.addResource('logout')
+      .addMethod('POST', lambdaIntegration, privateMethodOptions);
+
+    // --- CloudFormation Outputs (프론트엔드 및 CI/CD에서 참조) ---
     new CfnOutput(this, 'ApiGatewayEndpoint', {
-      value: api.urlForPath('/hello'), // /hello 경로에 대한 URL 출력
-      description: 'The URL for the Hello Lambda API endpoint',
+      value: api.url,
+      description: 'The URL of the API Gateway endpoint',
+      exportName: 'BlogApiGatewayUrl', // 프론트엔드에서 참조할 이름
     });
+    new CfnOutput(this, 'ApiGatewayId', {
+      value: api.restApiId,
+      description: 'The ID of the API Gateway',
+      exportName: 'BlogApiGatewayId', // 프론트엔드에서 참조할 이름
+    });
+
+    new CfnOutput(this, 'UserPoolIdOutput', {
+      value: userPool.userPoolId,
+      description: 'The ID of the Cognito User Pool',
+      exportName: 'BlogUserPoolId', // 프론트엔드에서 참조할 이름
+    });
+    new CfnOutput(this, 'UserPoolClientIdOutput', {
+      value: userPoolClient.userPoolClientId,
+      description: 'The Client ID of the Cognito User Pool App Client',
+      exportName: 'BlogUserPoolClientId', // 프론트엔드에서 참조할 이름
+    });
+
+    // S3 버킷 이름도 CfnOutput으로 내보냅니다.
+    // 이제 이 버킷은 CDK가 관리하므로, GitHub Actions에서 참조할 수 있도록 Export 하는 것이 좋습니다.
+    new CfnOutput(this, 'ArtifactBucketName', {
+      value: artifactBucket.bucketName,
+      description: 'S3 Bucket name for Lambda artifacts',
+      exportName: 'BlogArtifactBucketName', // GitHub Actions에서 참조할 이름
+    });
+
+    // --- Observability: CloudWatch Alarms (Monitoring as Code) ---
+    // Lambda 에러 알람
+    helloLambda.metricErrors({
+      period: Duration.minutes(5), // Metric 정의 시 period 지정
+      statistic: 'Sum', // 통계 방식 지정
+    }).createAlarm(this, 'HelloLambdaErrorsAlarm', {
+      threshold: 1, // 1 에러 이상 발생 시
+      evaluationPeriods: 1, // 1 기간 동안
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: 'blog-hello-lambda function errors detected!',
+      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+    });
+
+    // API Gateway 5xx 에러 알람 (서버 오류)
+    api.metricServerError({
+      period: Duration.minutes(5), // Metric 정의 시 period 지정
+      statistic: 'Sum',
+    }).createAlarm(this, 'ApiGatewayServerErrorAlarm', {
+      threshold: 1, // 1 에러 이상 발생 시
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: 'API Gateway 5xx server errors detected!',
+      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+    });
+
+    // DynamoDB Read Throttled Requests 알람 (용량 부족)
+    postsTable.metric('ReadThrottleEvents', {
+      period: Duration.minutes(5), // Metric 정의 시 period 지정
+      statistic: 'Sum',
+    }).createAlarm(this, 'PostsTableReadThrottleAlarm', {
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: 'DynamoDB PostsTable read throttled!',
+      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+    });
+
+    // DynamoDB Write Throttled Requests 알람 (용량 부족)
+    postsTable.metric('WriteThrottleEvents', {
+      period: Duration.minutes(5), // Metric 정의 시 period 지정
+      statistic: 'Sum',
+    }).createAlarm(this, 'PostsTableWriteThrottleAlarm', {
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: 'DynamoDB PostsTable write throttled!',
+      // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+    });
+
+    // TODO: SNS Topic 정의 (알람을 받을 이메일 주소 연결)
+    // const alarmSnsTopic = new sns.Topic(this, 'AlarmSnsTopic', {
+    //   displayName: 'Blog Service Alarms',
+    // });
+    // alarmSnsTopic.addSubscription(new sns_subscriptions.EmailSubscription('your-email@example.com'));
+    // 각 알람의 actions 배열에 new cloudwatch_actions.SnsAction(alarmSnsTopic) 추가
+
   }
 }

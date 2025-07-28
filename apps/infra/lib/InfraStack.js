@@ -35,86 +35,140 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InfraStack = void 0;
 const aws_cdk_lib_1 = require("aws-cdk-lib");
-const cdk = __importStar(require("aws-cdk-lib")); // <-- 이 줄 추가!
+const cdk = __importStar(require("aws-cdk-lib"));
 const aws_lambda_nodejs_1 = require("aws-cdk-lib/aws-lambda-nodejs");
 const aws_lambda_1 = require("aws-cdk-lib/aws-lambda");
 const aws_apigateway_1 = require("aws-cdk-lib/aws-apigateway");
+const apigw = __importStar(require("aws-cdk-lib/aws-apigateway"));
 const path = __importStar(require("path"));
 const dynamodb = __importStar(require("aws-cdk-lib/aws-dynamodb"));
+const cognito = __importStar(require("aws-cdk-lib/aws-cognito"));
+const iam = __importStar(require("aws-cdk-lib/aws-iam"));
 class InfraStack extends aws_cdk_lib_1.Stack {
     constructor(scope, id, props) {
         super(scope, id, props);
-        // --- DynamoDB Table 정의 시작 ---
-        const postsTable = new dynamodb.Table(this, 'PostsTable', {
-            tableName: 'BlogPosts', // 테이블 이름 지정 (원하는 이름으로 변경 가능)
-            partitionKey: {
-                name: 'postId', // 키 이름
-                type: dynamodb.AttributeType.STRING, // 키 타입 (문자열)
+        // --- Cognito User Pool 정의 ---
+        const userPool = new cognito.UserPool(this, 'BlogUserPool', {
+            userPoolName: 'BlogUserPool',
+            selfSignUpEnabled: true,
+            signInAliases: {
+                email: true,
+                username: false,
             },
-            removalPolicy: cdk.RemovalPolicy.DESTROY, // 개발 전용 (임시) => 스택 삭제시 테이블 전부 삭제됨.
+            autoVerify: {
+                email: true,
+            },
+            standardAttributes: {
+                email: {
+                    required: true,
+                    mutable: true,
+                },
+            },
+            passwordPolicy: {
+                minLength: 8,
+                requireLowercase: true,
+                requireDigits: true,
+                requireSymbols: true,
+                requireUppercase: true,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
         });
-        // --- DynamoDB Table 정의 끝 ---
-        // 1. Lambda 함수 정의
-        // 백엔드 워크스페이스의 빌드 결과물(dist)을 Lambda 코드로 사용합니다.
+        const userPoolClient = userPool.addClient('BlogAppClient', {
+            userPoolClientName: 'WebAppClient',
+            generateSecret: false,
+            authFlows: {
+                userPassword: true,
+            },
+        });
+        // --- DynamoDB Posts Table 정의 ---
+        const postsTable = new dynamodb.Table(this, 'PostsTable', {
+            tableName: 'BlogPosts',
+            partitionKey: {
+                name: 'postId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+        });
+        // --- Lambda Function 정의 ---
         const helloLambda = new aws_lambda_nodejs_1.NodejsFunction(this, 'HelloLambda', {
-            functionName: 'blog-hello-lambda', // Lambda 함수 이름 (원하는 이름으로 변경 가능)
-            entry: path.join(__dirname, '../../backend/dist/src/index.js'), // 백엔드 워크스페이스의 컴파일된 파일 경로
-            handler: 'handler', // Lambda 함수 내에서 export 한 핸들러 함수의 이름 (index.ts의 export const handler)
-            runtime: aws_lambda_1.Runtime.NODEJS_20_X, // Node.js 20 런타임 사용
-            memorySize: 128, // 람다 메모리 (기본값)
-            timeout: aws_cdk_lib_1.Duration.seconds(10), // 람다 타임아웃
+            functionName: 'blog-hello-lambda',
+            entry: path.join(__dirname, '../../backend/dist/src/index.js'),
+            handler: 'handler',
+            runtime: aws_lambda_1.Runtime.NODEJS_20_X,
+            memorySize: 128,
+            timeout: aws_cdk_lib_1.Duration.seconds(10),
             environment: {
                 NODE_ENV: 'production',
                 MY_VARIABLE: 'hello from cdk',
                 TABLE_NAME: postsTable.tableName,
+                USER_POOL_ID: userPool.userPoolId,
+                USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
             },
             bundling: {
-                externalModules: ['aws-sdk'], // AWS Lambda 런타임에 기본 포함된 aws-sdk는 번들링에서 제외하여 배포 크기 최적화
-                forceDockerBundling: false, // 로컬 환경에 Docker가 없을 경우 false로 설정하여 로컬 Node.js로 번들링 시도
-                // Docker가 설치되어 있고 일관된 환경을 원하면 true
+                externalModules: ['aws-sdk'],
+                forceDockerBundling: false,
             },
-            // 로그 그룹 생성 및 보존 기간 설정
-            // logRetention: RetentionDays.ONE_WEEK, // CloudWatch Logs 보존 기간 
         });
-        // --- Lambda에 DynamoDB 권한 부여 시작 ---
-        postsTable.grantReadWriteData(helloLambda); // <-- 이 줄 추가! Lambda에게 postsTable에 대한 읽기/쓰기 권한 부여
-        // --- Lambda에 DynamoDB 권한 부여 끝 ---
-        // 2. API Gateway 정의
-        // Lambda 함수를 HTTP 엔드포인트로 노출합니다.
+        // --- Lambda 함수에 권한 부여 ---
+        postsTable.grantReadWriteData(helloLambda);
+        helloLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: [
+                'cognito-idp:SignUp',
+                'cognito-idp:InitiateAuth',
+                'cognito-idp:RespondToAuthChallenge',
+                'cognito-idp:GlobalSignOut',
+            ],
+            resources: [userPool.userPoolArn],
+        }));
+        // --- API Gateway 정의 ---
         const api = new aws_apigateway_1.RestApi(this, 'BlogApi', {
-            restApiName: 'BlogService', // API Gateway 이름
-            description: 'API Gateway for Blog Backend',
+            restApiName: 'BlogService',
             deployOptions: {
-                stageName: 'dev', // 배포 스테이지 이름 (개발 환경)
-            },
-            defaultCorsPreflightOptions: {
-                allowOrigins: ['*'], // 모든 Origin 허용
-                allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-                allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
-                maxAge: aws_cdk_lib_1.Duration.days(1),
+                stageName: 'dev',
             },
         });
-        // 3. API Gateway에 Lambda 통합 (GET /hello)
-        // "/hello" 경로로 들어오는 GET 요청을 위에서 정의한 Lambda 함수와 연결합니다.
-        const helloResource = api.root.addResource('hello'); // /hello 경로 추가
-        helloResource.addMethod('GET', new aws_apigateway_1.LambdaIntegration(helloLambda)); // GET 메서드와 Lambda 통합
-        // --- 새롭게 추가되는 API Gateway 리소스 정의 시작 ---
-        const postsResource = api.root.addResource('posts'); // /posts 경로 생성
-        // 모든 HTTP 메서드 (GET, POST)를 posts 경로에 연결
-        postsResource.addMethod('GET', new aws_apigateway_1.LambdaIntegration(helloLambda)); // 모든 게시물 조회
-        postsResource.addMethod('POST', new aws_apigateway_1.LambdaIntegration(helloLambda)); // 새 게시물 생성
-        // /posts/{proxy+} 경로 생성: /{postId}와 같은 가변 경로를 처리하기 위함
+        // --- Cognito Authorizer 정의 ---
+        const cognitoAuthorizer = new apigw.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+            cognitoUserPools: [userPool],
+            identitySource: 'method.request.header.Authorization',
+        });
+        // --- Method Options 정의 ---
+        const publicMethodOptions = {};
+        const privateMethodOptions = {
+            authorizer: cognitoAuthorizer,
+            authorizationType: apigw.AuthorizationType.COGNITO,
+        };
+        // --- Lambda 통합 ---
+        const lambdaIntegration = new aws_apigateway_1.LambdaIntegration(helloLambda);
+        // --- 리소스 및 메서드 등록 ---
+        const helloResource = api.root.addResource('hello');
+        helloResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+        const postsResource = api.root.addResource('posts');
+        postsResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+        postsResource.addMethod('POST', lambdaIntegration, privateMethodOptions);
         const proxyResource = postsResource.addResource('{proxy+}');
-        // 모든 HTTP 메서드 (GET, PUT, DELETE)를 {proxy+} 경로에 연결
-        proxyResource.addMethod('GET', new aws_apigateway_1.LambdaIntegration(helloLambda)); // 특정 게시물 조회
-        proxyResource.addMethod('PUT', new aws_apigateway_1.LambdaIntegration(helloLambda)); // 특정 게시물 업데이트
-        proxyResource.addMethod('DELETE', new aws_apigateway_1.LambdaIntegration(helloLambda)); // 특정 게시물 삭제
-        // --- 새롭게 추가되는 API Gateway 리소스 정의 끝 ---
-        // 4. 배포 후 API Gateway 엔드포인트 URL 출력
-        // 배포가 완료되면 이 URL을 통해 Lambda 함수를 호출할 수 있습니다.
+        proxyResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
+        proxyResource.addMethod('PUT', lambdaIntegration, privateMethodOptions);
+        proxyResource.addMethod('DELETE', lambdaIntegration, privateMethodOptions);
+        const authResource = api.root.addResource('auth');
+        authResource.addResource('signup')
+            .addMethod('POST', lambdaIntegration, publicMethodOptions);
+        authResource.addResource('login')
+            .addMethod('POST', lambdaIntegration, publicMethodOptions);
+        authResource.addResource('logout')
+            .addMethod('POST', lambdaIntegration, privateMethodOptions);
+        // --- CloudFormation Outputs ---
         new aws_cdk_lib_1.CfnOutput(this, 'ApiGatewayEndpoint', {
-            value: api.urlForPath('/hello'), // /hello 경로에 대한 URL 출력
-            description: 'The URL for the Hello Lambda API endpoint',
+            value: api.url,
+            description: 'The URL of the API Gateway endpoint',
+        });
+        new aws_cdk_lib_1.CfnOutput(this, 'UserPoolId', {
+            value: userPool.userPoolId,
+            description: 'The ID of the Cognito User Pool',
+        });
+        new aws_cdk_lib_1.CfnOutput(this, 'UserPoolClientId', {
+            value: userPoolClient.userPoolClientId,
+            description: 'The Client ID of the Cognito User Pool App Client',
         });
     }
 }

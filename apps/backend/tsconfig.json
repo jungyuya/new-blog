@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2020", // 최신 JavaScript 기능 사용을 위해 es2020 이상으로 설정
+    "module": "commonjs", // Node.js 환경에 적합한 모듈 시스템
+    "lib": ["es2020"], // 최신 JavaScript 라이브러리 타입 포함
+    "strict": true, // 엄격한 타입 검사 활성화 (권장)
+    "esModuleInterop": true, // CommonJS와 ES 모듈 간 상호 운용성 허용
+    "skipLibCheck": true, // 라이브러리 타입 검사 건너뛰기 (컴파일 속도 향상)
+    "forceConsistentCasingInFileNames": true, // 파일 이름 대소문자 일관성 강제
+    "outDir": "./dist", // 컴파일된 JavaScript 파일이 저장될 디렉토리
+    "rootDir": "./", // 소스 코드의 루트 디렉토리
+    "baseUrl": "./", // 모듈 해석을 위한 기본 디렉토리
+    "paths": {
+      "*": ["node_modules/*"] // 모듈 경로 설정
+    }
+  },
+  "include": ["**/*.ts"], // .ts 확장자를 가진 모든 파일을 컴파일 대상에 포함
+  "exclude": ["node_modules", "dist"] // node_modules와 dist 디렉토리는 컴파일에서 제외
+}

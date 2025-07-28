@@ -1,31 +1,16 @@
 {
   "version": "45.0.0",
   "files": {
-    "e336b7d5d81038aab66f2edc5133cfe73ba7c98f4e08b6b260db5b69c259d9bb": {
-      "displayName": "HelloLambda/Code",
-      "source": {
-        "path": "asset.e336b7d5d81038aab66f2edc5133cfe73ba7c98f4e08b6b260db5b69c259d9bb",
-        "packaging": "zip"
-      },
-      "destinations": {
-        "786382940028-ap-northeast-2-54ee255f": {
-          "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-          "objectKey": "e336b7d5d81038aab66f2edc5133cfe73ba7c98f4e08b6b260db5b69c259d9bb.zip",
-          "region": "ap-northeast-2",
-          "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
-        }
-      }
-    },
-    "b56bb96d55ec12179cbc939fff74ba13634b23be25fbbf1a84ab83334cdb8974": {
+    "fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487": {
       "displayName": "BlogInfraStack Template",
       "source": {
         "path": "BlogInfraStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "786382940028-ap-northeast-2-1e0c395d": {
+        "786382940028-ap-northeast-2-76f6c503": {
           "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-          "objectKey": "b56bb96d55ec12179cbc939fff74ba13634b23be25fbbf1a84ab83334cdb8974.json",
+          "objectKey": "fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487.json",
           "region": "ap-northeast-2",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
         }
