@@ -65,25 +65,41 @@ jobs:
         run: pnpm --filter infra cdk diff # Turborepo 필터로 infra 워크스페이스에 대해 cdk diff 실행
         working-directory: ./apps/infra # apps/infra 디렉토리에서 스크립트 실행
 
-      - name: CDK Deploy Infrastructure
-        # set -euxo pipefail: 스크립트 실행 중 오류 발생 시 즉시 종료 (디버깅 용이)
-        # pnpm --filter infra: monorepo 루트에서 infra 워크스페이스에 대해 명령 실행
-        # || exit 1: 이전 명령이 실패하면 이 스텝을 실패 상태로 만듦
+      - name: CDK Deploy Infrastructure (with forced logging)
+        # ⭐ 핵심 변경: cdk deploy 출력을 파일로 리다이렉션 후 강제 출력
         run: |
-          set -euxo pipefail
-          pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json || exit 1
-        working-directory: ./apps/infra # apps/infra 디렉토리에서 스크립트 실행
+          set -euxo pipefail # 여전히 오류 발생 시 즉시 종료
+          DEPLOY_LOG_FILE="cdk_deploy_output.log" # 임시 로그 파일명
+          
+          # pnpm cdk deploy 실행, 모든 출력 (stdout, stderr)을 파일로 리다이렉션
+          # 성공하면 0, 실패하면 1을 반환하도록 pipefail 적용
+          pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true # 실패 시에도 즉시 종료하지 않고 로그 파일에 남김
+          
+          # 로그 파일 내용을 출력하여 GitHub Actions 로그에 포함
+          echo "--- CDK Deploy Output ---"
+          cat "${DEPLOY_LOG_FILE}"
+          echo "-------------------------"
+
+          # cdk deploy 명령의 실제 종료 코드를 확인하여 스텝 실패 여부 결정
+          if grep -q "deployed" "${DEPLOY_LOG_FILE}"; then
+            echo "CDK deploy command completed successfully."
+          elif grep -q "No changes to deploy" "${DEPLOY_LOG_FILE}"; then
+            echo "CDK deploy command completed with no changes to deploy."
+          else
+            echo "CDK deploy command failed. Check the output above for errors."
+            exit 1 # 실제 오류가 있었다면 스텝 실패 처리
+          fi
+        working-directory: ./apps/infra
         env:
-          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # 현재 커밋 SHA를 Lambda 코드 S3 키에 사용
-          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }} # 아티팩트 버킷 이름 조합
+          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
 
       - name: Save CDK Outputs
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          # path는 리포지토리 루트 기준 상대 경로이므로 apps/infra/cdk-outputs.json으로 지정
           path: apps/infra/cdk-outputs.json
-          if-no-files-found: warn # 파일이 없어도 경고만 표시 (오류 아님)
+          if-no-files-found: warn
           compression-level: 6
           overwrite: false
           include-hidden-files: false

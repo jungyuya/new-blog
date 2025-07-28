@@ -101,7 +101,7 @@ export class InfraStack extends Stack {
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
-      tracing: lambda.Tracing.ACTIVE, // X-Ray 트레이싱 활성화 (Observability)
+      tracing: lambda.Tracing.ACTIVE, //X-Ray 트레이싱 활성화 (Observability)
     });
 
     // --- Lambda 함수에 권한 부여 ---
