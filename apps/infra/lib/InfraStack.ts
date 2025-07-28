@@ -92,7 +92,7 @@ export class InfraStack extends Stack {
       code: lambda.Code.fromBucket(artifactBucket, lambdaCodeS3Key), // S3 버킷과 키를 통해 코드 참조
       handler: 'index.handler', // apps/backend/src/index.ts의 handler 함수
       runtime: Runtime.NODEJS_20_X,
-      memorySize: 128,
+      memorySize: 256,
       timeout: Duration.seconds(10),
       environment: {
         NODE_ENV: 'production',

@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/9e6ea5c047fe5601776e0efb31ceba6448911d2d5dcf1474a90e78cd530fd1af.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -60,7 +60,7 @@
             "data": "PostsTableC82B36F0"
           }
         ],
-        "/BlogInfraStack/ExistingBlogArtifactBucket": [
+        "/BlogInfraStack/BlogArtifactBucket": [
           {
             "type": "aws:cdk:warning",
             "data": "objectVersion is not defined for S3Code.fromBucket(). The lambda will not be updated automatically if the code in the bucket is updated. This is because CDK/Cloudformation does not track changes on the source S3 Bucket. It is recommended to either use S3Code.fromAsset() instead or set objectVersion. [ack: @aws-cdk/aws-lambda:codeFromBucketObjectVersionNotSpecified]",
@@ -68,7 +68,7 @@
               "Annotations.addMessage (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/core/lib/annotations.js:1:1978)",
               "Annotations.addWarningV2 (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/core/lib/annotations.js:1:896)",
               "Function.fromBucket (/home/jungyu/projects/new-blog/node_modules/.pnpm/aws-cdk-lib@2.207.0_constructs@10.4.2/node_modules/aws-cdk-lib/aws-lambda/lib/code.js:1:1218)",
-              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:80:25)",
+              "new InfraStack (/home/jungyu/projects/new-blog/apps/infra/lib/InfraStack.ts:92:25)",
               "Object.<anonymous> (/home/jungyu/projects/new-blog/apps/infra/bin/infra.ts:16:1)",
               "Module._compile (node:internal/modules/cjs/loader:1529:14)",
               "Module.m._compile (/home/jungyu/projects/new-blog/node_modules/.pnpm/ts-node@10.9.2_@types+node@24.1.0_typescript@5.8.3/node_modules/ts-node/src/index.ts:1618:23)",
@@ -88,6 +88,42 @@
               "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)",
               "node:internal/main/run_main_module:28:49"
             ]
+          }
+        ],
+        "/BlogInfraStack/BlogArtifactBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogArtifactBucketCF54B9AB"
+          }
+        ],
+        "/BlogInfraStack/BlogArtifactBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogArtifactBucketPolicyD5DD4586"
+          }
+        ],
+        "/BlogInfraStack/BlogArtifactBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogArtifactBucketAutoDeleteObjectsCustomResource59CA7566"
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
           }
         ],
         "/BlogInfraStack/HelloLambda/ServiceRole/Resource": [
@@ -364,6 +400,12 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "UserPoolClientIdOutput"
+          }
+        ],
+        "/BlogInfraStack/ArtifactBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ArtifactBucketName"
           }
         ],
         "/BlogInfraStack/HelloLambdaErrorsAlarm/Resource": [

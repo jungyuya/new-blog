@@ -1,16 +1,31 @@
 {
   "version": "45.0.0",
   "files": {
-    "fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487": {
+    "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6": {
+      "displayName": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "786382940028-ap-northeast-2-0e622d2a": {
+          "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+          "objectKey": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
+          "region": "ap-northeast-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
+        }
+      }
+    },
+    "9e6ea5c047fe5601776e0efb31ceba6448911d2d5dcf1474a90e78cd530fd1af": {
       "displayName": "BlogInfraStack Template",
       "source": {
         "path": "BlogInfraStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "786382940028-ap-northeast-2-76f6c503": {
+        "786382940028-ap-northeast-2-076b8264": {
           "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-          "objectKey": "fa9673f64b7959b2eb6a11b526f1a672da800f9882902d2a4afc054826021487.json",
+          "objectKey": "9e6ea5c047fe5601776e0efb31ceba6448911d2d5dcf1474a90e78cd530fd1af.json",
           "region": "ap-northeast-2",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
         }
