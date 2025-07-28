@@ -10,7 +10,8 @@ on:
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
   workflow_run:
-    workflows: ["Backend CI (Build & Upload Lambda Artifact)"]
+    workflows:
+      - "Backend CI (Build & Upload Lambda Artifact)"
     types:
       - completed
     branches:
@@ -27,21 +28,22 @@ jobs:
       AWS_REGION: ap-northeast-2
       ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}
 
-    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') # ⭐ 두 트리거 이벤트 모두 커버하도록 조건 명확화
+    # push 또는 Backend CI 성공 이후 workflow_run 두 이벤트 모두 실행
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # ⭐ workflow_run 이벤트인 경우 해당 워크플로우를 트리거한 커밋의 SHA를 가져옵니다.
-          # push 이벤트인 경우 기본적으로 현재 커밋을 가져옵니다.
+          # workflow_run 이벤트면 head SHA, 아니면 현재 SHA
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3 # v3 또는 v4 사용 가능
+        uses: pnpm/action-setup@v4
         with:
-          version: 9 # ⭐ 로컬 pnpm 버전과 동일하게 명시
+          version: 9
           run_install: false
 
       - name: Setup Node.js
@@ -51,7 +53,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile # 이제 pnpm-lock.yaml을 찾을 수 있습니다.
+        run: pnpm install --frozen-lockfile
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -63,23 +65,24 @@ jobs:
         run: npm install -g aws-cdk
 
       - name: CDK Diff (Optional but Recommended for Review)
-        run: pnpm --filter infra cdk diff
         working-directory: ./apps/infra
+        run: pnpm --filter infra cdk diff
 
       - name: CDK Deploy Infrastructure
-        run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
         working-directory: ./apps/infra
         env:
-          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # ⭐ workflow_run 시 올바른 SHA 참조
+          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
+        run: pnpm --filter infra cdk deploy \
+          --require-approval never \
+          --outputs-file cdk-outputs.json
 
       - name: Save CDK Outputs
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk-outputs.json # ⭐ working-directory가 apps/infra가 되므로, 파일명만 지정
+          path: apps/infra/cdk-outputs.json
           if-no-files-found: warn
           compression-level: 6
           overwrite: false
           include-hidden-files: false
-          working-directory: ./apps/infra # ⭐ 추가
