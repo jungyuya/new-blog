@@ -59,9 +59,8 @@ jobs:
         run: npm install -g aws-cdk
 
       - name: Build Infra
-        # ⭐ 새로운 스텝 추가: apps/infra 프로젝트 빌드 (TypeScript 컴파일)
         run: pnpm --filter infra build
-        working-directory: ./apps/infra # apps/infra 디렉토리에서 빌드 스크립트 실행
+        working-directory: ./apps/infra
 
       - name: CDK Diff (Optional but Recommended for Review)
         run: pnpm --filter infra cdk diff
@@ -72,7 +71,9 @@ jobs:
           set -euxo pipefail
           DEPLOY_LOG_FILE="cdk_deploy_output.log"
           
-          pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true
+          # ⭐ 변경: CDK_DEBUG=true 환경 변수 추가
+          # ⭐ 변경: NODE_OPTIONS=--max-old-space-size=4096 추가 (메모리 문제 방지)
+          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true
           
           echo "--- CDK Deploy Output ---"
           cat "${DEPLOY_LOG_FILE}"

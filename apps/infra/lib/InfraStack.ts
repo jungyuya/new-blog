@@ -234,7 +234,7 @@ export class InfraStack extends Stack {
 
     // DynamoDB Write Throttled Requests 알람 (용량 부족)
     postsTable.metric('WriteThrottleEvents', {
-      period: Duration.minutes(5), // Metric 정의 시 period 지정
+      period: Duration.minutes(5), // Metric 정의 시 period  지정
       statistic: 'Sum',
     }).createAlarm(this, 'PostsTableWriteThrottleAlarm', {
       threshold: 1,
@@ -244,7 +244,7 @@ export class InfraStack extends Stack {
       // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
     });
 
-    // TODO: SNS Topic 정의 (알람을 받을 이메일 주소 연결)
+    // TODO: SNS Topic 정의 (알람을 받을 이메일 주소 연결 )
     // const alarmSnsTopic = new sns.Topic(this, 'AlarmSnsTopic', {
     //   displayName: 'Blog Service Alarms',
     // });
