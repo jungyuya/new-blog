@@ -28,7 +28,7 @@ export const handler = async (event: any) => {
   console.log('Lambda function invoked with event:', event);
 
   const tableName = process.env.TABLE_NAME;
-  const userPoolId = process.env.USER_POOL_ID; // <-- 이 줄 추가!
+  const userPoolId = process.env.USER_POOL_ID; 
   const userPoolClientId = process.env.USER_POOL_CLIENT_ID; // <-- 이 줄 추가!
 
   if (!tableName || !userPoolId || !userPoolClientId) { // <-- 조건문 수정!
