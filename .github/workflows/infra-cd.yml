@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        # working-directory는 명시하지 않아 기본값(리포지토리 루트) 사용
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -47,7 +48,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile # 이것은 항상 루트에서 실행됨
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -59,21 +60,19 @@ jobs:
         run: npm install -g aws-cdk
 
       - name: Build Infra
-        run: pnpm --filter infra build
-        working-directory: ./apps/infra
+        run: pnpm --filter infra build # ⭐ 변경: --filter infra 유지, working-directory 제거
+        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
 
       - name: CDK Diff (Optional but Recommended for Review)
-        run: pnpm --filter infra cdk diff
-        working-directory: ./apps/infra
+        run: pnpm --filter infra cdk diff # ⭐ 변경: --filter infra 유지, working-directory 제거
+        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
 
       - name: CDK Deploy Infrastructure (with forced logging)
         run: |
           set -euxo pipefail
-          DEPLOY_LOG_FILE="cdk_deploy_output.log"
+          DEPLOY_LOG_FILE="apps/infra/cdk_deploy_output.log" # ⭐ 변경: 로그 파일 경로 수정 (루트 기준)
           
-          # ⭐ 변경: CDK_DEBUG=true 환경 변수 추가
-          # ⭐ 변경: NODE_OPTIONS=--max-old-space-size=4096 추가 (메모리 문제 방지)
-          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true
+          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter infra cdk deploy --require-approval never --outputs-file apps/infra/cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true # ⭐ 변경: outputs-file 경로 수정 (루트 기준)
           
           echo "--- CDK Deploy Output ---"
           cat "${DEPLOY_LOG_FILE}"
@@ -87,7 +86,7 @@ jobs:
             echo "CDK deploy command failed. Check the output above for errors."
             exit 1
           fi
-        working-directory: ./apps/infra
+        # working-directory: ./apps/infra # ⭐ 이 라인 삭제
         env:
           GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
@@ -96,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          path: apps/infra/cdk-outputs.json
+          path: apps/infra/cdk-outputs.json # ⭐ 이 경로는 계속 리포지토리 루트 기준
           if-no-files-found: warn
           compression-level: 6
           overwrite: false
