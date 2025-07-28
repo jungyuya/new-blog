@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2020", // 최신 JavaScript 기능 사용을 위해 es2020 이상으로 설정
-    "module": "commonjs", // Node.js 환경에 적합한 모듈 시스템
+    "module": "commonjs", // Node.js환경에 적합한 모듈 시스템
     "lib": ["es2020"], // 최신 JavaScript 라이브러리 타입 포함
     "strict": true, // 엄격한 타입 검사 활성화 (권장)
     "esModuleInterop": true, // CommonJS와 ES 모듈 간 상호 운용성 허용
