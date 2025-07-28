@@ -1,15 +1,9 @@
+# .github/workflows/infra-cd.yml (최종 수정 제안)
 name: Infra CD (Deploy AWS CDK)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'apps/infra/**'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
   workflow_run:
-    workflows: ["Backend CI (Build & Upload Lambda Artifact)"]
+    workflows: ["Backend CI (Build & Test Backend Code)"] # Backend CI 워크플로우 이름과 일치하는지 확인
     types:
       - completed
     branches:
@@ -17,38 +11,41 @@ on:
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }} # Backend CI가 성공했을 때만 실행
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-
     env:
       AWS_REGION: ap-northeast-2
-      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}
-
-    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }} # CDK_DEFAULT_ACCOUNT 환경 변수 추가
+      CDK_DEFAULT_REGION: ${{ env.AWS_REGION }} # CDK_DEFAULT_REGION 환경 변수 추가
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-        # working-directory는 명시하지 않아 기본값(리포지토리 루트) 사용
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9
-          run_install: false
+          version: 9 # pnpm 버전 9로 설정
+          run_install: false # 의존성 설치는 별도 스텝에서 진행
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
           cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile # 이것은 항상 루트에서 실행됨
+      - name: Install Monorepo Dependencies
+        # ⭐ 핵심 변경: 이제 pnpm-lock.yaml에 esbuild가 포함될 것이므로,
+        # 이 스텝에서 모든 의존성이 설치됩니다.
+        run: pnpm install --frozen-lockfile
+
+      # ⭐ 핵심 제거: 이전에 추가했던 'Install esbuild for CDK bundling' 스텝을 제거합니다. ⭐
+      # - name: Install esbuild for CDK bundling
+      #   run: pnpm add -Dw esbuild
+      #   working-directory: ./apps/infra
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -56,48 +53,6 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install AWS CDK CLI
-        run: npm install -g aws-cdk
-
-      - name: Build Infra
-        run: pnpm exec tsc # 또는 pnpm run build (apps/infra/package.json에 "build": "tsc"가 정의되어 있다면)
-        working-directory: ./apps/infra
-
-      - name: CDK Diff (Optional but Recommended for Review)
-        run: pnpm exec cdk diff
-        working-directory: ./apps/infra
-
-      - name: CDK Deploy Infrastructure (with forced logging)
-        run: |
-          set -euxo pipefail
-          DEPLOY_LOG_FILE="cdk_deploy_output.log"
-          
-          # ⭐ 최종 변경: pnpm exec cdk deploy
-          CDK_DEBUG=true NODE_OPTIONS="--max-old-space-size=4096" pnpm exec cdk deploy --require-approval never --outputs-file cdk-outputs.json > "${DEPLOY_LOG_FILE}" 2>&1 || true
-          
-          echo "--- CDK Deploy Output ---"
-          cat "${DEPLOY_LOG_FILE}"
-          echo "-------------------------"
-
-          if grep -q "deployed" "${DEPLOY_LOG_FILE}"; then
-            echo "CDK deploy command completed successfully."
-          elif grep -q "No changes to deploy" "${DEPLOY_LOG_FILE}"; then
-            echo "CDK deploy command completed with no changes to deploy."
-          else
-            echo "CDK deploy command failed. Check the output above for errors."
-            exit 1
-          fi
-        working-directory: ./apps/infra
-        env:
-          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
-
-      - name: Save CDK Outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: cdk-outputs
-          path: apps/infra/cdk-outputs.json
-          if-no-files-found: warn
-          compression-level: 6
-          overwrite: false
-          include-hidden-files: false
+      - name: CDK Deploy Infrastructure
+        working-directory: ./apps/infra # apps/infra 디렉토리로 이동
+        run: pnpm exec cdk deploy --require-approval never # --require-approval never 추가하여 자동 배포
