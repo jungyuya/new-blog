@@ -67,7 +67,9 @@ jobs:
         working-directory: ./apps/infra
 
       - name: CDK Deploy Infrastructure
-        run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
+        run: |
+          cd apps/infra
+          pnpm cdk deploy --require-approval never --outputs-file cdk-outputs.json || exit 1
         working-directory: ./apps/infra
         env:
           GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # ⭐ workflow_run 시 올바른 SHA 참조
