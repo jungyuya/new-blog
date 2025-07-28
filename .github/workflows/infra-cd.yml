@@ -6,11 +6,11 @@ on:
     branches:
       - main
     paths:
-      - 'apps/infra/**' # apps/infra 디렉토리 내의 파일 변경 시 트리거
-      - 'pnpm-workspace.yaml' # 워크스페이스 설정 파일 변경 시 트리거
-      - 'pnpm-lock.yaml' # 의존성 파일 변경 시 트리거
-  workflow_run: # backend-ci.yml 워크플로우가 성공적으로 완료되면 트리거
-    workflows: ["Backend CI (Build & Upload Lambda Artifact)"] # backend-ci.yml의 name
+      - 'apps/infra/**'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+  workflow_run:
+    workflows: ["Backend CI (Build & Upload Lambda Artifact)"]
     types:
       - completed
     branches:
@@ -20,22 +20,28 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # OIDC 토큰을 요청할 권한
-      contents: read # 리포지토리 내용을 읽을 권한
+      id-token: write
+      contents: read
 
-    env: # 이 env 블록은 job 아래에 2칸 들여쓰기 되어야 합니다.
-      AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경
-      # ARTIFACT_BUCKET_NAME 정의 방식 변경
-      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }} 
+    env:
+      AWS_REGION: ap-northeast-2
+      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}
+
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') # ⭐ 두 트리거 이벤트 모두 커버하도록 조건 명확화
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # ⭐ workflow_run 이벤트인 경우 해당 워크플로우를 트리거한 커밋의 SHA를 가져옵니다.
+          # push 이벤트인 경우 기본적으로 현재 커밋을 가져옵니다.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v3 # v3 또는 v4 사용 가능
         with:
-          version: 8
+          version: 9 # ⭐ 로컬 pnpm 버전과 동일하게 명시
           run_install: false
 
       - name: Setup Node.js
@@ -45,16 +51,16 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile # 이제 pnpm-lock.yaml을 찾을 수 있습니다.
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole # 4.2에서 생성한 IAM 역할 ARN
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install AWS CDK CLI
-        run: npm install -g aws-cdk # CDK CLI 설치 (runner에 없을 수 있으므로)
+        run: npm install -g aws-cdk
 
       - name: CDK Diff (Optional but Recommended for Review)
         run: pnpm --filter infra cdk diff
@@ -63,10 +69,9 @@ jobs:
       - name: CDK Deploy Infrastructure
         run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
         working-directory: ./apps/infra
-        env: # 이 env 블록은 step 안에 정의될 수도 있습니다.
-          GITHUB_SHA: ${{ github.sha }} # 현재 커밋 SHA를 Lambda 코드 S3 키에 사용
-          # ARTIFACT_BUCKET_NAME 환경 변수를 최종 조합하여 전달
-          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }} 
+        env:
+          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # ⭐ workflow_run 시 올바른 SHA 참조
+          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
 
       - name: Save CDK Outputs
         uses: actions/upload-artifact@v4
