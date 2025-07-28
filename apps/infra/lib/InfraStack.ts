@@ -1,3 +1,4 @@
+// new-blog/apps/infra/lib/InfraStack.ts
 import { Stack, StackProps, Duration, CfnOutput } from 'aws-cdk-lib';
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -83,7 +84,7 @@ export class InfraStack extends Stack {
     });
 
     // --- Lambda Function 정의 (S3 버킷에서 코드 로드하도록 변경) ---
-    // GITHUB_SHA는 GitHub Actions에서 제공하는 환경 변수입니다.
+    // GITHUB_SHA는 GitHub Actions에서 제공하는 환경변수입니다.
     // 로컬에서 테스트할 때는 'latest'로 폴백됩니다.
     const lambdaCodeS3Key = `backend/${process.env.GITHUB_SHA || 'latest'}.zip`;
 
