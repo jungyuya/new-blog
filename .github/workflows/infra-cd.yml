@@ -1,9 +1,9 @@
-# .github/workflows/infra-cd.yml (최종 수정 제안)
+# .github/workflows/infra-cd.yml
 name: Infra CD (Deploy AWS CDK)
 
 on:
   workflow_run:
-    workflows: ["Backend CI (Build & Test Backend Code)"] # Backend CI 워크플로우 이름과 일치하는지 확인
+    workflows: ["Backend CI (Build & Test Backend Code)"]
     types:
       - completed
     branches:
@@ -11,15 +11,16 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }} # Backend CI가 성공했을 때만 실행
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     env:
       AWS_REGION: ap-northeast-2
-      CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }} # CDK_DEFAULT_ACCOUNT 환경 변수 추가
-      CDK_DEFAULT_REGION: ${{ env.AWS_REGION }} # CDK_DEFAULT_REGION 환경 변수 추가
+      CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+      # ⭐ 핵심 수정: CDK_DEFAULT_REGION 값을 'ap-northeast-2'로 직접 지정합니다. ⭐
+      CDK_DEFAULT_REGION: ap-northeast-2 
 
     steps:
       - name: Checkout repository
@@ -28,8 +29,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9 # pnpm 버전 9로 설정
-          run_install: false # 의존성 설치는 별도 스텝에서 진행
+          version: 9
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,21 +39,14 @@ jobs:
           cache: 'pnpm'
 
       - name: Install Monorepo Dependencies
-        # ⭐ 핵심 변경: 이제 pnpm-lock.yaml에 esbuild가 포함될 것이므로,
-        # 이 스텝에서 모든 의존성이 설치됩니다.
         run: pnpm install --frozen-lockfile
-
-      # ⭐ 핵심 제거: 이전에 추가했던 'Install esbuild for CDK bundling' 스텝을 제거합니다. ⭐
-      # - name: Install esbuild for CDK bundling
-      #   run: pnpm add -Dw esbuild
-      #   working-directory: ./apps/infra
-
+            
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }} # 이 위치에서는 ${{ env.AWS_REGION }}이 올바르게 작동합니다.
 
       - name: CDK Deploy Infrastructure
-        working-directory: ./apps/infra # apps/infra 디렉토리로 이동
-        run: pnpm exec cdk deploy --require-approval never # --require-approval never 추가하여 자동 배포
+        working-directory: ./apps/infra
+        run: pnpm exec cdk deploy --require-approval never
