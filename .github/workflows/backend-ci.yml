@@ -1,4 +1,4 @@
-# .github/workflows/backend-ci.yml (최종 수정 제안)
+# .github/workflows/backend-ci.yml (최종 및 정확한 수정 제안)
 name: Backend CI (Build & Upload Lambda Artifact)
 
 on:
@@ -18,8 +18,9 @@ jobs:
       contents: read
     env:
       AWS_REGION: ap-northeast-2
-      # Job 레벨에서 ARTIFACT_BUCKET_NAME을 올바르게 정의했습니다.
-      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-${{ env.AWS_REGION }} 
+      # ⭐ 핵심 수정: AWS_REGION을 직접 문자열로 참조합니다. ⭐
+      # 또는 ARTIFACT_BUCKET_NAME을 스텝 내에서 정의하는 것을 고려할 수 있습니다.
+      ARTIFACT_BUCKET_NAME: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}-ap-northeast-2 
       
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +39,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole # S3 업로드 권한이 있는 역할
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }} # 이 부분은 env 블록 외부이므로 ${{ env.AWS_REGION }}이 올바른 참조입니다.
 
       - name: Build Lambda Code
         run: pnpm --filter backend build # backend 워크스페이스 빌드
@@ -48,8 +49,6 @@ jobs:
         run: zip -r backend.zip dist # dist 폴더를 backend.zip으로 압축
 
       - name: Upload Lambda Artifact to S3
-        # 이 스텝에서는 job 레벨의 환경 변수 (ARTIFACT_BUCKET_NAME)를 바로 사용합니다.
-        # 별도의 'env' 블록을 이곳에 추가하지 않습니다.
         working-directory: ./apps/backend
         run: |
           LAMBDA_ARTIFACT_PATH="backend.zip" # 앞에서 생성된 backend.zip
