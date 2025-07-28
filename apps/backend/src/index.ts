@@ -42,7 +42,7 @@ export const handler = async (event: any) => {
 
   const { httpMethod, path, body, requestContext } = event; // requestContext 추가!
 
-  // 사용자 인증 정보 추출 (API Gateway Cognito Authorizer 사용 시)
+  // 사용자 인증 정보 추출 (API Gateway Cognito Authorizer 사용 시 )
   // requestContext.authorizer.claims에 인증된 사용자 정보가 포함됩니다.
   const userId = requestContext?.authorizer?.claims?.sub; // User Pool에서 고유한 사용자 ID (sub)
   const userEmail = requestContext?.authorizer?.claims?.email; // User Pool에서 사용자 이메일
