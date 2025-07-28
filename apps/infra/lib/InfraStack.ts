@@ -10,7 +10,7 @@ import * as path from 'path'; // path 모듈은 더 이상 NodejsFunction의 ent
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3'; // S3 모듈 임포트
+import * as s3 from 'aws-cdk-lib/aws-s3'; //S3 모듈 임포트
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'; // CloudWatch 모듈 임포트
 // import * as sns from 'aws-cdk-lib/aws-sns'; // SNS 알림을 위한 모듈 (추후 SNS 설정 시 주석 해제)
 // import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'; // SNS 구독을 위한 모듈 (추후 SNS 설정 시 주석 해제)

@@ -1,4 +1,3 @@
-# .github/workflows/infra-cd.yml
 name: Infra CD (Deploy AWS CDK)
 
 on:
@@ -6,12 +5,11 @@ on:
     branches:
       - main
     paths:
-      - 'apps/infra/**'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
-  workflow_run:
-    workflows:
-      - "Backend CI (Build & Upload Lambda Artifact)"
+      - 'apps/infra/**' # apps/infra 디렉토리 내의 파일 변경 시 트리거
+      - 'pnpm-workspace.yaml' # 워크스페이스 설정 파일 변경 시 트리거
+      - 'pnpm-lock.yaml' # 의존성 파일 변경 시 트리거
+  workflow_run: # backend-ci.yml 워크플로우가 성공적으로 완료되면 트리거
+    workflows: ["Backend CI (Build & Upload Lambda Artifact)"] # backend-ci.yml의 name
     types:
       - completed
     branches:
@@ -21,68 +19,71 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      id-token: write # OIDC 토큰을 요청할 권한
+      contents: read # 리포지토리 내용을 읽을 권한
 
-    env:
-      AWS_REGION: ap-northeast-2
-      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }}
+    env: # 이 env 블록은 job 아래에 2칸 들여쓰기 되어야 합니다.
+      AWS_REGION: ap-northeast-2 # 여러분의 AWS 리전으로 변경 (예: ap-northeast-2)
+      ARTIFACT_BUCKET_NAME_BASE: blog-lambda-artifacts-${{ secrets.AWS_ACCOUNT_ID }} # S3 아티팩트 버킷 이름의 기본 부분
 
-    # push 또는 Backend CI 성공 이후 workflow_run 두 이벤트 모두 실행
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    # push 이벤트이거나, workflow_run 이벤트가 'success'로 완료되었을 때만 deploy Job 실행
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # workflow_run 이벤트면 head SHA, 아니면 현재 SHA
+          # workflow_run을 트리거한 워크플로우의 커밋 SHA를 참조하여 정확한 코드 버전을 가져옵니다.
+          # push 이벤트인 경우 기본적으로 현재 커밋을 가져옵니다.
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v3
         with:
-          version: 9
-          run_install: false
+          version: 9 # ⭐ 로컬 pnpm 버전(9.x.x)과 동일하게 9로 명시
+          run_install: false # pnpm install은 다음 단계에서 실행
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
+          cache: 'pnpm' # pnpm 캐시 사용
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile # pnpm-lock.yaml에 고정된 버전으로 설치
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsCDKDeployRole # 4.2에서 생성한 IAM 역할 ARN
+          aws-region: ${{ env.AWS_REGION }} # AWS_REGION 환경 변수 참조
 
       - name: Install AWS CDK CLI
-        run: npm install -g aws-cdk
+        run: npm install -g aws-cdk # CDK CLI 설치 (runner에 없을 수 있으므로)
 
       - name: CDK Diff (Optional but Recommended for Review)
-        working-directory: ./apps/infra
-        run: pnpm --filter infra cdk diff
+        run: pnpm --filter infra cdk diff # Turborepo 필터로 infra 워크스페이스에 대해 cdk diff 실행
+        working-directory: ./apps/infra # apps/infra 디렉토리에서 스크립트 실행
 
       - name: CDK Deploy Infrastructure
-        working-directory: ./apps/infra
+        # set -euxo pipefail: 스크립트 실행 중 오류 발생 시 즉시 종료 (디버깅 용이)
+        # pnpm --filter infra: monorepo 루트에서 infra 워크스페이스에 대해 명령 실행
+        # || exit 1: 이전 명령이 실패하면 이 스텝을 실패 상태로 만듦
+        run: |
+          set -euxo pipefail
+          pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json || exit 1
+        working-directory: ./apps/infra # apps/infra 디렉토리에서 스크립트 실행
         env:
-          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }}
-        run: pnpm --filter infra cdk deploy \
-          --require-approval never \
-          --outputs-file cdk-outputs.json
+          GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # 현재 커밋 SHA를 Lambda 코드 S3 키에 사용
+          ARTIFACT_BUCKET_NAME: ${{ env.ARTIFACT_BUCKET_NAME_BASE }}-${{ env.AWS_REGION }} # 아티팩트 버킷 이름 조합
 
       - name: Save CDK Outputs
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
+          # path는 리포지토리 루트 기준 상대 경로이므로 apps/infra/cdk-outputs.json으로 지정
           path: apps/infra/cdk-outputs.json
-          if-no-files-found: warn
+          if-no-files-found: warn # 파일이 없어도 경고만 표시 (오류 아님)
           compression-level: 6
           overwrite: false
           include-hidden-files: false
