@@ -220,7 +220,7 @@ export class InfraStack extends Stack {
       // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
     });
 
-    // DynamoDB Read Throttled Requests 알람 (용량 부족    )
+    // DynamoDB Read Throttled Requests 알람 (용량 부족     )
     postsTable.metric('ReadThrottleEvents', {
       period: Duration.minutes(5), // Metric 정의 시 period 지정
       statistic: 'Sum',

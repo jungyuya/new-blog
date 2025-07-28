@@ -67,9 +67,7 @@ jobs:
         working-directory: ./apps/infra
 
       - name: CDK Deploy Infrastructure
-        run: |
-          cd apps/infra
-          pnpm cdk deploy --require-approval never --outputs-file cdk-outputs.json || exit 1
+        run: pnpm --filter infra cdk deploy --require-approval never --outputs-file cdk-outputs.json
         working-directory: ./apps/infra
         env:
           GITHUB_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }} # ⭐ workflow_run 시 올바른 SHA 참조
@@ -79,4 +77,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          path: apps/infra/cdk-outputs.json
+          path: cdk-outputs.json # ⭐ working-directory가 apps/infra가 되므로, 파일명만 지정
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
+        working-directory: ./apps/infra # ⭐ 추가
