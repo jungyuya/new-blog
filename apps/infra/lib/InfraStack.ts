@@ -1,4 +1,4 @@
-// new-blog/apps/infra/lib/InfraStack.ts
+//new-blog/apps/infra/lib/InfraStack.ts
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput } from 'aws-cdk-lib';
@@ -64,7 +64,7 @@ export class InfraStack extends Stack {
       lifecycleRules: [{ enabled: true, expiration: Duration.days(30) }],
     });
 
-    // --- IAM Role 정의 및 권한 부여 ---
+    // --- IAM Role 정의 및 권한 부여  ---
     const helloLambdaRole = new iam.Role(this, 'HelloLambdaServiceRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
