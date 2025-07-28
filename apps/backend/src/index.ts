@@ -29,7 +29,7 @@ export const handler = async (event: any) => {
 
   const tableName = process.env.TABLE_NAME;
   const userPoolId = process.env.USER_POOL_ID; 
-  const userPoolClientId = process.env.USER_POOL_CLIENT_ID; // <-- 이 줄 추가!
+  const userPoolClientId = process.env.USER_POOL_CLIENT_ID; 
 
   if (!tableName || !userPoolId || !userPoolClientId) { // <-- 조건문 수정!
     console.error('Environment variables are not set!');
