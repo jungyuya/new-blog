@@ -1,0 +1,38 @@
+# ~/projects/new-blog/apps/backend/template.yaml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: New Blog Backend API powered by Hono on AWS Lambda
+
+Globals:
+  Function:
+    Timeout: 30 # Lambda 함수 실행 시간 제한 (초)
+    MemorySize: 256 # Lambda 함수 메모리 크기 (MB)
+    Architectures:
+      - arm64 # M1/M2 맥 사용자를 위해 arm64 아키텍처 지정 (x86_64도 가능)
+
+Resources:
+  # 우리의 Hono Lambda 함수
+  BackendApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler # index.ts 파일의 handler 함수를 가리킴
+      Runtime: nodejs20.x # Node.js 런타임 버전
+      CodeUri: dist # 현재 디렉토리 (apps/backend)에서 코드를 찾음
+      Events:
+        # 이벤트를 API Gateway로 설정하여 HTTP 요청을 받을 수 있도록 함
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+} # 모든 경로를 이 Lambda 함수로 라우팅
+            Method: any # 모든 HTTP 메서드 허용
+      Environment:
+        Variables:
+          TABLE_NAME: NewBlogTable # ⭐️ 중요: DynamoDB 테이블 이름은 CDK에서 설정할 실제 이름과 동일하게 설정해야 합니다. (로컬 테스트용)
+          USER_POOL_ID: ap-northeast-2_dcXRFOg8l # 로컬 테스트용 Cognito User Pool ID (실제와 달라도 무방)
+          USER_POOL_CLIENT_ID: 3vpm0jhgriptpkgrskdieb1tng # 로컬 테스트용 Cognito Client ID (실제와 달라도 무방)
+
+Outputs:
+  BackendApiUrl:
+    Description: "API Gateway endpoint URL for Prod environment"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
