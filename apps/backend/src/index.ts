@@ -48,7 +48,7 @@ interface APIGatewayEventRequestContextV2WithAuth extends APIGatewayEventRequest
   };
 }
 
-// 전체 이벤트 타입에 반영 (requestContext를 확장된 타입으로 오버라이드)
+// 전체 이벤트 타입에 반영 (requestContext를 확장된 타입으로 오버라이드 )
 type APIGatewayProxyEventV2WithAuth = Omit<
   APIGatewayProxyEventV2,
   'requestContext'
