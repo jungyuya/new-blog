@@ -1,0 +1,8 @@
+{
+  "BlogInfraStack": {
+    "RegionOutput": "ap-northeast-2",
+    "UserPoolIdOutput": "ap-northeast-2_27WIBgYjt",
+    "UserPoolClientIdOutput": "57nplr76c82u3sjmvt7cub8gf5",
+    "ApiGatewayEndpoint": "https://oaghj8029h.execute-api.ap-northeast-2.amazonaws.com/"
+  }
+}

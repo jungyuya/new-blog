@@ -6,8 +6,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js",
     "zip": "cd dist && zip -r ../backend.zip .",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start:dev": "pnpm build && sam local start-api --env-vars /home/jungyu/projects/new-blog/apps/backend/env.json --docker-volume-basedir . --template template.yaml"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",

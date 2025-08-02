@@ -43,12 +43,20 @@ console.log('⚙️ DYNAMODB_ENDPOINT=', DYNAMODB_ENDPOINT);
 // ---------------------------
 // 3. AWS 클라이언트 초기화
 // ---------------------------
-const ddbClient = new DynamoDBClient({
-  region: REGION,
-  ...(DYNAMODB_ENDPOINT && { endpoint: DYNAMODB_ENDPOINT }),
-});
-const ddbDocClient = DynamoDBDocumentClient.from(ddbClient); // DynamoDB Document Client
 
+// DynamoDB 클라이언트 설정을 담을 객체를 미리 선언합니다.
+const ddbClientOptions: { region: string; endpoint?: string } = {
+  region: REGION,
+};
+
+// 'production' 환경이 아닐 때만 (즉, 로컬 환경일 때만) endpoint를 추가합니다.
+if (process.env.NODE_ENV !== 'production') {
+  ddbClientOptions.endpoint = process.env.DYNAMODB_ENDPOINT || 'http://host.docker.internal:8000';
+  console.log('🚀 Running in local mode. Connecting to DynamoDB at:', ddbClientOptions.endpoint);
+}
+
+const ddbClient = new DynamoDBClient(ddbClientOptions);
+const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
 const cognitoClient = new CognitoIdentityProviderClient({ region: REGION });
 
 const verifier = CognitoJwtVerifier.create({
