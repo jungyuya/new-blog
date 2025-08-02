@@ -31,7 +31,8 @@ Resources:
           TABLE_NAME: NewBlogTable # ⭐️ 중요: DynamoDB 테이블 이름은 CDK에서 설정할 실제 이름과 동일하게 설정해야 합니다. (로컬 테스트용)
           USER_POOL_ID: ap-northeast-2_dcXRFOg8l # 로컬 테스트용 Cognito User Pool ID (실제와 달라도 무방)
           USER_POOL_CLIENT_ID: 3vpm0jhgriptpkgrskdieb1tng # 로컬 테스트용 Cognito Client ID (실제와 달라도 무방)
-
+          DYNAMODB_ENDPOINT: http://host.docker.internal:8000
+          REGION: ap-northeast-2
 Outputs:
   BackendApiUrl:
     Description: "API Gateway endpoint URL for Prod environment"
