@@ -313,6 +313,9 @@ app.onError((err, c) => {
   return c.json({ message: 'Internal Server Error', error: err.message }, 500);
 });
 
+// [최종 배포 테스트용 로그]
+console.log("LAMBDA CODE VERSION 1.0.1 DEPLOYED SUCCESSFULLY!");
+
 // ---------------------------
 // 10. Lambda 핸들러 내보내기
 // ---------------------------

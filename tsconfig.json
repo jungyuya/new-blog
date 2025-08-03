@@ -3,7 +3,6 @@
   "references": [
     { "path": "./apps/frontend" },
     { "path": "./apps/backend" },
-    { "path": "./apps/frontend/amplify" }
   ],
   "compilerOptions": {
     "target": "ESNext",

@@ -1,4 +1,7 @@
 "use strict";
+// ~/projects/new-blog/apps/infra/lib/InfraStack.ts
+// [프로젝트 헌법] 제1조: 인프라 구성법 (CORS 문제 해결 최종안)
+// 최종 수정일: 2025년 8월 3일
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -35,39 +38,30 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InfraStack = void 0;
 const aws_cdk_lib_1 = require("aws-cdk-lib");
-const cdk = __importStar(require("aws-cdk-lib"));
 const lambda = __importStar(require("aws-cdk-lib/aws-lambda"));
 const aws_lambda_nodejs_1 = require("aws-cdk-lib/aws-lambda-nodejs");
 const aws_lambda_1 = require("aws-cdk-lib/aws-lambda");
-const aws_apigateway_1 = require("aws-cdk-lib/aws-apigateway");
-const apigw = __importStar(require("aws-cdk-lib/aws-apigateway"));
-const dynamodb = __importStar(require("aws-cdk-lib/aws-dynamodb"));
+const aws_apigatewayv2_1 = require("aws-cdk-lib/aws-apigatewayv2");
+const aws_apigatewayv2_integrations_1 = require("aws-cdk-lib/aws-apigatewayv2-integrations");
+// [CORS 수정] HttpUserPoolAuthorizer를 import 합니다.
+const aws_apigatewayv2_authorizers_1 = require("aws-cdk-lib/aws-apigatewayv2-authorizers");
 const cognito = __importStar(require("aws-cdk-lib/aws-cognito"));
+const dynamodb = __importStar(require("aws-cdk-lib/aws-dynamodb"));
 const iam = __importStar(require("aws-cdk-lib/aws-iam"));
-const s3 = __importStar(require("aws-cdk-lib/aws-s3")); //S3 모듈 임포트
-const cloudwatch = __importStar(require("aws-cdk-lib/aws-cloudwatch")); // CloudWatch 모듈 임포트
-// import * as sns from 'aws-cdk-lib/aws-sns'; // SNS 알림을 위한 모듈 (추후 SNS 설정 시 주석 해제)
-// import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'; // SNS 구독을 위한 모듈 (추후 SNS 설정 시 주석 해제)
-// import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions'; // CloudWatch 알람 액션을 위한 모듈 (추후 SNS 설정 시 주석 해제)
+const fs = __importStar(require("fs")); // Node.js의 파일 시스템 모듈을 import 합니다.
+const path = __importStar(require("path"));
+const cloudwatch = __importStar(require("aws-cdk-lib/aws-cloudwatch"));
 class InfraStack extends aws_cdk_lib_1.Stack {
     constructor(scope, id, props) {
         super(scope, id, props);
-        // --- Cognito User Pool 정의 ---
+        // --- 1. Cognito User Pool 정의 (사용자 인증 관리) ---
         const userPool = new cognito.UserPool(this, 'BlogUserPool', {
-            userPoolName: 'BlogUserPool',
+            userPoolName: `BlogUserPool-${this.stackName}`,
             selfSignUpEnabled: true,
-            signInAliases: {
-                email: true,
-                username: false,
-            },
-            autoVerify: {
-                email: true,
-            },
+            signInAliases: { email: true },
+            autoVerify: { email: true },
             standardAttributes: {
-                email: {
-                    required: true,
-                    mutable: true,
-                },
+                email: { required: true, mutable: true },
             },
             passwordPolicy: {
                 minLength: 8,
@@ -76,186 +70,198 @@ class InfraStack extends aws_cdk_lib_1.Stack {
                 requireSymbols: true,
                 requireUppercase: true,
             },
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
+            removalPolicy: aws_cdk_lib_1.RemovalPolicy.DESTROY,
         });
         const userPoolClient = userPool.addClient('BlogAppClient', {
             userPoolClientName: 'WebAppClient',
             generateSecret: false,
-            authFlows: {
-                userPassword: true,
+            authFlows: { userSrp: true, userPassword: true },
+            accessTokenValidity: aws_cdk_lib_1.Duration.days(1),
+            idTokenValidity: aws_cdk_lib_1.Duration.days(1),
+            refreshTokenValidity: aws_cdk_lib_1.Duration.days(90),
+            oAuth: {
+                flows: { authorizationCodeGrant: true },
+                scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
+                callbackUrls: ['http://localhost:3000', `https://blog.jungyu.store`],
+                logoutUrls: ['http://localhost:3000', `https://blog.jungyu.store`],
             },
         });
-        // --- DynamoDB Posts Table 정의 ---
-        const postsTable = new dynamodb.Table(this, 'PostsTable', {
-            tableName: 'BlogPosts',
-            partitionKey: {
-                name: 'postId',
-                type: dynamodb.AttributeType.STRING,
-            },
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
+        // --- 2. DynamoDB Table 정의 (싱글 테이블 디자인 적용) ---
+        const postsTable = new dynamodb.Table(this, 'BlogPostsTable', {
+            tableName: `BlogPosts-${this.stackName}`,
+            partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            removalPolicy: aws_cdk_lib_1.RemovalPolicy.DESTROY,
         });
-        // --- Lambda 코드 저장을 위한 S3 버킷 정의 (CI/CD 아티팩트 저장소) ---
-        // S3 버킷 이름을 환경 변수에서 가져오거나, 환경 변수가 없으면 CDK에서 제공하는 계정 정보로 기본 이름을 구성합니다.
-        // 이렇게 하면 코드에 AWS 계정 ID를 하드코딩하지 않아도 됩니다.
-        // GitHub Actions에서 ARTIFACT_BUCKET_NAME 환경 변수를 설정하여 이 버킷 이름을 주입할 것입니다.
-        const artifactBucketName = process.env.ARTIFACT_BUCKET_NAME || `blog-lambda-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
-        // 이 버킷은 이제 CDK가 직접 생성하고 관리하게 됩니다.
-        // 따라서, 이전에 'Day 0'에서 수동으로 생성했던 버킷이 이와 이름이 같다면,
-        // CI/CD 배포 전에 수동으로 생성한 버킷을 삭제해야 합니다. (아래 팁 참조)
-        const artifactBucket = new s3.Bucket(this, 'BlogArtifactBucket', {
-            bucketName: artifactBucketName, // 환경 변수 또는 기본값 사용
-            versioned: true, // 버전 관리 활성화: Lambda 롤백 등 안정성 향상에 중요
-            removalPolicy: cdk.RemovalPolicy.DESTROY, // 스택 삭제 시 버킷과 내용도 함께 삭제 (개발 환경에서 편리)
-            autoDeleteObjects: true, // 버킷 내 객체 자동 삭제 (removalPolicy: DESTROY와 함께 사용)
+        postsTable.addGlobalSecondaryIndex({
+            indexName: 'GSI1',
+            partitionKey: { name: 'GSI1_PK', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'GSI1_SK', type: dynamodb.AttributeType.STRING },
         });
-        // --- Lambda Function 정의 (S3 버킷에서 코드 로드하도록 변경) ---
-        // GITHUB_SHA는 GitHub Actions에서 제공하는 환경 변수입니다.
-        // 로컬에서 테스트할 때는 'latest'로 폴백됩니다.
-        const lambdaCodeS3Key = `backend/${process.env.GITHUB_SHA || 'latest'}.zip`;
-        const helloLambda = new aws_lambda_nodejs_1.NodejsFunction(this, 'HelloLambda', {
-            functionName: 'blog-hello-lambda',
-            code: lambda.Code.fromBucket(artifactBucket, lambdaCodeS3Key), // S3 버킷과 키를 통해 코드 참조
-            handler: 'index.handler', // apps/backend/src/index.ts의 handler 함수
-            runtime: aws_lambda_1.Runtime.NODEJS_20_X,
+        postsTable.addGlobalSecondaryIndex({
+            indexName: 'GSI2',
+            partitionKey: { name: 'GSI2_PK', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'GSI2_SK', type: dynamodb.AttributeType.STRING },
+        });
+        postsTable.addGlobalSecondaryIndex({
+            indexName: 'GSI3',
+            partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
+        });
+        // --- 3. Lambda Function (백엔드 API 로직) ---
+        const monorepoRoot = path.join(__dirname, '..', '..', '..');
+        const backendPackageJsonPath = path.join(monorepoRoot, 'apps', 'backend', 'package.json');
+        const backendPackageJson = JSON.parse(fs.readFileSync(backendPackageJsonPath, 'utf8'));
+        const backendVersion = backendPackageJson.version;
+        console.log(`Backend version detected: ${backendVersion}`); // CDK 실행 시 터미널에 버전이 출력되도록 함
+        const backendApiLambda = new aws_lambda_nodejs_1.NodejsFunction(this, 'BackendApiLambda', {
+            functionName: `blog-backend-api-${this.stackName}`,
+            entry: path.join(monorepoRoot, 'apps', 'backend', 'src', 'index.ts'),
+            handler: 'handler',
+            runtime: aws_lambda_1.Runtime.NODEJS_22_X,
             memorySize: 256,
-            timeout: aws_cdk_lib_1.Duration.seconds(10),
+            timeout: aws_cdk_lib_1.Duration.seconds(30),
             environment: {
                 NODE_ENV: 'production',
-                MY_VARIABLE: 'hello from cdk',
                 TABLE_NAME: postsTable.tableName,
                 USER_POOL_ID: userPool.userPoolId,
                 USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+                REGION: this.region,
+                AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+                // [핵심 수정] 코드의 버전을 환경 변수로 주입합니다.
+                BACKEND_VERSION: backendVersion,
             },
-            tracing: lambda.Tracing.ACTIVE, //X-Ray 트레이싱 활성화 (Observability)
+            tracing: lambda.Tracing.ACTIVE,
+            bundling: {
+                minify: true,
+                externalModules: [],
+            },
         });
-        // --- Lambda 함수에 권한 부여 ---
-        postsTable.grantReadWriteData(helloLambda);
-        helloLambda.addToRolePolicy(new iam.PolicyStatement({
-            actions: [
-                'cognito-idp:SignUp',
-                'cognito-idp:InitiateAuth',
-                'cognito-idp:RespondToAuthChallenge',
-                'cognito-idp:GlobalSignOut',
+        // --- 4. Lambda 함수에 권한 부여 ---
+        // DynamoDB 테이블 자체에 대한 읽기/쓰기 권한을 부여합니다.
+        postsTable.grantReadWriteData(backendApiLambda);
+        // [핵심 수정] 모든 GSI에 대한 읽기(Query) 권한을 명시적으로 추가합니다.
+        // grantReadWriteData가 GSI 권한을 충분히 부여하지 못하는 경우를 대비한 방어적 코드입니다.
+        backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['dynamodb:Query'],
+            resources: [
+                // 테이블 ARN 뒤에 '/index/*'를 붙여 모든 인덱스를 지칭합니다.
+                `${postsTable.tableArn}/index/*`,
             ],
+        }));
+        // Cognito User Pool에 대한 권한 부여 (이전과 동일)
+        backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'],
             resources: [userPool.userPoolArn],
         }));
-        // --- API Gateway 정의 ---
-        const api = new aws_apigateway_1.RestApi(this, 'BlogApi', {
-            restApiName: 'BlogService',
-            deployOptions: {
-                stageName: 'dev',
-                tracingEnabled: true, // API Gateway X-Ray 트레이싱 활성화 (Observability)
+        // --- 5. API Gateway (HTTP API) 및 통합 ---
+        const httpApi = new aws_apigatewayv2_1.HttpApi(this, 'BlogHttpApiGateway', {
+            apiName: `BlogHttpApi-${this.stackName}`,
+            // [CORS 수정] CORS 설정을 여기서 다시 명확하게 정의합니다.
+            // 이 설정은 API Gateway가 OPTIONS 사전 요청에 대해 자동으로 응답하도록 지시합니다.
+            corsPreflight: {
+                allowOrigins: ['http://localhost:3000', `https://blog.jungyu.store`],
+                allowMethods: [
+                    aws_apigatewayv2_1.CorsHttpMethod.GET,
+                    aws_apigatewayv2_1.CorsHttpMethod.POST,
+                    aws_apigatewayv2_1.CorsHttpMethod.PUT,
+                    aws_apigatewayv2_1.CorsHttpMethod.DELETE,
+                    aws_apigatewayv2_1.CorsHttpMethod.OPTIONS,
+                ],
+                allowHeaders: ['Content-Type', 'Authorization'], // 프론트엔드에서 보내는 주요 헤더를 명시
+                allowCredentials: true,
             },
         });
-        // --- Cognito Authorizer 정의 ---
-        const cognitoAuthorizer = new apigw.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
-            cognitoUserPools: [userPool],
-            identitySource: 'method.request.header.Authorization',
+        const lambdaIntegration = new aws_apigatewayv2_integrations_1.HttpLambdaIntegration('LambdaIntegration', backendApiLambda);
+        // [CORS 수정] Cognito Authorizer를 명시적으로 생성합니다.
+        const authorizer = new aws_apigatewayv2_authorizers_1.HttpUserPoolAuthorizer('BlogUserPoolAuthorizer', userPool, {
+            userPoolClients: [userPoolClient],
+            identitySource: ['$request.header.Authorization'],
         });
-        // --- Method Options 정의 ---
-        const publicMethodOptions = {};
-        const privateMethodOptions = {
-            authorizer: cognitoAuthorizer,
-            authorizationType: apigw.AuthorizationType.COGNITO,
-        };
-        // --- Lambda 통합 ---
-        const lambdaIntegration = new aws_apigateway_1.LambdaIntegration(helloLambda);
-        // --- 리소스 및 메서드 등록 ---
-        const helloResource = api.root.addResource('hello');
-        helloResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
-        const postsResource = api.root.addResource('posts');
-        postsResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
-        postsResource.addMethod('POST', lambdaIntegration, privateMethodOptions);
-        const proxyResource = postsResource.addResource('{proxy+}');
-        proxyResource.addMethod('GET', lambdaIntegration, publicMethodOptions);
-        proxyResource.addMethod('PUT', lambdaIntegration, privateMethodOptions);
-        proxyResource.addMethod('DELETE', lambdaIntegration, privateMethodOptions);
-        const authResource = api.root.addResource('auth');
-        authResource.addResource('signup')
-            .addMethod('POST', lambdaIntegration, publicMethodOptions);
-        authResource.addResource('login')
-            .addMethod('POST', lambdaIntegration, publicMethodOptions);
-        authResource.addResource('logout')
-            .addMethod('POST', lambdaIntegration, privateMethodOptions);
-        // --- CloudFormation Outputs (프론트엔드 및 CI/CD에서 참조) ---
+        // [CORS 수정] 라우팅을 '프록시 통합'에서 '명시적 경로 정의'로 변경합니다.
+        // 이는 OPTIONS 요청에 Authorizer가 적용되는 것을 막기 위한 가장 확실하고 제어 가능한 방법입니다.
+        // 인증이 필요 없는 공개 라우트 (Authorizer 없음)
+        httpApi.addRoutes({
+            path: '/auth/signup',
+            methods: [aws_apigatewayv2_1.HttpMethod.POST],
+            integration: lambdaIntegration,
+        });
+        httpApi.addRoutes({
+            path: '/auth/login',
+            methods: [aws_apigatewayv2_1.HttpMethod.POST],
+            integration: lambdaIntegration,
+        });
+        httpApi.addRoutes({
+            path: '/posts',
+            methods: [aws_apigatewayv2_1.HttpMethod.GET],
+            integration: lambdaIntegration,
+        });
+        httpApi.addRoutes({
+            path: '/posts/{postId}',
+            methods: [aws_apigatewayv2_1.HttpMethod.GET],
+            integration: lambdaIntegration,
+        });
+        httpApi.addRoutes({
+            path: '/hello',
+            methods: [aws_apigatewayv2_1.HttpMethod.GET],
+            integration: lambdaIntegration,
+        });
+        // 인증이 필요한 보호된 라우트 (Authorizer 적용)
+        httpApi.addRoutes({
+            path: '/auth/logout',
+            methods: [aws_apigatewayv2_1.HttpMethod.POST],
+            integration: lambdaIntegration,
+            authorizer,
+        });
+        httpApi.addRoutes({
+            path: '/posts',
+            methods: [aws_apigatewayv2_1.HttpMethod.POST],
+            integration: lambdaIntegration,
+            authorizer,
+        });
+        httpApi.addRoutes({
+            path: '/posts/{postId}',
+            methods: [aws_apigatewayv2_1.HttpMethod.PUT, aws_apigatewayv2_1.HttpMethod.DELETE],
+            integration: lambdaIntegration,
+            authorizer,
+        });
+        // --- 6. CloudFormation Outputs (배포 결과물 출력) ---
         new aws_cdk_lib_1.CfnOutput(this, 'ApiGatewayEndpoint', {
-            value: api.url,
-            description: 'The URL of the API Gateway endpoint',
-            exportName: 'BlogApiGatewayUrl', // 프론트엔드에서 참조할 이름
-        });
-        new aws_cdk_lib_1.CfnOutput(this, 'ApiGatewayId', {
-            value: api.restApiId,
-            description: 'The ID of the API Gateway',
-            exportName: 'BlogApiGatewayId', // 프론트엔드에서 참조할 이름
+            value: httpApi.url,
+            description: 'HTTP API Gateway endpoint URL',
+            exportName: `BlogApiGatewayUrl-${this.stackName}`,
         });
         new aws_cdk_lib_1.CfnOutput(this, 'UserPoolIdOutput', {
             value: userPool.userPoolId,
-            description: 'The ID of the Cognito User Pool',
-            exportName: 'BlogUserPoolId', // 프론트엔드에서 참조할 이름
+            description: 'Cognito User Pool ID',
+            exportName: `BlogUserPoolId-${this.stackName}`,
         });
         new aws_cdk_lib_1.CfnOutput(this, 'UserPoolClientIdOutput', {
             value: userPoolClient.userPoolClientId,
-            description: 'The Client ID of the Cognito User Pool App Client',
-            exportName: 'BlogUserPoolClientId', // 프론트엔드에서 참조할 이름
+            description: 'Cognito User Pool App Client ID',
+            exportName: `BlogUserPoolClientId-${this.stackName}`,
         });
-        // S3 버킷 이름도 CfnOutput으로 내보냅니다.
-        // 이제 이 버킷은 CDK가 관리하므로, GitHub Actions에서 참조할 수 있도록 Export 하는 것이 좋습니다.
-        new aws_cdk_lib_1.CfnOutput(this, 'ArtifactBucketName', {
-            value: artifactBucket.bucketName,
-            description: 'S3 Bucket name for Lambda artifacts',
-            exportName: 'BlogArtifactBucketName', // GitHub Actions에서 참조할 이름
+        new aws_cdk_lib_1.CfnOutput(this, 'RegionOutput', {
+            value: this.region,
+            description: 'AWS Region',
+            exportName: `BlogRegion-${this.stackName}`,
         });
-        // --- Observability: CloudWatch Alarms (Monitoring as Code) ---
-        // Lambda 에러 알람
-        helloLambda.metricErrors({
-            period: aws_cdk_lib_1.Duration.minutes(5), // Metric 정의 시 period 지정
-            statistic: 'Sum', // 통계 방식 지정
-        }).createAlarm(this, 'HelloLambdaErrorsAlarm', {
-            threshold: 1, // 1 에러 이상 발생 시
-            evaluationPeriods: 1, // 1 기간 동안
+        // --- 7. CloudWatch Alarms (모니터링 및 관측 가능성) ---
+        backendApiLambda.metricErrors({ period: aws_cdk_lib_1.Duration.minutes(5) })
+            .createAlarm(this, 'BackendApiLambdaErrorsAlarm', {
+            threshold: 1,
+            evaluationPeriods: 1,
             comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarmDescription: 'blog-hello-lambda function errors detected!',
-            // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
+            alarmDescription: 'Lambda function errors detected!',
         });
-        // API Gateway 5xx 에러 알람 (서버 오류)
-        api.metricServerError({
-            period: aws_cdk_lib_1.Duration.minutes(5), // Metric 정의 시 period 지정
-            statistic: 'Sum',
-        }).createAlarm(this, 'ApiGatewayServerErrorAlarm', {
-            threshold: 1, // 1 에러 이상 발생 시
+        httpApi.metricServerError({ period: aws_cdk_lib_1.Duration.minutes(5) })
+            .createAlarm(this, 'ApiGatewayServerErrorAlarm', {
+            threshold: 1,
             evaluationPeriods: 1,
             comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             alarmDescription: 'API Gateway 5xx server errors detected!',
-            // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
         });
-        // DynamoDB Read Throttled Requests 알람 (용량 부족     )
-        postsTable.metric('ReadThrottleEvents', {
-            period: aws_cdk_lib_1.Duration.minutes(5), // Metric 정의 시 period 지정
-            statistic: 'Sum',
-        }).createAlarm(this, 'PostsTableReadThrottleAlarm', {
-            threshold: 1,
-            evaluationPeriods: 1,
-            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarmDescription: 'DynamoDB PostsTable read throttled!',
-            // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
-        });
-        // DynamoDB Write Throttled Requests 알람 (용량 부족)
-        postsTable.metric('WriteThrottleEvents', {
-            period: aws_cdk_lib_1.Duration.minutes(5), // Metric 정의 시 period  지정
-            statistic: 'Sum',
-        }).createAlarm(this, 'PostsTableWriteThrottleAlarm', {
-            threshold: 1,
-            evaluationPeriods: 1,
-            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarmDescription: 'DynamoDB PostsTable write throttled!',
-            // actions: [new cloudwatch_actions.SnsAction(yourSnsTopic)], // TODO: SNS Topic 생성 후 연결
-        });
-        // TODO: SNS Topic 정의 (알람을 받을 이메일 주소 연결 )
-        // const alarmSnsTopic = new sns.Topic(this, 'AlarmSnsTopic', {
-        //   displayName: 'Blog Service Alarms',
-        // });
-        // alarmSnsTopic.addSubscription(new sns_subscriptions.EmailSubscription('your-email@example.com'));
-        // 각 알람의 actions 배열에 new cloudwatch_actions.SnsAction(alarmSnsTopic) 추가
     }
 }
 exports.InfraStack = InfraStack;
