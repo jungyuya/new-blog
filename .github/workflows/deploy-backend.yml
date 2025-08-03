@@ -39,8 +39,6 @@ jobs:
       # 6. pnpm 및 Node.js 환경 설정
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
