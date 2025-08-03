@@ -1,4 +1,4 @@
-# .github/workflows/infra-cd.yml
+# .github/workflows/infra-cd.bak => deploy-backend.yml로 통합됨
 name: Infra CD (Deploy AWS CDK)
 
 on:

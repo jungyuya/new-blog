@@ -1,4 +1,4 @@
-# .github/workflows/backend-ci.yml
+# .github/workflows/backend-ci.bak => deploy-backend.yml로 통합됨
 name: Backend CI (Build & Test Backend Code) # 워크플로우 이름 변경: S3 업로드 책임 제거
 
 on:

@@ -140,7 +140,7 @@ const localAuthMiddleware = async (
 // 8. API 라우트 정의
 // ---------------------------
 app.get('/hello', async c => {
-  return c.json({ message: 'Hello from your backend Lambda!', tableName: TABLE_NAME }, 200);
+  return c.json({ message: 'CI/CD 테스트 중입니다. 그라라라라라라', tableName: TABLE_NAME }, 200);
 });
 
 app.post('/auth/signup', zValidator('json', SignUpSchema), async c => {
