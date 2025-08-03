@@ -1,0 +1,13 @@
+{
+  "aws_project_region": "ap-northeast-2",
+  "aws_cognito_region": "ap-northeast-2",
+  "aws_user_pools_id": "ap-northeast-2_27WIBgYjt",
+  "aws_user_pools_web_client_id": "57nplr76c82u3sjmvt7cub8gf5",
+  "aws_cloud_logic_custom": [
+    {
+      "name": "MyBlogAPI",
+      "endpoint": "https://oaghj8029h.execute-api.ap-northeast-2.amazonaws.com/",
+      "region": "ap-northeast-2"
+    }
+  ]
+}
