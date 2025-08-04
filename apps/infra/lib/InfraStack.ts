@@ -5,6 +5,7 @@
 // ---------------------------
 // 1. CDK 및 AWS 서비스 모듈 Import
 // ---------------------------
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -18,7 +19,6 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
 // [핵심] open-next/cdk 패키지에서 NextjsSite Construct를 import 합니다.
@@ -157,8 +157,14 @@ export class InfraStack extends Stack {
     // SECTION 2: 프론트엔드 리소스 정의 (Frontend Resources)
     // 이 섹션은 사용자 인터페이스(UI)를 세상에 공개하고 제공하는 역할을 담당합니다.
     // ===================================================================================
+    const projectRoot = path.join(__dirname, '..', '..', '..');
+
+
+
     const frontendSite = new Nextjs(this, 'FrontendSite', {
       nextjsPath: 'apps/frontend',
+
+
       // [미래를 위한 확장]
       // 백엔드 API 정보를 프론트엔드 빌드 시점에 환경 변수로 전달합니다.
       // 이렇게 하면 프론트엔드 코드에서 amplifyconfiguration.ts 파일을 하드코딩할 필요가 없어집니다.
