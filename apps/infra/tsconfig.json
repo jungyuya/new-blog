@@ -1,20 +1,13 @@
-// apps/infra/tsconfig.json (최종 수정본)
+// apps/infra/tsconfig.json (독립 버전)
 {
-  // 1. 중앙 헌법(루트 tsconfig)을 상속받습니다.
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    // 2. [핵심 수정] AWS CDK v2가 표준적으로 사용하는 모듈 시스템과 타겟을 지정합니다.
-    //    'CommonJS'는 'bundler'와 충돌하므로, 'NodeNext'로 변경하여 현대적인 Node.js 환경에 맞춥니다.
-    //    CDK는 NodeNext 모듈 시스템을 완벽하게 지원합니다.
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
     "target": "ES2022",
-
-    // 3. React와 관련 없는 프로젝트임을 명확히 합니다.
-    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  // 4. 이 법률이 적용될 파일의 범위를 지정합니다.
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules", "cdk.out"]
+  "include": ["**/*.ts"]
 }

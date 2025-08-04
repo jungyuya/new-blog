@@ -1,7 +1,7 @@
-// ~/projects/new-blog/tsconfig.json (최종 수정본)
+// ~/projects/new-blog/tsconfig.json
 {
+  // 이 파일은 pnpm 워크스페이스를 위한 참고용 파일입니다.
   "files": [],
-  "include": [],
   "references": [
     { "path": "apps/backend" },
     { "path": "apps/frontend" },

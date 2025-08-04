@@ -1,14 +1,15 @@
-// apps/backend/tsconfig.json (최종 수정본)
+// apps/backend/tsconfig.json (독립 버전)
 {
-  "extends": "../../tsconfig.base.json", // [핵심] 기반 헌법을 상속
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "outDir": "dist",
-    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*.ts"]
 }
