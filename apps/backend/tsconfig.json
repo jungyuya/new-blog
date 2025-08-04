@@ -1,4 +1,4 @@
-// apps/backend/tsconfig.json (독립 버전)
+// apps/backend/tsconfig.json
 {
   "compilerOptions": {
     "module": "NodeNext",
@@ -11,5 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

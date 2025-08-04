@@ -1,4 +1,4 @@
-// apps/infra/tsconfig.json (독립 버전)
+// apps/infra/tsconfig.json
 {
   "compilerOptions": {
     "module": "CommonJS",
@@ -9,5 +9,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "cdk.out"]
 }

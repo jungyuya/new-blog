@@ -1,8 +1,7 @@
 // apps/frontend/tsconfig.json (완전 독립 최종본)
 {
-  // [핵심] 더 이상 외부 파일을 extends 하지 않습니다.
   "compilerOptions": {
-    // Next.js가 요구하는 기본 설정들
+    // [핵심] 더 이상 외부 파일을 extends 하지 않고, 필요한 모든 규칙을 직접 명시합니다.
     "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -18,8 +17,6 @@
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    // [핵심] 경로 별칭을 자기 자신 안에서 완벽하게 정의합니다.
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

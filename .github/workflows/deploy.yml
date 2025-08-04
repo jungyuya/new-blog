@@ -1,0 +1,73 @@
+# .github/workflows/deploy.yml (Phase 5 풀스택 통합 최종안)
+
+name: "New-Blog Full-Stack CI/CD" # [수정] 파이프라인의 역할을 명확히 하기 위해 이름 변경
+
+on:
+  push:
+    branches:
+      - main # [수정] 프론트엔드 변경을 포함한 모든 main 브랜치 push에서 실행
+
+# 동시성 제어: main 브랜치에서 워크플로우가 동시에 여러 개 실행되는 것을 방지
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # OIDC를 통해 AWS에 접근할 수 있는 권한을 부여
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} # [확인] 당신의 이전 파일과 동일한 secret 변수 이름을 사용하도록 수정했습니다.
+          aws-region: ${{ secrets.AWS_REGION }}             # [확인] 당신의 이전 파일과 동일한 secret 변수 이름을 사용하도록 수정했습니다.
+
+      - name: Setup Node.js and pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # 우리의 기술 스택 버전과 일치
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile # [개선] --frozen-lockfile 추가하여 CI 환경의 일관성 확보
+
+      # ===================================================================================
+      # [핵심 변경 1] 풀스택 빌드 단계 추가
+      # 이 단계가 없으면 CDK는 배포할 프론트엔드 결과물(.open-next)을 찾지 못합니다.
+      # ===================================================================================
+      - name: Build Full-Stack Project
+        run: pnpm build
+
+      # ===================================================================================
+      # [핵심 변경 2] CDK 배포 명령어 수정
+      # --all: 스택 내의 모든 변경사항(백엔드+프론트엔드)을 배포합니다.
+      # --require-approval never: CI/CD 환경에서는 상호작용이 불가능하므로, 승인 질문을 비활성화합니다.
+      # ===================================================================================
+      - name: Deploy to AWS with CDK
+        run: npx aws-cdk deploy --all --require-approval never
+        working-directory: ./apps/infra # cdk.json 파일이 있는 위치에서 실행

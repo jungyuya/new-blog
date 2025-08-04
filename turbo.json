@@ -1,13 +1,24 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
   "tasks": {
     "build": {
-      "outputs": ["dist/**", ".next/**"],
       "dependsOn": ["^build"]
     },
-    "lint": {
-      "outputs": []
+    "backend#build": {
+      "outputs": ["dist/**"]
     },
+    "infra#build": {
+      "outputs": [] 
+    },
+    "frontend#build:next": {
+      "outputs": ["apps/frontend/.next/**"]
+    },
+    "frontend#build:open-next": {
+      "dependsOn": ["build:next"],
+      "outputs": ["apps/frontend/.open-next/**"]
+    },
+    "lint": {},
     "dev": {
       "cache": false,
       "persistent": true
