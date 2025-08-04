@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import AuthLayout from '@/components/AuthLayout';
-import { createNewPost } from '../../../utils/api';
+import { createNewPost } from '@/utils/api';
 
 // 실제 UI와 로직을 담당하는 내부 컴포넌트
 function NewPostForm() {

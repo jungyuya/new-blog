@@ -1,0 +1,22 @@
+// ~/projects/new-blog/tsconfig.base.json (신규 생성)
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    // 공통 경로 설정을 여기에 둡니다.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/frontend/src/*"]
+    }
+  },
+  "exclude": ["node_modules"]
+}

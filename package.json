@@ -1,16 +1,17 @@
 {
   "name": "new-blog",
-  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "lint": "turbo run lint"
   },
+  "packageManager": "pnpm@10.14.0",
   "devDependencies": {
-    "prettier": "^3.2.5",
+    "@types/node": "^22.0.0",
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
+    "typescript": "^5",
     "turbo": "latest"
-  },
-  "packageManager": "pnpm@9.4.0"
+  }
 }

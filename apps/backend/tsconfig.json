@@ -1,22 +1,14 @@
-// ~/projects/new-blog/apps/backend/tsconfig.json
-
+// apps/backend/tsconfig.json (최종 수정본)
 {
-  "extends": "../../tsconfig.json", // 모노레포 루트의 tsconfig.json 설정을 상속받습니다.
+  "extends": "../../tsconfig.base.json", // [핵심] 기반 헌법을 상속
   "compilerOptions": {
-    "outDir": "dist", // 컴파일된 JavaScript 파일이 저장될 디렉토리
-    "rootDir": "src", // TypeScript 소스 코드가 있는 디렉토리
-    "module": "ESNext", // ⭐ 수정됨: ES Modules (import/export)를 사용하도록 설정 ⭐
-    "target": "ES2022", // ⭐ 수정됨: Node.js 22.x가 지원하는 최신 JavaScript 버전으로 컴파일 ⭐
-    "esModuleInterop": true, // CommonJS 모듈을 ES Modules처럼 import 할 수 있도록 허용 (호환성)
-    "forceConsistentCasingInFileNames": true, // 파일 이름 대소문자 일관성 강제
-    "strict": true, // 엄격한 타입 검사 활성화 (코드 품질 향상)
-    "skipLibCheck": true, // 라이브러리 파일의 타입 검사 건너뛰기 (컴파일 속도 향상)
-    "moduleResolution": "Node", // ⭐ 추가됨: 모듈 해석 전략을 Node.js 방식으로 설정 ⭐
-    "resolveJsonModule": true, // JSON 파일을 모듈처럼 import 할 수 있도록 허용
-    "allowSyntheticDefaultImports": true, // 기본 내보내기가 없는 모듈에 대해 가상 기본 내보내기를 허용
-    "types": ["node"],
-    "typeRoots": ["node_modules/@types"] // ⭐ 추가됨: 명시적으로 node 타입만 참조하도록 설정 ⭐
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "outDir": "dist",
+    "jsx": "react-jsx",
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts"], // 컴파일에 포함될 파일 패턴
-  "exclude": ["node_modules", "dist"] // 컴파일에서 제외될 파일/디렉토리 패턴
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -6,7 +6,7 @@ import '@aws-amplify/ui-react/styles.css';
 import { fetchPosts, Post } from '../utils/api';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import AuthLayout from '@/components/AuthLayout'; // '@/components/'는 'src/components/'를 가리킵니다.
+import AuthLayout from '../components/AuthLayout'; // '@/components/'는 'src/components/'를 가리킵니다.
 
 /**
  * 로그인한 사용자에게 보여줄 실제 대시보드 UI 컴포넌트입니다.
