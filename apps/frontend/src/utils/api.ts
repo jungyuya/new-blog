@@ -1,6 +1,5 @@
 // apps/frontend/src/utils/api.ts (최종 완성본)
 
-import { get } from 'aws-amplify/api';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 /**
