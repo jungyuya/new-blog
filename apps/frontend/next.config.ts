@@ -1,11 +1,11 @@
-// apps/frontend/next.config.ts (open-next 호환 최종안)
+// apps/frontend/next.config.ts (Standalone 모드 최종안)
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
-  // [핵심 수정] open-next가 정상적으로 동작하도록, output 옵션을 완전히 제거합니다.
-  // output: 'standalone', // <--- 이 라인을 반드시 제거해야 합니다.
+  // [핵심 최종 수정] Standalone 모드를 활성화하여,
+  // 모든 의존성이 물리적으로 포함된 배포 패키지를 생성합니다.
+  output: 'standalone',
 
-  // 타입스크립트 빌드 오류를 무시하는 설정은 디버깅을 위해 임시로 유지합니다.
   typescript: {
     ignoreBuildErrors: true,
   },
