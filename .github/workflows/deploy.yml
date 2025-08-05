@@ -58,5 +58,18 @@ jobs:
       - name: Build and Package All Apps
         run: pnpm run build --no-cache
 
+      # ===================================================================================
+      #  현장 감식 단계 추가
+      # 이 단계는 cdk deploy가 실행되기 직전의 파일 시스템 상태를 낱낱이 보여줍니다.
+      # ===================================================================================
+      - name: Verify Build Artifacts
+        run: |
+          echo "--- Verifying build artifacts in project root ---"
+          ls -la
+          echo "--- Verifying contents of apps/frontend ---"
+          ls -la apps/frontend
+          echo "--- Verifying contents of apps/frontend/.open-next ---"
+          ls -laR apps/frontend/.open-next || echo ".open-next directory not found!"
+
       - name: Deploy Infrastructure to AWS
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
