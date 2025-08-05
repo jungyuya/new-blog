@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (pnpm v10 호환 최종 완결본)
+# .github/workflows/deploy.yml (modclean 적용 최종 완성본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -19,18 +19,15 @@ jobs:
       contents: read
 
     steps:
-      - name: "Phase 1: Setup Environment"
+      - name: "Setup: Checkout, Node, pnpm & Cache"
         uses: actions/checkout@v4
-      - name: Setup Node.js v22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           run_install: false
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -39,60 +36,41 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ===================================================================================
-      # Phase 2: Build, Package & Isolate Artifacts
-      # ===================================================================================
+      - name: "Build: Clean, Build & Package Frontend"
+        run: |
+          pnpm run clean
+          pnpm run package --no-cache
 
-      - name: "Clean up previous builds"
-        run: pnpm run clean
-
-      - name: "Build and Package Frontend"
-        run: pnpm run package --no-cache
-
-      - name: "Isolate Frontend for Deployment using pnpm deploy"
+      - name: "Optimize: Isolate, Clean & Zip Layer"
         run: |
           mkdir deploy-output
-          # [핵심] pnpm v10의 새로운 규칙에 따라 --legacy 플래그를 추가합니다.
           pnpm --filter frontend deploy --prod --legacy ./deploy-output || exit 1
-
-      - name: "Create Lambda Layer Zip File from Deployed Output"
-        run: |
-          echo "--- Zipping node_modules from pnpm deploy output ---"
           cd deploy-output
+          npx modclean --patterns='**/*__tests__*/**,**/*.d.ts,**/*.map,**/*.md,**/LICENSE,**/license,**/license.txt' -n 'default:true,so:false'
           zip -r ../node_modules.zip ./node_modules
           cd ..
 
-      - name: "Check node_modules.zip size"
-        run: |
-          echo "Layer zip file size:"
-          du -h node_modules.zip
+      - name: "Verify: Check Layer Size"
+        run: du -h node_modules.zip
 
-      # ===================================================================================
-      # Phase 3: Deploy to AWS
-      # ===================================================================================
-
-      - name: Configure AWS Credentials
+      - name: "Deploy: AWS Credentials, Layer & CDK"
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_to_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: "Deploy Dependencies as a Lambda Layer"
-        id: deploy-layer
+      - id: deploy-layer
         run: |
           LAYER_ARN=$(aws lambda publish-layer-version \
             --layer-name new-blog-dependencies \
-            --description "Frontend node_modules dependencies built on ${{ github.sha }}" \
+            --description "Frontend node_modules built on ${{ github.sha }}" \
             --zip-file fileb://node_modules.zip \
             --compatible-runtimes nodejs22.x \
             --query LayerVersionArn --output text)
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
-
-      - name: "Deploy Infrastructure and Application Code via CDK"
-        run: pnpm --filter infra exec cdk deploy --all \
+      - run: pnpm --filter infra exec cdk deploy --all \
           --require-approval never \
           --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
 
-      - name: "Clean up temporary build artifacts"
+      - name: "Cleanup: Remove Temporary Artifacts"
         if: always()
         run: rm -rf deploy-output node_modules.zip
