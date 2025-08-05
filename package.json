@@ -2,9 +2,9 @@
   "name": "new-blog",
   "private": true,
   "scripts": {
-    "build": "turbo run build build:open-next",
+    "build": "turbo run package",
     "dev": "turbo run dev",
-    "lint": "next lint"
+    "lint": "turbo run lint"
   },
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
