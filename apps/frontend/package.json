@@ -4,9 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build:next": "next build",
-    "build:open-next": "open-next build",
-    "build": "echo \"Build is orchestrated by Turbo. See root turbo.json\"",
+    "build": "open-next build",
     "start": "next start",
     "lint": "next lint"
   },

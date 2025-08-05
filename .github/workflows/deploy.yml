@@ -51,6 +51,13 @@ jobs:
       - name: Build Full-Stack Project
         run: pnpm build
 
-# [최종 확정] 이 명령어가 버전과 경로 문제를 모두 해결하는 최선의 방식입니다.
+      - name: Clean up build artifacts
+        run: |
+          rm -rf apps/frontend/.next
+          rm -rf apps/frontend/.open-next
+
+      - name: Build Full-Stack Project
+        run: pnpm build
+
       - name: Deploy to AWS with CDK
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
