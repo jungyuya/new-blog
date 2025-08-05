@@ -44,7 +44,7 @@ jobs:
           pnpm run package --no-cache
 
       # [핵심] 모든 진단, 수술, 검증 작업을 단 하나의, 논리적으로 완벽한 단계로 통합합니다.
-      - name: "Step 2.2: Create Zip, Investigate, and Clean"
+      - name: "Step 2.2: Create Standalone Zip and Verify Size"
         run: |
           echo "--- Creating zip file from standalone output ---"
           cd apps/frontend/.next/standalone
@@ -54,16 +54,27 @@ jobs:
           echo "--- Initial zip file size ---"
           du -h apps/frontend/node_modules.zip
 
-          echo "--- Listing top 30 largest files/directories in the zip ---"
-          unzip -l apps/frontend/node_modules.zip | sort -k 1 -nr | head -n 30
+      - name: "Step 2.3: Optimize Zip with Modclean"
+        run: |
+          echo "--- Unzipping for optimization ---"
+          # [핵심] 압축을 풀고, 최적화한 뒤, 다시 압축하는 가장 안전한 방법을 사용합니다.
+          mkdir temp-layer
+          unzip apps/frontend/node_modules.zip -d temp-layer
           
-          echo "--- Removing known large, unnecessary packages with precision ---"
+          echo "--- Optimizing node_modules with modclean ---"
+          cd temp-layer
+          npx modclean --patterns='**/*__tests__*/**,**/*.d.ts,**/*.map,**/*.md,**/LICENSE' -n 'default:true'
           
-          zip -d apps/frontend/node_modules.zip \
-            "**/node_modules/sharp/*" \
-            "**/node_modules/@img/*"
+          echo "--- Zipping the cleaned files ---"
+          zip -r ../node_modules_optimized.zip .
+          cd ..
+          
+          # 기존 zip 파일을 최적화된 zip 파일로 교체합니다.
+          mv node_modules_optimized.zip apps/frontend/node_modules.zip
 
-          echo "--- Final zip file size after surgery ---"
+      - name: "Step 2.4: Verify Final Layer Zip Size"
+        run: |
+          echo "--- Final size of the optimized node_modules.zip ---"
           du -h apps/frontend/node_modules.zip
 
       # ===================================================================================
