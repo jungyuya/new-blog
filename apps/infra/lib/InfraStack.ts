@@ -179,13 +179,13 @@ export class InfraStack extends Stack {
       handler: 'index.handler',
       // [핵심 수정] fromAsset 대신, Docker를 이용한 번들링을 사용합니다.
       // 이 코드는 Docker에게 projectRoot 디렉토리 전체를 빌드 컨텍스트로 제공하고,
-      // 'apps/frontend/.open-next/server-function' 폴더를 복사하여 Lambda 코드로 만듭니다.
+      // 'apps/frontend/.open-next/server-functions' 폴더를 복사하여 Lambda 코드로 만듭니다.
       code: lambda.Code.fromAsset(projectRoot, {
         bundling: {
           image: lambda.Runtime.NODEJS_22_X.bundlingImage,
           command: [
             'bash', '-c', `
-        cp -r apps/frontend/.open-next/server-function/* /asset-output/
+        cp -r apps/frontend/.open-next/server-functions/* /asset-output/
         `
           ],
         },
@@ -248,7 +248,7 @@ export class InfraStack extends Stack {
       distribution: distribution,
       distributionPaths: ['/*'],
     });
-    
+
     // ===================================================================================
     // SECTION 3: 스택 출력 및 모니터링
     // ===================================================================================
