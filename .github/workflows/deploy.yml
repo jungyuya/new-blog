@@ -54,28 +54,30 @@ jobs:
           echo "--- Initial zip file size ---"
           du -h apps/frontend/node_modules.zip
 
-      - name: "Step 2.3: Optimize Zip with Modclean"
+      - name: "Optimize and Zip Lambda Layer"
         run: |
-          echo "--- Unzipping for optimization ---"
-          # [핵심] 압축을 풀고, 최적화한 뒤, 다시 압축하는 가장 안전한 방법을 사용합니다.
+          echo "--- Preparing for optimization ---"
           mkdir temp-layer
           unzip apps/frontend/node_modules.zip -d temp-layer
-          
-          echo "--- Optimizing node_modules with modclean ---"
           cd temp-layer
+
+          echo "--- Removing the largest offender: sharp and related packages ---"
+          rm -rf node_modules/.pnpm/sharp@*
+          rm -rf node_modules/.pnpm/@img*
+
+          echo "--- Optimizing the rest with modclean ---"
           npx modclean --patterns='**/*__tests__*/**,**/*.d.ts,**/*.map,**/*.md,**/LICENSE' -n 'default:true'
-          
+
           echo "--- Zipping the cleaned files ---"
           zip -r ../node_modules_optimized.zip .
           cd ..
-          
-          # 기존 zip 파일을 최적화된 zip 파일로 교체합니다.
           mv node_modules_optimized.zip apps/frontend/node_modules.zip
 
-      - name: "Step 2.4: Verify Final Layer Zip Size"
+      - name: "Verify Final Layer Zip Size with precision"
         run: |
           echo "--- Final size of the optimized node_modules.zip ---"
-          du -h apps/frontend/node_modules.zip
+          # [핵심] du -b 옵션을 사용하여, 정확한 바이트 크기를 확인합니다.
+          du -b apps/frontend/node_modules.zip
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
