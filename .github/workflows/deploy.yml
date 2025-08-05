@@ -60,11 +60,25 @@ jobs:
         # 이 단계는 '.next/standalone'을 입력으로 받아 '.open-next'를 생성합니다.
         run: pnpm run package --no-cache
 
-      - name: "Create zip file for Lambda Layer from node_modules"
-        # standalone 빌드로 생성된 물리적인 node_modules를 압축합니다.
+      # [핵심 최종 수정] Layer 생성 단계를 최적화합니다.
+      - name: "Create Optimized node_modules Layer Zip File"
         run: |
+          echo "--- Preparing node_modules for Lambda Layer ---"
+          # 1. standalone 폴더로 이동합니다.
           cd apps/frontend/.next/standalone
+          
+          # 2. 기존의 거대한 node_modules와 package-lock.json 등을 제거합니다.
+          rm -rf node_modules package-lock.json yarn.lock
+
+          # 3. package.json을 사용하여, 오직 production 의존성만 다시 설치합니다.
+          # pnpm은 --prod 옵션을 통해 devDependencies를 제외하고 설치합니다.
+          pnpm install --prod
+
+          # 4. 최적화된 node_modules를 압축합니다.
+          echo "--- Zipping optimized node_modules ---"
           zip -r ../../node_modules.zip ./node_modules
+          
+          # 5. 원래 위치로 돌아옵니다.
           cd ../../../..
       
       # ===================================================================================
