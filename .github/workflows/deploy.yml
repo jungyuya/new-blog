@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (정밀 검증 및 제거 최종 완결본)
+# .github/workflows/deploy.yml (최종 경로 수정 및 중복 제거 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Build, Verify & Optimize
+      # Phase 2: Build, Investigate, Optimize & Verify
       # ===================================================================================
 
       - name: "Step 2.1: Clean and Build"
@@ -43,30 +43,34 @@ jobs:
           pnpm run clean
           pnpm run package --no-cache
 
-      - name: "Step 2.2: Create Zip, Investigate, and Clean"
+      # [핵심] 모든 진단, 수술, 검증 작업을 단 하나의, 논리적으로 완벽한 단계로 통합합니다.
+      - name: "Step 2.2: Investigate, Optimize, and Verify Zip File"
         run: |
           echo "--- Creating zip file from standalone output ---"
-          zip -r node_modules.zip . -C apps/frontend/.next/standalone
+          # 1. 압축할 대상이 있는 폴더로 직접 이동합니다.
+          cd apps/frontend/.next/standalone
+          
+          # 2. 현재 폴더('.')의 모든 내용을, 두 단계 위('apps/frontend')에 'node_modules.zip'으로 압축합니다.
+          zip -r ../../node_modules.zip .
+          
+          # 3. 원래의 위치로 안전하게 복귀합니다.
+          cd ../../../..
           
           echo "--- Initial zip file size ---"
-          du -h node_modules.zip
+          # 4. 'apps/frontend/' 폴더 안에 있는 zip 파일의 크기를 확인합니다.
+          du -h apps/frontend/node_modules.zip
 
           echo "--- Listing top 30 largest files/directories in the zip ---"
-          unzip -l node_modules.zip | sort -k 1 -nr | head -n 30
+          # 5. 'apps/frontend/' 폴더 안에 있는 zip 파일의 내용물을 확인합니다.
+          unzip -l apps/frontend/node_modules.zip | sort -k 1 -nr | head -n 30
           
           echo "--- Removing known large, unnecessary packages ---"
-          zip -d node_modules.zip "node_modules/typescript/*" "node_modules/@types/*" "node_modules/eslint/*" "node_modules/turbo/*" "node_modules/next/dist/compiled/webpack/*" "node_modules/next/dist/compiled/terser/*"
+          # 6. 'apps/frontend/' 폴더 안에 있는 zip 파일에서 직접 파일을 제거합니다.
+          zip -d apps/frontend/node_modules.zip "node_modules/typescript/*" "node_modules/@types/*" "node_modules/eslint/*" "node_modules/turbo/*" "node_modules/next/dist/compiled/webpack/*" "node_modules/next/dist/compiled/terser/*"
 
           echo "--- Final zip file size after surgery ---"
-          du -h node_modules.zip
-
-      - name: "Step 2.3: Precision Surgery (If Needed)"
-        run: |
-          echo "--- Attempting to remove known large, unnecessary packages ---"
-          zip -d node_modules.zip "node_modules/typescript/*" "node_modules/@types/*" "node_modules/eslint/*" "node_modules/turbo/*" "node_modules/next/dist/compiled/webpack/*" "node_modules/next/dist/compiled/terser/*"
-
-          echo "--- Final zip file size after surgery ---"
-          du -h node_modules.zip
+          # 7. 최종 크기를 다시 확인합니다.
+          du -h apps/frontend/node_modules.zip
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
@@ -84,7 +88,7 @@ jobs:
           LAYER_ARN=$(aws lambda publish-layer-version \
             --layer-name new-blog-dependencies \
             --description "Frontend node_modules dependencies built on ${{ github.sha }}" \
-            --zip-file fileb://node_modules.zip \
+            --zip-file fileb://apps/frontend/node_modules.zip \
             --compatible-runtimes nodejs22.x \
             --query LayerVersionArn --output text)
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
@@ -96,4 +100,4 @@ jobs:
 
       - name: "Step 3.4 (Cleanup): Remove Temporary Artifacts"
         if: always()
-        run: rm -f node_modules.zip
+        run: rm -f apps/frontend/node_modules.zip
