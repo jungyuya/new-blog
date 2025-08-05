@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (pnpm 버전 충돌 최종 해결안)
+# .github/workflows/deploy.yml (모든 불일치 제거 최종 완성본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -33,10 +33,10 @@ jobs:
         with:
           node-version: '22'
 
-      # [최종 수정 완료된 부분]
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
+          # [최종 수정] version 키를 완전히 제거하여, package.json의 packageManager를 따르도록 합니다.
           run_install: false
 
       - name: Setup pnpm cache
@@ -50,15 +50,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # (참고: `turbo run clean`을 위해서는 사전 작업이 필요합니다. 기존의 `rm -rf`도 유효합니다.)
+      # [최종 수정] pnpm을 통해 clean 스크립트를 실행하여 'command not found' 오류를 해결합니다.
       - name: Clean up previous build artifacts
-        run: turbo run clean
+        run: pnpm run clean
 
+      # [최종 수정] pnpm을 통해 build 스크립트를 실행합니다. 이 한 줄이 모든 빌드/패키징을 조율합니다.
       - name: Build and Package All Apps via Turbo
-        run: pnpm build --no-cache
+        run: pnpm run build --no-cache
 
+      # [최종 수정] cdk deploy 직전에, 최종 결과물인 .open-next 폴더의 존재를 물리적으로 확인합니다.
       - name: Verify Build Artifacts
-        run: ls -laR apps/frontend/.open-next
+        run: |
+          echo "--- Verifying the presence of the final artifact: .open-next ---"
+          ls -laR apps/frontend/.open-next
 
+      # [최종 수정] 모든 것이 준비된 후, pnpm을 통해 cdk deploy를 실행합니다.
       - name: Deploy Infrastructure to AWS
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
