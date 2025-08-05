@@ -64,7 +64,7 @@ jobs:
         # standalone 빌드로 생성된 물리적인 node_modules를 압축합니다.
         run: |
           cd apps/frontend/.next/standalone
-          zip -r ../../../node_modules.zip ./node_modules
+          zip -r ../../node_modules.zip ./node_modules
           cd ../../../..
       
       # ===================================================================================
