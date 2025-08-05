@@ -1,26 +1,18 @@
-#!/usr/bin/env node
+#!/usr/-bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { InfraStack } from '../lib/InfraStack';
 
 const app = new cdk.App();
 
-// AWS 계정 ID와 리전을 환경 변수에서 가져오거나, 명시적으로 지정
-// 우리는 이미 aws configure로 리전을 ap-northeast-2로 설정했으므로 생략 가능합니다.
-// 하지만 계정 ID는 보안상 환경 변수로 관리하는 것이 좋습니다
-// 또는 cdk bootstrap 명령에서 계정 ID를 명시했으므로, 여기서는 hardcoding 대신 환경 변수 사용을 권장합니다.
-// 그러나 첫 배포의 편의를 위해 여기에 직접 계정 ID를 입력하겠습니다.
-const accountId = process.env.CDK_DEFAULT_ACCOUNT || '786382940028'; // AWS 계정 ID 입력!
-const region = process.env.CDK_DEFAULT_REGION || 'ap-northeast-2'; // 서울 리전
-
 new InfraStack(app, 'BlogInfraStack', {
+  // [핵심] 리전 간 참조(Cross-Region Reference)를 활성화하기 위해,
+  // 스택이 배포될 리전을 명시적으로 지정합니다.
+  // 계정 ID는 CI/CD 환경 변수에서 자동으로 가져오도록 그대로 둡니다.
   env: {
-    account: accountId,
-    region: region,
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'ap-northeast-2',
   },
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and Context lookups will not work.
-   */
-
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+  // [추가] 스택 이름에 대한 설명을 추가하여 가독성을 높입니다.
+  description: 'Full-stack infrastructure for the new-blog project',
 });

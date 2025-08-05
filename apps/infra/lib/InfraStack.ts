@@ -27,6 +27,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 
 // --- 모니터링 ---
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -175,35 +178,30 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/posts/{postId}', methods: [HttpMethod.PUT, HttpMethod.DELETE], integration: lambdaIntegration, authorizer });
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (전면 재설계 - 버전 호환 최종안)
+    // SECTION 2: 프론트엔드 리소스 정의 (최종 단순화 완성본)
     // ===================================================================================
 
-    // --- 2.1. S3 Bucket: (변경 없음) ---
+    // --- 2.0. 도메인 및 인증서 준비 ---
+    const domainName = 'jungyu.store';
+    const siteDomain = `blog.${domainName}`;
+    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName: domainName });
+    const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
+
+    // --- 2.1. S3 Bucket ---
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
 
-    // --- 2.2. Lambda Function: (변경 없음) ---
-    // 함수 정의 자체는 이전과 동일합니다. 함수 URL 설정은 아래에서 별도로 수행합니다.
+    // --- 2.2. Lambda Function ---
     const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      // [핵심 수정] fromAsset 대신, Docker를 이용한 번들링을 사용합니다.
-      // 이 코드는 Docker에게 projectRoot 디렉토리 전체를 빌드 컨텍스트로 제공하고,
-      // 'apps/frontend/.open-next/server-functions' 폴더를 복사하여 Lambda 코드로 만듭니다.
-      code: lambda.Code.fromAsset(projectRoot, {
-        bundling: {
-          image: lambda.Runtime.NODEJS_22_X.bundlingImage,
-          command: [
-            'bash', '-c', `
-        cp -r apps/frontend/.open-next/server-functions/* /asset-output/
-        `
-          ],
-        },
-      }),
+      // [핵심 최종 수정] 복잡한 Docker 번들링을 제거하고,
+      // CI/CD가 생성한 결과물의 경로를 직접, 그리고 단순하게 지정합니다.
+      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions')),
       memorySize: 1024,
       timeout: Duration.seconds(10),
       environment: {
@@ -215,16 +213,14 @@ export class InfraStack extends Stack {
     });
     assetsBucket.grantRead(serverLambda);
 
-    // --- 2.2.1. Lambda 함수 URL 생성 (핵심 수정) ---
-    // 함수를 생성한 뒤, .addFunctionUrl() 메서드를 호출하여 URL을 명시적으로 추가합니다.
-    const serverLambdaUrl = serverLambda.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE, // 인증 없음
-    });
+    // --- 2.2.1. Lambda 함수 URL 생성 ---
+    const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // --- 2.3. CloudFront Distribution: (수정) ---
+    // --- 2.3. CloudFront Distribution ---
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
+      domainNames: [siteDomain],
+      certificate: certificate,
       defaultBehavior: {
-        // [핵심 수정] .functionUrl 속성 대신, 위에서 생성한 serverLambdaUrl 객체의 .url 속성을 사용합니다.
         origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url))),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
@@ -245,22 +241,20 @@ export class InfraStack extends Stack {
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
     });
 
-    // --- 2.4. S3 Bucket Deployment: (핵심 수정) ---
+    // --- 2.4. S3 Bucket Deployment ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      // [핵심 수정] fromAsset 대신, Docker를 이용한 번들링을 사용합니다.
-      sources: [s3deploy.Source.asset(projectRoot, {
-        bundling: {
-          image: cdk.DockerImage.fromRegistry('alpine'), // 간단한 복사 작업이므로 가벼운 alpine 이미지를 사용
-          command: [
-            'sh', '-c', `
-        cp -r apps/frontend/.open-next/assets/* /asset-output/
-        `
-          ],
-        },
-      })],
+      // [핵심 최종 수정] 여기도 마찬가지로, Docker 번들링을 제거하고 단순 경로 지정을 사용합니다.
+      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
       destinationBucket: assetsBucket,
       distribution: distribution,
       distributionPaths: ['/*'],
+    });
+
+    // --- 2.5. Route 53 Record 생성 ---
+    new route53.ARecord(this, 'SiteARecord', {
+      recordName: siteDomain,
+      zone: hostedZone,
+      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
     });
 
     // ===================================================================================
