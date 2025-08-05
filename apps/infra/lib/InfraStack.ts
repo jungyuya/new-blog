@@ -177,7 +177,19 @@ export class InfraStack extends Stack {
       functionName: `blog-frontend-server-${this.stackName}`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-function')),
+      // [핵심 수정] fromAsset 대신, Docker를 이용한 번들링을 사용합니다.
+      // 이 코드는 Docker에게 projectRoot 디렉토리 전체를 빌드 컨텍스트로 제공하고,
+      // 'apps/frontend/.open-next/server-function' 폴더를 복사하여 Lambda 코드로 만듭니다.
+      code: lambda.Code.fromAsset(projectRoot, {
+        bundling: {
+          image: lambda.Runtime.NODEJS_22_X.bundlingImage,
+          command: [
+            'bash', '-c', `
+        cp -r apps/frontend/.open-next/server-function/* /asset-output/
+        `
+          ],
+        },
+      }),
       memorySize: 1024,
       timeout: Duration.seconds(10),
       environment: {
@@ -219,14 +231,24 @@ export class InfraStack extends Stack {
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
     });
 
-    // --- 2.4. S3 Bucket Deployment: (변경 없음) ---
+    // --- 2.4. S3 Bucket Deployment: (핵심 수정) ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
+      // [핵심 수정] fromAsset 대신, Docker를 이용한 번들링을 사용합니다.
+      sources: [s3deploy.Source.asset(projectRoot, {
+        bundling: {
+          image: cdk.DockerImage.fromRegistry('alpine'), // 간단한 복사 작업이므로 가벼운 alpine 이미지를 사용
+          command: [
+            'sh', '-c', `
+        cp -r apps/frontend/.open-next/assets/* /asset-output/
+        `
+          ],
+        },
+      })],
       destinationBucket: assetsBucket,
       distribution: distribution,
       distributionPaths: ['/*'],
     });
-
+    
     // ===================================================================================
     // SECTION 3: 스택 출력 및 모니터링
     // ===================================================================================

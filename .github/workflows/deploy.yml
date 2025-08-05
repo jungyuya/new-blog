@@ -56,7 +56,7 @@ jobs:
           rm -rf apps/frontend/.open-next
 
       - name: Build and Package All Apps
-        run: pnpm run build 
+        run: pnpm run build --no-cache
 
       - name: Deploy Infrastructure to AWS
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
