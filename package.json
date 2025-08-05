@@ -2,7 +2,8 @@
   "name": "new-blog",
   "private": true,
   "scripts": {
-    "build": "turbo run package --filter=frontend",
+    "build": "turbo run build --filter=frontend", 
+    "package": "turbo run package --filter=frontend", 
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "clean": "turbo run clean"

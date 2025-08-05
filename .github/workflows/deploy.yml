@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (ALL pnpm으로 실행하는 최종 확정안)
+# .github/workflows/deploy.yml (Lambda Layer 적용 최종 완성본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -19,16 +19,10 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
+      - name: "Phase 1: Setup Environment"
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Setup Node.js
+      - name: Setup Node.js v22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -49,14 +43,52 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Clean up previous build artifacts
+      # ===================================================================================
+      # Phase 2: Build & Package Artifacts
+      # ===================================================================================
+
+      - name: "Clean up previous builds"
         run: pnpm run clean
 
-      - name: Build and Package Frontend
+      - name: "Build Frontend (next build --standalone)"
+        # 루트의 'build' 스크립트('turbo run build --filter=frontend')를 실행합니다.
+        # 이 단계의 결과물은 '.next/standalone' 폴더입니다.
         run: pnpm run build --no-cache
 
-      - name: Verify Build Artifacts
-        run: ls -laR apps/frontend/.open-next
+      - name: "Package Frontend (open-next build)"
+        # 루트의 'package' 스크립트('turbo run package --filter=frontend')를 실행합니다.
+        # 이 단계는 '.next/standalone'을 입력으로 받아 '.open-next'를 생성합니다.
+        run: pnpm run package --no-cache
 
-      - name: Deploy Infrastructure to AWS
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+      - name: "Create zip file for Lambda Layer from node_modules"
+        # standalone 빌드로 생성된 물리적인 node_modules를 압축합니다.
+        run: |
+          cd apps/frontend/.next/standalone
+          zip -r ../../../node_modules.zip ./node_modules
+          cd ../../../..
+      
+      # ===================================================================================
+      # Phase 3: Deploy to AWS
+      # ===================================================================================
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: "Deploy Dependencies as a Lambda Layer"
+        id: deploy-layer # [핵심] 이 단계에 ID를 부여하여 출력값을 참조할 수 있도록 합니다.
+        run: |
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name new-blog-dependencies \
+            --description "Frontend node_modules dependencies built on ${{ github.sha }}" \
+            --zip-file fileb://apps/frontend/node_modules.zip \
+            --compatible-runtimes nodejs22.x \
+            --query LayerVersionArn --output text)
+          echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
+
+      - name: "Deploy Infrastructure and Application Code via CDK"
+        run: pnpm --filter infra exec cdk deploy --all \
+          --require-approval never \
+          --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}

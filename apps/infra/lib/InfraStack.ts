@@ -7,7 +7,7 @@
 // 1. CDK 및 AWS 서비스 모듈 Import
 // ---------------------------
 import * as cdk from 'aws-cdk-lib';
-import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -41,8 +41,13 @@ export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // 프로젝트 루트 디렉토리의 절대 경로를 계산하여, 모든 경로 참조의 기준으로 삼습니다.
     const projectRoot = path.join(__dirname, '..', '..', '..');
+
+    // [핵심] CI/CD 파이프라인으로부터 Lambda Layer의 ARN을 전달받기 위한 파라미터를 정의합니다.
+    const layerArnParameter = new CfnParameter(this, 'layerArn', {
+      type: 'String',
+      description: 'The ARN of the Lambda Layer containing frontend node_modules.',
+    });
 
     // ===================================================================================
     // SECTION 1: 백엔드 리소스 정의 (변경 없음)
@@ -177,33 +182,37 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/posts', methods: [HttpMethod.POST], integration: lambdaIntegration, authorizer });
     httpApi.addRoutes({ path: '/posts/{postId}', methods: [HttpMethod.PUT, HttpMethod.DELETE], integration: lambdaIntegration, authorizer });
 
+
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (최종 단순화 완성본)
+    // SECTION 2: 프론트엔드 리소스 정의 (전면 재설계 - 버전 호환 최종안)
     // ===================================================================================
 
     // --- 2.0. 도메인 및 인증서 준비 ---
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
-    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName: domainName });
+    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
-    // --- 2.1. S3 Bucket ---
+    // --- 2.1. S3 Bucket:  ---
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
 
-    // --- 2.2. Lambda Function ---
+    // --- 2.2. Next.js Server Lambda Function ---
     const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      // [핵심 최종 수정] 복잡한 Docker 번들링을 제거하고,
-      // CI/CD가 생성한 결과물의 경로를 직접, 그리고 단순하게 지정합니다.
+      // [핵심] 코드 경로는 이제 node_modules가 제외된, 순수한 애플리케이션 코드만 담고 있습니다.
       code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions/default')),
       memorySize: 1024,
       timeout: Duration.seconds(10),
+      // [핵심] CI/CD가 생성하고 전달해준 Layer를 여기에 연결합니다.
+      layers: [
+        lambda.LayerVersion.fromLayerVersionArn(this, 'DependenciesLayer', layerArnParameter.valueAsString)
+      ],
       environment: {
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
@@ -212,8 +221,6 @@ export class InfraStack extends Stack {
       },
     });
     assetsBucket.grantRead(serverLambda);
-
-    // --- 2.2.1. Lambda 함수 URL 생성 ---
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     // --- 2.3. CloudFront Distribution ---
@@ -243,7 +250,6 @@ export class InfraStack extends Stack {
 
     // --- 2.4. S3 Bucket Deployment ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      // [핵심 최종 수정] 여기도 마찬가지로, Docker 번들링을 제거하고 단순 경로 지정을 사용합니다.
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
       destinationBucket: assetsBucket,
       distribution: distribution,
