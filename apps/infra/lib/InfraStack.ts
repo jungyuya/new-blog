@@ -201,7 +201,7 @@ export class InfraStack extends Stack {
       handler: 'index.handler',
       // [핵심 최종 수정] 복잡한 Docker 번들링을 제거하고,
       // CI/CD가 생성한 결과물의 경로를 직접, 그리고 단순하게 지정합니다.
-      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions')),
+      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions/default')),
       memorySize: 1024,
       timeout: Duration.seconds(10),
       environment: {
