@@ -59,14 +59,14 @@ jobs:
           
           echo "--- Removing known large, unnecessary packages with precision ---"
           zip -d apps/frontend/node_modules.zip \
-            "node_modules/typescript/*" \
-            "node_modules/@types/*" \
-            "node_modules/eslint/*" \
-            "node_modules/turbo/*" \
-            "node_modules/next/dist/compiled/webpack/*" \
-            "node_modules/next/dist/compiled/terser/*" \
-            "node_modules/sharp/*" \
-            "node_modules/@img/*"
+            "**/node_modules/typescript/*" \
+            "**/node_modules/@types/*" \
+            "**/node_modules/eslint/*" \
+            "**/node_modules/turbo/*" \
+            "**/node_modules/next/dist/compiled/webpack/*" \
+            "**/node_modules/next/dist/compiled/terser/*" \
+            "**/node_modules/sharp/*" \
+            "**/node_modules/@img/*"
 
           echo "--- Final zip file size after surgery ---"
           du -h apps/frontend/node_modules.zip
