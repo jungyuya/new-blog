@@ -162,7 +162,7 @@ export class InfraStack extends Stack {
 
 
     const frontendSite = new Nextjs(this, 'FrontendSite', {
-      nextjsPath: 'apps/frontend',
+      nextjsPath: path.join(projectRoot, 'apps', 'frontend'),
 
 
       // [미래를 위한 확장]
