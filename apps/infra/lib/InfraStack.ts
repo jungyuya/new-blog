@@ -88,6 +88,9 @@ export class InfraStack extends Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
+    // [핵심 수정] 첫 배포를 위해 모든 GSI 정의를 잠시 주석 처리합니다.
+    // 나중에 필요할 때, 하나씩 주석을 해제하고 배포하면 됩니다.
     /*
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI1',
