@@ -61,17 +61,25 @@ jobs:
         run: pnpm run package --no-cache
 
       # [핵심 최종 수정] Layer 생성 단계를 최적화합니다.
-      - name: "Create Lambda Layer Zip File from Standalone Output"
+      - name: "Create Optimized Lambda Layer Zip File"
         run: |
-          echo "--- Zipping the node_modules created by 'next build --standalone' ---"
+          echo "--- Optimizing node_modules for Lambda Layer ---"
           # 1. standalone 폴더로 이동합니다.
           cd apps/frontend/.next/standalone
           
-          # 2. [핵심 최종 수정] next build가 만들어준 완벽한 node_modules를,
-          #    아무것도 건드리지 말고, 그대로 압축합니다.
+          # 2. next build가 생성한 거대한 node_modules를 제거합니다.
+          rm -rf node_modules
+
+          # 3. standalone 폴더 안에 있는 package.json을 사용하여,
+          #    오직 production 의존성만 새로, 그리고 깨끗하게 설치합니다.
+          #    pnpm은 --prod 옵션을 통해 devDependencies를 완벽하게 제외합니다.
+          pnpm install --prod
+
+          # 4. 다이어트에 성공한, 가벼워진 node_modules를 압축합니다.
+          echo "--- Zipping optimized node_modules ---"
           zip -r ../../node_modules.zip ./node_modules
           
-          # 3. 원래 위치로 돌아옵니다.
+          # 5. 원래 위치로 돌아옵니다.
           cd ../../../..
       
       # ===================================================================================
