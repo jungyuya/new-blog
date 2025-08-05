@@ -2,10 +2,10 @@
   "name": "new-blog",
   "private": true,
   "scripts": {
-    "build": "turbo run package",
-    "clean": "turbo run clean",
+    "build": "turbo run package --filter=frontend",
     "dev": "turbo run dev",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
   },
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {

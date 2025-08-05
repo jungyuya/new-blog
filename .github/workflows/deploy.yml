@@ -52,7 +52,7 @@ jobs:
       - name: Clean up previous build artifacts
         run: pnpm run clean
 
-      - name: Build and Package All Apps via Turbo
+      - name: Build and Package Frontend
         run: pnpm run build --no-cache
 
       - name: Verify Build Artifacts

@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "package": "open-next build",
-    "start": "next start",
-    "lint": "next lint",
+    "build": "echo 'infra package has nothing to build'",
+    "cdk": "cdk",
+    "test": "jest",
     "clean": "rm -rf cdk.out"
   },
   "keywords": [],
