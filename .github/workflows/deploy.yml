@@ -19,7 +19,6 @@ jobs:
       contents: read
 
     steps:
-      # ... 이전 스텝들은 모두 동일 ...
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Configure AWS Credentials
@@ -56,8 +55,8 @@ jobs:
           rm -rf apps/frontend/.next
           rm -rf apps/frontend/.open-next
 
-      - name: Build Full-Stack Project
-        run: pnpm build
+      - name: Build and Package All Apps
+        run: pnpm run build 
 
-      - name: Deploy to AWS with CDK
+      - name: Deploy Infrastructure to AWS
         run: pnpm --filter infra exec cdk deploy --all --require-approval never

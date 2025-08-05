@@ -1,29 +1,35 @@
 // apps/infra/lib/InfraStack.ts
-// [프로젝트 헌법] 제1조: 인프라 구성법 (Phase 5: 프론트엔드 통합 최종안)
-// 최종 수정일: 2025년 8월 4일
+// [프로젝트 헌법] 제1조 및 제3조: 인프라 구성법 (Phase 5: 재건축 최종안)
+// 최종 수정일: 2025년 8월 5일
+// 'Nextjs' Construct를 포기하고, CDK 기본 요소를 사용하여 명시적으로 인프라를 제어합니다.
 
 // ---------------------------
 // 1. CDK 및 AWS 서비스 모듈 Import
 // ---------------------------
-import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// --- 백엔드 리소스 ---
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as fs from 'fs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
-// [핵심] open-next/cdk 패키지에서 NextjsSite Construct를 import 합니다.
-// 이 코드가 오류 없이 작동하려면, `pnpm --filter infra add -D open-next`가 성공적으로 실행되어야 합니다.
-import { Nextjs } from 'open-next-cdk';
+// --- 프론트엔드 리소스 (재건축의 핵심) ---
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+
+// --- 모니터링 ---
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
 // ---------------------------
 // 2. CDK 스택 클래스 정의
@@ -32,9 +38,12 @@ export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // 프로젝트 루트 디렉토리의 절대 경로를 계산하여, 모든 경로 참조의 기준으로 삼습니다.
+    const projectRoot = path.join(__dirname, '..', '..', '..');
+
     // ===================================================================================
-    // SECTION 1: 백엔드 리소스 정의 (Backend Resources)
-    // 이 섹션은 API, 데이터베이스, 사용자 인증 등 서비스의 핵심 로직을 담당합니다.
+    // SECTION 1: 백엔드 리소스 정의 (변경 없음)
+    // 이 섹션은 기존과 동일하게 안정적으로 동작합니다.
     // ===================================================================================
 
     // --- 1.1. Cognito User Pool (사용자 인증 시스템) ---
@@ -87,16 +96,15 @@ export class InfraStack extends Stack {
     // ... (GSI2, GSI3 정의는 생략 없이 동일하게 유지)
 
     // --- 1.3. Lambda Function (API 비즈니스 로직) ---
-    const monorepoRoot = path.join(__dirname, '..', '..', '..');
-    const backendPackageJsonPath = path.join(monorepoRoot, 'apps', 'backend', 'package.json');
+    const backendPackageJsonPath = path.join(projectRoot, 'apps', 'backend', 'package.json');
     const backendPackageJson = JSON.parse(fs.readFileSync(backendPackageJsonPath, 'utf8'));
     const backendVersion = backendPackageJson.version;
 
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
-      entry: path.join(monorepoRoot, 'apps', 'backend', 'src', 'index.ts'),
+      entry: path.join(projectRoot, 'apps', 'backend', 'src', 'index.ts'),
       handler: 'handler',
-      runtime: Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       memorySize: 256,
       timeout: Duration.seconds(30),
       environment: {
@@ -143,7 +151,6 @@ export class InfraStack extends Stack {
       identitySource: ['$request.header.Authorization'],
     });
 
-    // API Gateway 라우트 정의
     httpApi.addRoutes({ path: '/auth/signup', methods: [HttpMethod.POST], integration: lambdaIntegration });
     httpApi.addRoutes({ path: '/auth/login', methods: [HttpMethod.POST], integration: lambdaIntegration });
     httpApi.addRoutes({ path: '/posts', methods: [HttpMethod.GET], integration: lambdaIntegration });
@@ -154,26 +161,70 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/posts/{postId}', methods: [HttpMethod.PUT, HttpMethod.DELETE], integration: lambdaIntegration, authorizer });
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (Frontend Resources)
-    // 이 섹션은 사용자 인터페이스(UI)를 세상에 공개하고 제공하는 역할을 담당합니다.
+    // SECTION 2: 프론트엔드 리소스 정의 (전면 재설계 - 버전 호환 최종안)
     // ===================================================================================
-    const projectRoot = path.join(__dirname, '..', '..', '..');
 
+    // --- 2.1. S3 Bucket: (변경 없음) ---
+    const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      publicReadAccess: false,
+    });
 
-
-    const frontendSite = new Nextjs(this, 'FrontendSite', {
-      nextjsPath: path.join(projectRoot, 'apps', 'frontend'),
-
-
-      // [미래를 위한 확장]
-      // 백엔드 API 정보를 프론트엔드 빌드 시점에 환경 변수로 전달합니다.
-      // 이렇게 하면 프론트엔드 코드에서 amplifyconfiguration.ts 파일을 하드코딩할 필요가 없어집니다.
+    // --- 2.2. Lambda Function: (변경 없음) ---
+    // 함수 정의 자체는 이전과 동일합니다. 함수 URL 설정은 아래에서 별도로 수행합니다.
+    const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
+      functionName: `blog-frontend-server-${this.stackName}`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-function')),
+      memorySize: 1024,
+      timeout: Duration.seconds(10),
       environment: {
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
+    });
+    assetsBucket.grantRead(serverLambda);
+
+    // --- 2.2.1. Lambda 함수 URL 생성 (핵심 수정) ---
+    // 함수를 생성한 뒤, .addFunctionUrl() 메서드를 호출하여 URL을 명시적으로 추가합니다.
+    const serverLambdaUrl = serverLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE, // 인증 없음
+    });
+
+    // --- 2.3. CloudFront Distribution: (수정) ---
+    const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
+      defaultBehavior: {
+        // [핵심 수정] .functionUrl 속성 대신, 위에서 생성한 serverLambdaUrl 객체의 .url 속성을 사용합니다.
+        origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url))),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      },
+      additionalBehaviors: {
+        '_next/*': {
+          origin: new origins.S3Origin(assetsBucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+        'assets/*': {
+          origin: new origins.S3Origin(assetsBucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
+      },
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
+    });
+
+    // --- 2.4. S3 Bucket Deployment: (변경 없음) ---
+    new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
+      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
+      destinationBucket: assetsBucket,
+      distribution: distribution,
+      distributionPaths: ['/*'],
     });
 
     // ===================================================================================
@@ -198,26 +249,20 @@ export class InfraStack extends Stack {
       description: 'AWS Region',
     });
     new CfnOutput(this, 'FrontendURL', {
-      value: frontendSite.url,
-      description: 'URL of the frontend site',
+      value: `https://${distribution.distributionDomainName}`, // CloudFront 도메인을 출력
+      description: 'URL of the frontend CloudFront distribution',
     });
-    // apps/infra/lib/InfraStack.ts (CloudWatch Alarms 섹션)
 
     // --- 3.2. CloudWatch Alarms (모니터링) ---
-    // Lambda 함수 오류 발생 시 알람
     backendApiLambda.metricErrors({ period: Duration.minutes(5) })
       .createAlarm(this, 'BackendApiLambdaErrorsAlarm', {
-        // [핵심 수정] 필수 옵션들을 다시 채워넣습니다.
-        threshold: 1, // 5분 동안 오류가 1번 이상 발생하면
-        evaluationPeriods: 1, // 1번의 평가 기간(5분) 동안 관찰하여
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, // 알람을 울립니다.
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription: 'Lambda function errors detected!',
       });
-
-    // API Gateway 5xx 서버 에러 발생 시 알람
     httpApi.metricServerError({ period: Duration.minutes(5) })
       .createAlarm(this, 'ApiGatewayServerErrorAlarm', {
-        // [핵심 수정] 필수 옵션들을 다시 채워넣습니다.
         threshold: 1,
         evaluationPeriods: 1,
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
