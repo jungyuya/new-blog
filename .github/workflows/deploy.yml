@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (캐시 파괴 및 검증 강화 최종 완결본)
+# .github/workflows/deploy.yml (모든 지혜를 담은 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -21,16 +21,11 @@ jobs:
     steps:
       - name: "Phase 1: Setup Environment"
         uses: actions/checkout@v4
-      - name: Setup Node.js v22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: pnpm/action-setup@v4
+        with: { run_install: false }
+      - uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -45,26 +40,13 @@ jobs:
 
       - name: "Step 2.1: Clean Artifacts & Forcefully Disable Turbo Cache"
         run: |
-          echo "--- Deleting previous build artifacts and turbo cache ---"
-          # [핵심] turbo의 캐시 폴더(.turbo)를 물리적으로 삭제하여, 모든 것을 처음부터 다시 빌드하도록 강제합니다.
           rm -rf .turbo
           pnpm run clean
 
-      - name: "Step 2.2: Build Standalone Output"
-        # 루트의 'build' 스크립트('turbo run build --filter=frontend')를 실행합니다.
-        run: pnpm run build --no-cache
-
-      - name: "Step 2.3: Package OpenNext Output"
-        # 루트의 'package' 스크립트('turbo run package --filter=frontend')를 실행합니다.
+      - name: "Step 2.2: Build and Package Frontend"
         run: pnpm run package --no-cache
 
-      - name: "Step 2.4 (Verification): Check Original node_modules Size"
-        # [검증 강화] 최적화 전, 원본 standalone node_modules의 크기를 확인합니다.
-        run: |
-          echo "--- Original size of node_modules in .next/standalone ---"
-          du -sh apps/frontend/.next/standalone/node_modules
-
-      - name: "Step 2.5 (Optimization): Isolate, Clean & Zip Layer"
+      - name: "Step 2.3: Isolate, Clean, Zip Layer & Verify"
         run: |
           echo "--- Isolating frontend artifacts for deployment ---"
           mkdir deploy-output
@@ -73,16 +55,25 @@ jobs:
           echo "--- Optimizing node_modules with modclean ---"
           cd deploy-output
           npx modclean --patterns='**/*__tests__*/**,**/*.d.ts,**/*.map,**/*.md,**/LICENSE,**/license,**/license.txt' -n 'default:true,so:false'
-          
+
+          # [개선] modclean 결과 확인 로그 추가
+          echo "--- node_modules size after modclean ---"
+          du -sh node_modules
+
           echo "--- Zipping the cleaned node_modules ---"
           zip -r ../node_modules.zip ./node_modules
           cd ..
 
-      - name: "Step 2.6 (Verification): Check Final Layer Zip Size"
-        # [검증 강화] 최적화 후, 최종 zip 파일의 크기를 확인하여, modclean의 효과를 우리 눈으로 직접 봅니다.
-        run: |
           echo "--- Final size of the optimized node_modules.zip ---"
           du -h node_modules.zip
+
+          # [개선] 최종 zip 크기가 67MiB 초과 시 파이프라인을 즉시 실패시킵니다.
+          MAX_SIZE=70167211
+          ACTUAL_SIZE=$(stat -c %s node_modules.zip)
+          if [ "$ACTUAL_SIZE" -ge "$MAX_SIZE" ]; then
+            echo "::error::Layer zip size ($ACTUAL_SIZE bytes) exceeds AWS Lambda Layer limit ($MAX_SIZE bytes)."
+            exit 1
+          fi
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
@@ -99,7 +90,7 @@ jobs:
         run: |
           LAYER_ARN=$(aws lambda publish-layer-version \
             --layer-name new-blog-dependencies \
-            --description "Frontend node_modules dependencies built on ${{ github.sha }}" \
+            --description "Frontend node_modules built on ${{ github.sha }}" \
             --zip-file fileb://node_modules.zip \
             --compatible-runtimes nodejs22.x \
             --query LayerVersionArn --output text)
