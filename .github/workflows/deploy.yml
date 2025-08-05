@@ -44,15 +44,16 @@ jobs:
           pnpm run package --no-cache
 
       # [핵심] 모든 진단, 수술, 검증 작업을 단 하나의, 논리적으로 완벽한 단계로 통합합니다.
-      - name: "Step 2.2: Create Standalone Zip and Verify Size"
+      - name: "Create Lambda Layer Zip File from Standalone Output"
         run: |
-          echo "--- Creating zip file from standalone output ---"
+          echo "--- Zipping the original standalone node_modules ---"
           cd apps/frontend/.next/standalone
-          zip -r ../../node_modules.zip .
+          zip -r ../../node_modules.zip ./node_modules
           cd ../../../..
-          
-          echo "--- Initial zip file size ---"
-          du -h apps/frontend/node_modules.zip
+
+      - name: "Verify Final Layer Zip Size"
+        run: du -h apps/frontend/node_modules.zip
+
 
       - name: "Optimize and Zip Lambda Layer"
         run: |
