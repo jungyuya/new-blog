@@ -61,25 +61,18 @@ jobs:
         run: pnpm run package --no-cache
 
       # [핵심 최종 수정] Layer 생성 단계를 최적화합니다.
-      - name: "Create Optimized node_modules Layer Zip File"
+      - name: "Create Lambda Layer Zip File from Standalone Output"
         run: |
-          echo "--- Preparing node_modules for Lambda Layer ---"
+          echo "--- Zipping the node_modules created by 'next build --standalone' ---"
           # 1. standalone 폴더로 이동합니다.
           cd apps/frontend/.next/standalone
           
-          # 2. 기존의 거대한 node_modules와 package-lock.json 등을 제거합니다.
-          rm -rf node_modules package-lock.json yarn.lock
-
-          # 3. package.json을 사용하여, 오직 production 의존성만 다시 설치합니다.
-          # pnpm은 --prod 옵션을 통해 devDependencies를 제외하고 설치합니다.
-          pnpm install --prod
-
-          # 4. 최적화된 node_modules를 압축합니다.
-          echo "--- Zipping optimized node_modules ---"
+          # 2. [핵심 최종 수정] next build가 만들어준 완벽한 node_modules를,
+          #    아무것도 건드리지 말고, 그대로 압축합니다.
           zip -r ../../node_modules.zip ./node_modules
           
-          # 5. 원래 위치로 돌아옵니다.
-          cd ../../../..
+          # 3. 원래 위치로 돌아옵니다.
+          cd ../../../..```
       
       # ===================================================================================
       # Phase 3: Deploy to AWS
