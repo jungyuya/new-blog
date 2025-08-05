@@ -43,25 +43,26 @@ jobs:
           pnpm run clean
           pnpm run package --no-cache
 
-      - name: "Step 2.2: Create Initial Zip and Start Investigation"
+      - name: "Step 2.2: Create Zip, Investigate, and Clean"
         run: |
-          echo "--- Creating initial zip file from standalone output ---"
-          cd apps/frontend/.next/standalone
-          zip -r ../../node_modules.zip .
-          cd ../../../..
+          echo "--- Creating zip file from standalone output ---"
+          zip -r node_modules.zip . -C apps/frontend/.next/standalone
           
-          echo "--- Initial zip file size (This is the problem) ---"
+          echo "--- Initial zip file size ---"
           du -h node_modules.zip
 
           echo "--- Listing top 30 largest files/directories in the zip ---"
-          # [핵심 수사] zipinfo를 사용하여, 압축 파일 내부의 용량 도둑을 찾습니다.
           unzip -l node_modules.zip | sort -k 1 -nr | head -n 30
+          
+          echo "--- Removing known large, unnecessary packages ---"
+          zip -d node_modules.zip "node_modules/typescript/*" "node_modules/@types/*" "node_modules/eslint/*" "node_modules/turbo/*" "node_modules/next/dist/compiled/webpack/*" "node_modules/next/dist/compiled/terser/*"
+
+          echo "--- Final zip file size after surgery ---"
+          du -h node_modules.zip
 
       - name: "Step 2.3: Precision Surgery (If Needed)"
         run: |
           echo "--- Attempting to remove known large, unnecessary packages ---"
-          # [정밀 제거] zip -d 옵션으로, 알려진 개발용 패키지들을 제거합니다.
-          # 이 명령어는 해당 파일이 없으면 조용히 실패하므로, 안전합니다.
           zip -d node_modules.zip "node_modules/typescript/*" "node_modules/@types/*" "node_modules/eslint/*" "node_modules/turbo/*" "node_modules/next/dist/compiled/webpack/*" "node_modules/next/dist/compiled/terser/*"
 
           echo "--- Final zip file size after surgery ---"
