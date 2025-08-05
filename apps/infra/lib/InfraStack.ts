@@ -88,12 +88,23 @@ export class InfraStack extends Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+    /*
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI1',
       partitionKey: { name: 'GSI1_PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI1_SK', type: dynamodb.AttributeType.STRING },
     });
-    // ... (GSI2, GSI3 정의는 생략 없이 동일하게 유지)
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'GSI2',
+      partitionKey: { name: 'GSI2_PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2_SK', type: dynamodb.AttributeType.STRING },
+    });
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'GSI3',
+      partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
+    });
+    */
 
     // --- 1.3. Lambda Function (API 비즈니스 로직) ---
     const backendPackageJsonPath = path.join(projectRoot, 'apps', 'backend', 'package.json');
