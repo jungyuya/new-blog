@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (모든 것을 pnpm으로 실행하는 최종 확정안)
+# .github/workflows/deploy.yml (ALL pnpm으로 실행하는 최종 확정안)
 
 name: "Deploy Full-Stack Application to AWS"
 
