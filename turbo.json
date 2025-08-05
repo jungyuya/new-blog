@@ -13,6 +13,9 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {}
+    "lint": {},
+    "clean": {
+      "cache": false
+    }
   }
 }

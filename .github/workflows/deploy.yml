@@ -1,6 +1,6 @@
-# .github/workflows/deploy.yml (실행 컨텍스트 통일 최종안)
+# .github/workflows/deploy.yml (Turbo 신뢰 기반 최종 재건축안)
 
-name: "New-Blog Full-Stack CI/CD"
+name: "Deploy Full-Stack Application to AWS"
 
 on:
   push:
@@ -21,55 +21,52 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: Setup Node.js and pnpm
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          run_install: false
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+          version: 10 # package.json의 packageManager 필드와 충돌하지 않도록, 구체적인 버전 대신 메이저 버전만 명시하거나 아예 제거할 수 있습니다. 가장 안전한 방법은 제거하는 것입니다.
+          run_install: false # pnpm install은 별도 단계에서 실행합니다.
+
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.STORE_PATH }}
+          path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build Full-Stack Project
-        run: pnpm build
 
-      - name: Clean up build artifacts
-        run: |
-          rm -rf apps/frontend/.next
-          rm -rf apps/frontend/.open-next
+      # [핵심 1] 빌드 전, 이전 실행에서 남았을지 모르는 모든 빌드 결과물을 깨끗이 청소합니다.
+      - name: Clean up previous build artifacts
+        run: turbo run clean
 
-      - name: Build and Package All Apps
-        run: pnpm run build --no-cache
+      # [핵심 2] 이제 우리는 Turbo를 완벽하게 신뢰합니다.
+      # 이 한 줄의 명령이 turbo.json에 정의된 의존성에 따라,
+      # frontend의 build(next build) -> package(open-next build) 순서를 자동으로 조율합니다.
+      # CI 환경의 안정성을 위해 캐시는 사용하지 않습니다.
+      - name: Build and Package All Apps via Turbo
+        run: pnpm build --no-cache
 
-      # ===================================================================================
-      #  현장 감식 단계 추가
-      # 이 단계는 cdk deploy가 실행되기 직전의 파일 시스템 상태를 낱낱이 보여줍니다.
-      # ===================================================================================
+      # [핵심 3] 현장 감식 단계. cdk deploy 직전에 모든 것이 준비되었는지 우리 눈으로 확인합니다.
       - name: Verify Build Artifacts
         run: |
-          echo "--- Verifying build artifacts in project root ---"
-          ls -la
-          echo "--- Verifying contents of apps/frontend ---"
-          ls -la apps/frontend
-          echo "--- Verifying contents of apps/frontend/.open-next ---"
-          ls -laR apps/frontend/.open-next || echo ".open-next directory not found!"
+          echo "--- Verifying the presence of the final artifact: .open-next ---"
+          ls -laR apps/frontend/.open-next
 
+      # [핵심 4] 인프라 배포 단계. 빌드/패키징이 성공적으로 완료된 후에만 실행됩니다.
       - name: Deploy Infrastructure to AWS
         run: pnpm --filter infra exec cdk deploy --all --require-approval never

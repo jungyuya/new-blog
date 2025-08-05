@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "build": "tsc",
-    "deploy": "cdk deploy --app \"npx ts-node --prefer-ts-exts bin/infra.ts\"",
-    "synth": "cdk synth --app \"npx ts-node --prefer-ts-exts bin/infra.ts\"",
-    "diff": "cdk diff --app \"npx ts-node --prefer-ts-exts bin/infra.ts\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "package": "open-next build",
+    "start": "next start",
+    "lint": "next lint",
+    "clean": "rm -rf cdk.out"
   },
   "keywords": [],
   "author": "",
