@@ -1,0 +1,65 @@
+# .github/workflows/build-and-verify.yml
+# [탐사 임무] 빌드 결과물 물리적 검증 파이프라인
+
+name: "Build and Verify Frontend Artifacts"
+
+on:
+  # 이 워크플로우는 수동으로만 실행하여, main 브랜치 push와는 무관하게 만듭니다.
+  # 이를 통해 우리는 원할 때만 진단 장비를 가동시킬 수 있습니다.
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Step 1: Checkout repository code"
+        uses: actions/checkout@v4
+
+      - name: "Step 2: Setup Node.js v22"
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: "Step 3: Setup pnpm v10.14.0"
+        uses: pnpm/action-setup@v4
+        with:
+          # version 키를 제거하여, 루트 package.json의 packageManager 필드를 따르도록 합니다.
+          run_install: false
+
+      - name: "Step 4: Setup pnpm cache for speed"
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: "Step 5: Install all dependencies"
+        run: pnpm install --frozen-lockfile
+
+      - name: "Step 6: Clean up previous artifacts (Just in case)"
+        # 루트 package.json의 "clean": "turbo run clean" 스크립트를 실행합니다.
+        run: pnpm run clean
+
+      - name: "Step 7: Build and Package Frontend via Turbo"
+        # 루트 package.json의 "build": "turbo run package --filter=frontend" 스크립트를 실행합니다.
+        # CI 안정성을 위해 캐시는 사용하지 않습니다.
+        run: pnpm run build --no-cache
+
+      # ===================================================================================
+      # [최종 목표] 현장 감식 단계
+      # 이 단계의 로그가 이번 탐사 임무의 유일한 결과물입니다.
+      # ===================================================================================
+      - name: "Step 8: Verify Physical Build Artifacts"
+        run: |
+          echo "--- [Verification Start] ---"
+          echo " "
+          echo "1. Checking the contents of 'apps/frontend'..."
+          ls -la apps/frontend
+          echo " "
+          echo "2. Checking the contents of 'apps/frontend/.open-next' (This is CRITICAL)..."
+          # '|| true'는 폴더가 없어서 ls 명령이 실패하더라도, 전체 워크플로우가 중단되지 않도록 합니다.
+          ls -laR apps/frontend/.open-next || echo "!!! CRITICAL: .open-next directory was NOT found. !!!"
+          echo " "
+          echo "--- [Verification End] ---"
