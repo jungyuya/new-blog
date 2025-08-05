@@ -209,7 +209,6 @@ export class InfraStack extends Stack {
       code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions/default')),
       memorySize: 1024,
       timeout: Duration.seconds(10),
-      // [핵심] CI/CD가 생성하고 전달해준 Layer를 여기에 연결합니다.
       layers: [
         lambda.LayerVersion.fromLayerVersionArn(this, 'DependenciesLayer', layerArnParameter.valueAsString)
       ],
@@ -221,6 +220,8 @@ export class InfraStack extends Stack {
       },
     });
     assetsBucket.grantRead(serverLambda);
+
+    // --- 2.2.1. Lambda 함수 URL 생성 ---
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     // --- 2.3. CloudFront Distribution ---
@@ -250,12 +251,12 @@ export class InfraStack extends Stack {
 
     // --- 2.4. S3 Bucket Deployment ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
+      // [핵심 최종 수정] 여기도 마찬가지로, Docker 번들링을 제거하고 단순 경로 지정을 사용합니다.
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
       destinationBucket: assetsBucket,
       distribution: distribution,
       distributionPaths: ['/*'],
     });
-
     // --- 2.5. Route 53 Record 생성 ---
     new route53.ARecord(this, 'SiteARecord', {
       recordName: siteDomain,
