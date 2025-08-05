@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (pnpm deploy 최종 진화 형태)
+# .github/workflows/deploy.yml (pnpm v10 호환 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -46,12 +46,14 @@ jobs:
       - name: "Clean up previous builds"
         run: pnpm run clean
 
+      - name: "Build and Package Frontend"
+        run: pnpm run package --no-cache
+
       - name: "Isolate Frontend for Deployment using pnpm deploy"
-        # [핵심] pnpm deploy는 build와 package를 포함한 모든 작업을 수행하고,
-        # 배포에 필요한 모든 것(소스코드, production 의존성)을 'deploy-output' 폴더로 복사합니다.
         run: |
           mkdir deploy-output
-          pnpm --filter frontend deploy --prod ./deploy-output
+          # [핵심] pnpm v10의 새로운 규칙에 따라 --legacy 플래그를 추가합니다.
+          pnpm --filter frontend deploy --prod --legacy ./deploy-output || exit 1
 
       - name: "Create Lambda Layer Zip File from Deployed Output"
         run: |
@@ -59,7 +61,12 @@ jobs:
           cd deploy-output
           zip -r ../node_modules.zip ./node_modules
           cd ..
-      
+
+      - name: "Check node_modules.zip size"
+        run: |
+          echo "Layer zip file size:"
+          du -h node_modules.zip
+
       # ===================================================================================
       # Phase 3: Deploy to AWS
       # ===================================================================================
@@ -85,3 +92,7 @@ jobs:
         run: pnpm --filter infra exec cdk deploy --all \
           --require-approval never \
           --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
+
+      - name: "Clean up temporary build artifacts"
+        if: always()
+        run: rm -rf deploy-output node_modules.zip

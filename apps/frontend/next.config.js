@@ -1,4 +1,4 @@
-// apps/frontend/next.config.ts (최종 확정안)
+// apps/frontend/next.config.js (최종 완결본)
 const path = require('path');
 
 /** @type {import('next').NextConfig} */
