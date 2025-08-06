@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (CDK 버전 명시 최종 완결본)
+# .github/workflows/deploy.yml (pnpm 회귀 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -25,7 +25,8 @@ jobs:
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - uses: actions/cache@v4
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -34,10 +35,7 @@ jobs:
       - name: Install dependencies at root
         run: pnpm install --frozen-lockfile
 
-      - name: "Install specific version of AWS CDK CLI"
-        # [핵심] pnpm이 관리하는 버전 대신, npm을 통해 전역으로 CDK CLI를 설치합니다.
-        # 우리의 aws-cdk-lib 버전과 동일한 버전을 사용하여, 버전 불일치 문제를 원천 차단합니다.
-        run: npm install -g aws-cdk@2.207.0
+      # [핵심] 더 이상 불확실한 글로벌 CDK를 설치하지 않습니다.
 
       # ===================================================================================
       # Phase 2: Build All Workspaces
@@ -68,15 +66,11 @@ jobs:
         run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
       - name: "Step 3.2: Bootstrap CDK with Trust Policy"
-        # [핵심] 이제 pnpm exec 대신, 전역으로 설치된 최신 cdk를 직접 호출합니다.
-        # working-directory를 infra로 지정하여, 올바른 cdk.json 컨텍스트에서 실행되도록 합니다.
-        working-directory: ./apps/infra
+        # [핵심] 우리 프로젝트의 lock 파일이 보장하는, 가장 확실한 cdk 버전을 사용합니다.
         run: |
-          cdk bootstrap \
+          pnpm --filter infra exec cdk bootstrap \
             --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
             --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
 
       - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
-        # [핵심] 여기도 마찬가지로, 전역 cdk를 직접 호출합니다.
-        working-directory: ./apps/infra
-        run: cdk deploy --all --require-approval never
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never
