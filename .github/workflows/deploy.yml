@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (최종 경로 수정 및 중복 제거 완결본)
+# .github/workflows/deploy.yml (캐시 비활성화 및 단순화 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -25,60 +25,40 @@ jobs:
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - name: Install dependencies
+
+      # [핵심 1] 모든 문제의 근원인 pnpm 캐시 관련 단계를 완전히 주석 처리하여 비활성화합니다.
+      # - name: Setup pnpm cache
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: ~/.pnpm-store
+      #     key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-pnpm-store-
+
+      - name: "Install dependencies from scratch"
+        # 캐시가 없으므로, pnpm은 모든 의존성을 인터넷에서 새로, 그리고 깨끗하게 다운로드합니다.
         run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Build, Investigate, Optimize & Verify
+      # Phase 2: Build & Package
       # ===================================================================================
 
       - name: "Step 2.1: Clean and Build"
         run: |
           pnpm run clean
+          # --no-cache 플래그는 유지하여, turbo의 내부 캐시도 비활성화합니다.
           pnpm run package --no-cache
 
-      # [핵심] 모든 진단, 수술, 검증 작업을 단 하나의, 논리적으로 완벽한 단계로 통합합니다.
-      - name: "Create Lambda Layer Zip File from Standalone Output"
+      # [핵심 2] 모든 복잡한 최적화 단계를 제거하고, 오직 순수한 standalone 결과물을 사용합니다.
+      - name: "Step 2.2: Create Lambda Layer Zip File"
         run: |
-          echo "--- Zipping the original standalone node_modules ---"
+          echo "--- Zipping the original standalone output ---"
           cd apps/frontend/.next/standalone
-          zip -r ../../node_modules.zip ./node_modules
+          zip -r ../../node_modules.zip .
           cd ../../../..
 
-      - name: "Verify Final Layer Zip Size"
+      - name: "Step 2.3: Verify Final Layer Zip Size"
         run: du -h apps/frontend/node_modules.zip
-
-
-      - name: "Optimize and Zip Lambda Layer"
-        run: |
-          echo "--- Preparing for optimization ---"
-          mkdir temp-layer
-          unzip apps/frontend/node_modules.zip -d temp-layer
-          cd temp-layer
-
-          echo "--- Removing the largest offender: sharp and related packages ---"
-          rm -rf node_modules/.pnpm/sharp@*
-          rm -rf node_modules/.pnpm/@img*
-
-          echo "--- Optimizing the rest with modclean ---"
-          npx modclean --patterns='**/*__tests__*/**,**/*.d.ts,**/*.map,**/*.md,**/LICENSE' -n 'default:true'
-
-          echo "--- Zipping the cleaned files ---"
-          zip -r ../node_modules_optimized.zip .
-          cd ..
-          mv node_modules_optimized.zip apps/frontend/node_modules.zip
-
-      - name: "Verify Final Layer Zip Size with precision"
-        run: |
-          echo "--- Final size of the optimized node_modules.zip ---"
-          # [핵심] du -b 옵션을 사용하여, 정확한 바이트 크기를 확인합니다.
-          du -b apps/frontend/node_modules.zip
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
@@ -95,14 +75,16 @@ jobs:
         run: |
           LAYER_ARN=$(aws lambda publish-layer-version \
             --layer-name new-blog-dependencies \
-            --description "Frontend node_modules dependencies built on ${{ github.sha }}" \
+            --description "Frontend dependencies built on ${{ github.sha }}" \
             --zip-file fileb://apps/frontend/node_modules.zip \
-            --compatible-runtimes nodejs22.x \
+            --compatible-rpmtimes nodejs22.x \
             --query LayerVersionArn --output text)
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
 
       - name: "Step 3.3: Deploy Infrastructure and Application Code via CDK"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
+        run: pnpm --filter infra exec cdk deploy --all \
+          --require-approval never \
+          --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
 
       - name: "Step 3.4 (Cleanup): Remove Temporary Artifacts"
         if: always()
