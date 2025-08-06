@@ -30,6 +30,8 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as ecr from 'aws-cdk-lib/aws-ecr'; // ECR을 import 합니다.
+
 
 // --- 모니터링 ---
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -40,6 +42,13 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    // [핵심] CI/CD로부터 이미지 태그를 전달받기 위한 파라미터를 추가합니다.
+    const imageTag = new CfnParameter(this, 'imageTag', {
+      type: 'String',
+      description: 'The ECR image tag to deploy.',
+      default: 'latest', // 로컬 테스트를 위한 기본값
+    });
 
     const projectRoot = path.join(__dirname, '..', '..', '..');
 
