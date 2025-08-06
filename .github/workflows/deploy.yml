@@ -101,9 +101,7 @@ jobs:
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
 
       - name: "Step 3.3: Deploy Infrastructure and Application Code via CDK"
-        run: pnpm --filter infra exec cdk deploy --all \
-          --require-approval never \
-          --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
 
       - name: "Step 3.4 (Cleanup): Remove Temporary Artifacts"
         if: always()
