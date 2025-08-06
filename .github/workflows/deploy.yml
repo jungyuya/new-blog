@@ -72,4 +72,3 @@ jobs:
         # 5. apps/frontend/.next/static 폴더의 내용을 S3에 업로드합니다.
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
 
-      # [핵심] 더 이상 Lambda Layer나 임시 zip 파일이 없으므로, Cleanup 단계가 필요 없습니다.
