@@ -1,4 +1,5 @@
-# .dockerignore 
+# .dockerignore (프로젝트 루트에 위치)
+
 # OS-specific files
 .DS_Store
 npm-debug.log*

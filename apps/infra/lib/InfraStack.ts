@@ -7,7 +7,7 @@
 // 1. CDK 및 AWS 서비스 모듈 Import
 // ---------------------------
 import * as cdk from 'aws-cdk-lib';
-import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -44,6 +44,11 @@ export class InfraStack extends Stack {
     super(scope, id, props);
 
     const projectRoot = path.join(__dirname, '..', '..', '..');
+
+    const imageTag = new CfnParameter(this, 'imageTag', {
+      type: 'String',
+      description: 'The ECR image tag to deploy.',
+    });
 
     // ===================================================================================
     // SECTION 1: 백엔드 리소스 정의 (변경 없음)
