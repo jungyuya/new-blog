@@ -59,5 +59,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: "Step 3.2: Deploy Infrastructure and Application via CDK"
+      - name: "Step 3.2: Bootstrap CDK in the target environment"
+        run: pnpm --filter infra exec cdk bootstrap
+
+      - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
         run: pnpm --filter infra exec cdk deploy --all --require-approval never
