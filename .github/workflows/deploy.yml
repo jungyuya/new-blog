@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (Trusted Bootstrap 최종 완결본)
+# .github/workflows/deploy.yml (CDK 버전 명시 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: "Phase 1: Setup Environment"
         uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@vv4
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
@@ -33,6 +33,11 @@ jobs:
             ${{ runner.os }}-pnpm-store-
       - name: Install dependencies at root
         run: pnpm install --frozen-lockfile
+
+      - name: "Install specific version of AWS CDK CLI"
+        # [핵심] pnpm이 관리하는 버전 대신, npm을 통해 전역으로 CDK CLI를 설치합니다.
+        # 우리의 aws-cdk-lib 버전과 동일한 버전을 사용하여, 버전 불일치 문제를 원천 차단합니다.
+        run: npm install -g aws-cdk@2.207.0
 
       # ===================================================================================
       # Phase 2: Build All Workspaces
@@ -58,20 +63,20 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
-          # [핵심] 다음 단계에서 AWS 계정 ID를 사용할 수 있도록 출력 변수로 설정합니다.
-          role-session-name: GitHubActionsSession
       - name: Get AWS Account ID
         id: get-aws-account-id
         run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
       - name: "Step 3.2: Bootstrap CDK with Trust Policy"
-        # [핵심 최종 수정] CDK가 CI/CD 역할을 완벽하게 신뢰하도록,
-        # --trust 옵션과 --cloudformation-execution-policies 옵션을 명시적으로 추가합니다.
+        # [핵심] 이제 pnpm exec 대신, 전역으로 설치된 최신 cdk를 직접 호출합니다.
+        # working-directory를 infra로 지정하여, 올바른 cdk.json 컨텍스트에서 실행되도록 합니다.
+        working-directory: ./apps/infra
         run: |
-          pnpm --filter infra exec cdk bootstrap \
+          cdk bootstrap \
             --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
             --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
 
       - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
-        # 이제 cdk deploy는 부트스트랩이 구축한 신뢰 관계 위에서 완벽하게 작동할 것입니다.
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+        # [핵심] 여기도 마찬가지로, 전역 cdk를 직접 호출합니다.
+        working-directory: ./apps/infra
+        run: cdk deploy --all --require-approval never
