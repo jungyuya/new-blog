@@ -81,12 +81,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: "Step 3.2: Deploy Infrastructure and Application via CDK"
-        # [핵심] 이제 CDK deploy 명령어 하나가 모든 것을 처리합니다.
-        # 1. apps/frontend/Dockerfile을 읽어 Docker 이미지를 빌드합니다.
-        # 2. 빌드된 이미지를 ECR에 푸시합니다.
-        # 3. 백엔드 Lambda 코드를 번들링합니다.
-        # 4. 모든 인프라(Lambda, S3, CloudFront 등)를 생성/업데이트합니다.
-        # 5. apps/frontend/.next/static 폴더의 내용을 S3에 업로드합니다.
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+      - name: "Step 3.2: Login to Amazon ECR"
+        id: login-ecr # [핵심] 다음 단계에서 registry 주소를 참조하기 위해 id를 추가합니다.
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Step 3.3: Build and push Docker image to ECR"
+        id: build-image
+        env:
+          # [핵심] 이전 단계(login-ecr)의 출력값을 사용하여 ECR 주소를 동적으로 가져옵니다.
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: new-blog-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f apps/frontend/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: "Step 3.4: Deploy Infrastructure and Application via CDK"
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never \
+          --parameters imageTag=${{ steps.build-image.outputs.image_tag }}
 
