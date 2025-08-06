@@ -211,7 +211,7 @@ export class InfraStack extends Stack {
     });
 
 
-        // --- 2.2. ECR Repository & Docker Image Asset ---
+    // --- 2.2. ECR Repository & Docker Image Asset ---
     // [핵심] ECR 저장소가 없으면 자동으로 생성하고, 있으면 기존 저장소를 사용합니다.
     const ecrRepository = new ecr.Repository(this, 'FrontendEcrRepo', {
       repositoryName: 'new-blog-frontend',
@@ -239,6 +239,8 @@ export class InfraStack extends Stack {
         {
           // [핵심] Dockerfile이 어디에 있는지 명시적으로 알려줍니다.
           file: 'apps/frontend/Dockerfile',
+          // [핵심] .dockerignore 파일을 사용하도록 명시합니다.
+          exclude: ['.git', 'node_modules', 'apps/infra/cdk.out'],
         }
       ),
       memorySize: 1024,
