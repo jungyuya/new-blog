@@ -35,7 +35,7 @@ export class InfraStack extends Stack {
 
     const projectRoot = path.join(__dirname, '..', '..', '..');
 
-    const imageTag = new CfnParameter(this, 'imageTag', {
+    const imageTag = new CfnParameter(this, 'ImageTag', {
       type: 'String',
       description: 'The ECR image tag to deploy.',
     });
@@ -165,38 +165,44 @@ export class InfraStack extends Stack {
     // SECTION 2: 프론트엔드 리소스 정의 (CDK 직접 빌드 최종안)
     // ===================================================================================
 
-    // --- 2.0. 도메인 및 인증서 준비 ---
+    // --- 2.0. 도메인 및 인증서 준비 (변경 없음) ---
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
-    // --- 2.1. S3 Bucket for Static Assets ---
+    // --- 2.1. S3 Bucket for Static Assets (변경 없음) ---
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
 
+    // [핵심 변경 2] ECR 저장소를 이름으로 참조합니다.
+    // CDK는 더 이상 저장소를 직접 만들거나 관리하지 않고, 이미 존재하는 저장소를 이름으로 찾아옵니다.
+    // 'new-blog-frontend'는 우리가 Step 1에서 콘솔로 생성한 리포지토리 이름과 정확히 일치해야 합니다.
+    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
+
     // --- 2.2. Next.js Server Lambda (CDK가 직접 빌드) ---
+    // [주의!] 이 부분은 아직 수정 전의 코드입니다. Part 2에서 최종 수정될 예정입니다.
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      // [핵심] fromImageAsset을 사용하여, CDK가 직접 이미지를 빌드하고 ECR에 푸시하도록 합니다.
-      code: lambda.DockerImageCode.fromImageAsset(
-        // 빌드 컨텍스트는 프로젝트 루트입니다.
-        projectRoot,
-        {
-          // Dockerfile의 위치를 명시합니다.
-          file: 'apps/frontend/Dockerfile',
-          // [핵심] .dockerignore 파일이 자동으로 적용되어, 재귀 복사 문제를 해결합니다.
-        }
-      ),
+
+      // [핵심 최종 변경] fromImageAsset을 fromEcrImage로 교체합니다.
+      // 이제 CDK는 빌드 과정에 전혀 관여하지 않고, 오직 ECR에 이미 존재하는 이미지를
+      // 이름과 "송장 번호(imageTag)"를 사용하여 참조하기만 합니다.
+      code: lambda.DockerImageCode.fromEcr(ecrRepository, {
+        tagOrDigest: imageTag.valueAsString,
+      }),
+
       memorySize: 1024,
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.ARM_64,
       environment: {
+        // AWS_LAMBDA_EXEC_WRAPPER와 PORT는 Dockerfile에서 이미 설정했으므로 여기서도 명시해 일관성을 유지합니다.
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
         PORT: '3000',
+        // 나머지 환경변수는 그대로 유지합니다.
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
@@ -205,8 +211,7 @@ export class InfraStack extends Stack {
     });
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
-
-    // --- 2.3. CloudFront Distribution ---
+    // --- 2.3. CloudFront Distribution (변경 없음) ---
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
@@ -239,7 +244,7 @@ export class InfraStack extends Stack {
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
     });
 
-    // --- 2.4. S3 Bucket Deployment ---
+    // --- 2.4. S3 Bucket Deployment (변경 없음) ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
       destinationBucket: assetsBucket,
@@ -248,7 +253,7 @@ export class InfraStack extends Stack {
       distributionPaths: ['/_next/static/*'],
     });
 
-    // --- 2.5. Route 53 Record 생성 ---
+    // --- 2.5. Route 53 Record 생성 (변경 없음) ---
     new route53.ARecord(this, 'SiteARecord', {
       recordName: siteDomain,
       zone: hostedZone,

@@ -1,6 +1,8 @@
-# .github/workflows/deploy.yml (CDK 빌드 위임 최종 완결본)
+# 파일 위치: .github/workflows/deploy.yml
+# 최종 수정일: 2025년 8월 6일
+# 역할: 책임 분리 원칙에 따라, 이미지 빌드/푸시(CI)와 인프라 배포(CD)를 모두 수행하는 최종 파이프라인
 
-name: "Deploy Full-Stack Application to AWS"
+name: "Build, Push, and Deploy Full-Stack Application"
 
 on:
   push:
@@ -11,64 +13,95 @@ concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
+# [핵심 1] ECR 저장소 이름과 리전을 환경 변수로 미리 정의하여 재사용성과 유지보수성을 높입니다.
+env:
+  ECR_REPOSITORY: new-blog-frontend
+  AWS_REGION: ${{ secrets.AWS_REGION }} # GitHub Secrets에서 가져옵니다.
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      id-token: write # AWS OIDC 인증을 위해 필요
+      contents: read   # 코드 체크아웃을 위해 필요
+      packages: write  # ECR에 이미지를 푸시하기 위해 필요 (중요!)
 
     steps:
-      - name: "Phase 1: Setup Environment"
+      # ===================================================================================
+      # Phase 1: 환경 설정 (변경 없음)
+      # ===================================================================================
+      - name: "Checkout repository"
         uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - uses: pnpm/action-setup@v4
+
+      - name: "Setup pnpm"
+        uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - name: Install dependencies at root
+
+      - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      # [핵심] 이제 CI/CD 파이프라인에서 Docker 이미지 빌드 및 푸시를 직접 수행하지 않습니다.
-      # 이 모든 책임은 CDK에게 위임되었으므로, 관련 단계는 삭제됩니다.
-      # 마찬가지로, Lambda Layer 생성 및 관련 최적화 단계도 삭제됩니다.
-      # 백엔드 및 프론트엔드 빌드도 CDK Asset Bundling이 처리하므로 제거됩니다.
-
       # ===================================================================================
-      # Phase 2: Deploy to AWS
+      # Phase 2: 애플리케이션 빌드 (역할 명확화)
       # ===================================================================================
-
-      - name: "Step 2.1: Clean previous artifacts"
+      - name: "Clean previous artifacts"
         run: pnpm run clean
 
-      - name: "Step 2.2: Build Backend"
-        working-directory: ./apps/backend
-        run: pnpm run build
-      
-      - name: "Step 2.3: Build Frontend"
-        working-directory: ./apps/frontend
-        run: pnpm run build  
+      # [중요] 이 빌드는 CDK의 S3 Deployment(.next/static 업로드)를 위해 여전히 필요합니다.
+      - name: "Build Frontend for S3 Assets"
+        run: pnpm --filter frontend run build
+
+      # Backend 빌드는 CDK(NodejsFunction)가 처리하므로 CI에서 필수는 아니지만,
+      # 배포 전 코드 유효성 검사 차원에서 실행하는 것이 좋습니다.
+      - name: "Build Backend for Validation"
+        run: pnpm --filter backend run build
 
       # ===================================================================================
-      # Phase 3: Deploy to AWS
+      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (CI/CD의 새로운 핵심 책임)
       # ===================================================================================
-
-      - name: "Step 3.1: Configure AWS Credentials"
+      - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - name: Get AWS Account ID
-        id: get-aws-account-id
-        run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: "Step 3.2: Bootstrap CDK with Trust Policy"
-        # [핵심 최종 수정] pnpm exec를 사용하여, 우리 프로젝트가 보장하는 정확한 버전의 CDK를 실행합니다.
-        # working-directory는 더 이상 필요 없습니다. pnpm filter가 컨텍스트를 지정해줍니다.
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Define Image Tag (송장 번호 생성)"
+        id: image-def
+        # 이미지 태그를 '타임스탬프-커밋해시'로 구성하여 고유성을 100% 보장합니다.
+        # 예: 20250806143000-a1b2c3d
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: "Build and push Docker image to ECR"
+        uses: docker/build-push-action@v5
+        with:
+          context: . # Docker 빌드 컨텍스트는 프로젝트 루트입니다.
+          file: ./apps/frontend/Dockerfile # 사용할 Dockerfile 경로를 명시합니다.
+          push: true
+          # ECR 저장소 URI와 방금 생성한 "송장 번호"를 조합하여 최종 이미지 이름을 지정합니다.
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          # 우리의 Lambda 아키텍처(ARM64)에 맞는 플랫폼으로 빌드하도록 명시합니다.
+          platforms: linux/arm64
+          # GitHub Actions 캐시를 사용하여 Docker 레이어 캐싱을 활성화하고 빌드 속도를 향상시킵니다.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ===================================================================================
+      # Phase 4: CDK를 통한 인프라 배포 (역할 축소 및 책임 명확화)
+      # ===================================================================================
+      - name: "Bootstrap CDK"
+        # Bootstrap은 한 번만 실행되면 되지만, 워크플로우에 포함하여 안정성을 높입니다.
+        # 이전과 달리 복잡한 신뢰 정책이 필요 없어 더 간단해졌습니다.
+        run: pnpm --filter infra exec cdk bootstrap
+
+      - name: "Deploy to AWS via CDK (송장 번호 전달)"
         run: |
-          pnpm --filter infra exec cdk bootstrap \
-            --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
-            --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
-
-      - name: "Step 3.3: Deploy All via CDK"
-        # [핵심 최종 수정] 여기도 마찬가지로, pnpm exec를 사용하여 모든 것을 처리합니다.
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never  
+          pnpm --filter infra exec cdk deploy --all \
+            --require-approval never \
+            --parameters ImageTag=${{ steps.image-def.outputs.TAG }} # [핵심 최종 변경] "송장 번호"를 CDK에 전달합니다.

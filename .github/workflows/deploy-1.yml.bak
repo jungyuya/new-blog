@@ -1,0 +1,74 @@
+# .github/workflows/deploy.yml (CDK 빌드 위임 최종 완결본)
+
+name: "Deploy Full-Stack Application to AWS"
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: "Phase 1: Setup Environment"
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: pnpm/action-setup@v4
+        with: { run_install: false }
+      - name: Install dependencies at root
+        run: pnpm install --frozen-lockfile
+
+      # [핵심] 이제 CI/CD 파이프라인에서 Docker 이미지 빌드 및 푸시를 직접 수행하지 않습니다.
+      # 이 모든 책임은 CDK에게 위임되었으므로, 관련 단계는 삭제됩니다.
+      # 마찬가지로, Lambda Layer 생성 및 관련 최적화 단계도 삭제됩니다.
+      # 백엔드 및 프론트엔드 빌드도 CDK Asset Bundling이 처리하므로 제거됩니다.
+
+      # ===================================================================================
+      # Phase 2: Deploy to AWS
+      # ===================================================================================
+
+      - name: "Step 2.1: Clean previous artifacts"
+        run: pnpm run clean
+
+      - name: "Step 2.2: Build Backend"
+        working-directory: ./apps/backend
+        run: pnpm run build
+      
+      - name: "Step 2.3: Build Frontend"
+        working-directory: ./apps/frontend
+        run: pnpm run build  
+
+      # ===================================================================================
+      # Phase 3: Deploy to AWS
+      # ===================================================================================
+
+      - name: "Step 3.1: Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Get AWS Account ID
+        id: get-aws-account-id
+        run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
+      - name: "Step 3.2: Bootstrap CDK with Trust Policy"
+        # [핵심 최종 수정] pnpm exec를 사용하여, 우리 프로젝트가 보장하는 정확한 버전의 CDK를 실행합니다.
+        # working-directory는 더 이상 필요 없습니다. pnpm filter가 컨텍스트를 지정해줍니다.
+        run: |
+          pnpm --filter infra exec cdk bootstrap \
+            --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
+            --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
+
+      - name: "Step 3.3: Deploy All via CDK"
+        # [핵심 최종 수정] 여기도 마찬가지로, pnpm exec를 사용하여 모든 것을 처리합니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never  
