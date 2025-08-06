@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (중복 제거 및 순서 확정 최종안)
+# .github/workflows/deploy.yml (Trusted Bootstrap 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Build Prerequisite Assets
+      # Phase 2: Build All Workspaces
       # ===================================================================================
 
       - name: "Step 2.1: Clean previous artifacts"
@@ -45,7 +45,7 @@ jobs:
         working-directory: ./apps/backend
         run: pnpm run build
       
-      - name: "Step 2.3: Build Frontend Static Assets"
+      - name: "Step 2.3: Build Frontend"
         working-directory: ./apps/frontend
         run: pnpm run build  
 
@@ -58,14 +58,20 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
+          # [핵심] 다음 단계에서 AWS 계정 ID를 사용할 수 있도록 출력 변수로 설정합니다.
+          role-session-name: GitHubActionsSession
+      - name: Get AWS Account ID
+        id: get-aws-account-id
+        run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
-      - name: Set CDK Qualifier
-        run: echo "CDK_QUALIFIER=hnb659fds" >> $GITHUB_ENV
-
-      - name: "Step 3.2: Bootstrap CDK with explicit Qualifier"
-        run: pnpm --filter infra exec cdk bootstrap --qualifier ${{ env.CDK_QUALIFIER }}
+      - name: "Step 3.2: Bootstrap CDK with Trust Policy"
+        # [핵심 최종 수정] CDK가 CI/CD 역할을 완벽하게 신뢰하도록,
+        # --trust 옵션과 --cloudformation-execution-policies 옵션을 명시적으로 추가합니다.
+        run: |
+          pnpm --filter infra exec cdk bootstrap \
+            --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
+            --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
 
       - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
-        # [핵심] deploy 명령어에도 동일한 Qualifier를 전달하여,
-        # bootstrap과 deploy가 100% 동일한 저장소 이름을 사용하도록 보장합니다.
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never --qualifier ${{ env.CDK_QUALIFIER }}
+        # 이제 cdk deploy는 부트스트랩이 구축한 신뢰 관계 위에서 완벽하게 작동할 것입니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never
