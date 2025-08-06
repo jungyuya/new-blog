@@ -82,9 +82,11 @@ jobs:
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
-          # 이제 이 캐싱 옵션들이 정상적으로 동작할 것입니다.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # [핵심 최종 수정] 이미지 매니페스트 출력 형식을 명시적으로 지정합니다.
+          # Lambda가 확실하게 지원하는 Docker 표준 형식(V2, Schema 2)으로 포장 규격을 고정합니다.
+          provenance: false
 
       # ===================================================================================
       # Phase 4: CDK를 통한 인프라 배포 (변경 없음)
