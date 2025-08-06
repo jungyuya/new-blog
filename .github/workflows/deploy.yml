@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (pnpm 회귀 최종 완결본)
+# .github/workflows/deploy.yml (책임 분리 최종 완결본)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -25,35 +25,18 @@ jobs:
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
       - name: Install dependencies at root
         run: pnpm install --frozen-lockfile
 
-      # [핵심] 더 이상 불확실한 글로벌 CDK를 설치하지 않습니다.
+      - name: "Phase 2: Build Prerequisite Assets"
+        run: |
+          pnpm run clean
+          # 백엔드와 프론트엔드 빌드를 실행하여, CDK가 참조할 수 있는 결과물을 준비합니다.
+          pnpm --filter backend run build
+          pnpm --filter frontend run build
 
       # ===================================================================================
-      # Phase 2: Build All Workspaces
-      # ===================================================================================
-
-      - name: "Step 2.1: Clean previous artifacts"
-        run: pnpm run clean
-
-      - name: "Step 2.2: Build Backend"
-        working-directory: ./apps/backend
-        run: pnpm run build
-      
-      - name: "Step 2.3: Build Frontend"
-        working-directory: ./apps/frontend
-        run: pnpm run build  
-
-      # ===================================================================================
-      # Phase 3: Deploy to AWS
+      # Phase 3: Build, Push Docker Image & Deploy to AWS
       # ===================================================================================
 
       - name: "Step 3.1: Configure AWS Credentials"
@@ -61,16 +44,22 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: Get AWS Account ID
-        id: get-aws-account-id
-        run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
-      - name: "Step 3.2: Bootstrap CDK with Trust Policy"
-        # [핵심] 우리 프로젝트의 lock 파일이 보장하는, 가장 확실한 cdk 버전을 사용합니다.
+      - name: "Step 3.2: Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Step 3.3: Build and push Docker image to ECR"
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: new-blog-frontend
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          pnpm --filter infra exec cdk bootstrap \
-            --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
-            --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f apps/frontend/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
-      - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+      - name: "Step 3.4: Deploy Infrastructure via CDK"
+        # [핵심] build-image 단계에서 생성된 이미지 태그를 CDK에 파라미터로 전달합니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never --parameters imageTag=${{ steps.build-image.outputs.image_tag }}
