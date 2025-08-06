@@ -178,16 +178,19 @@ export class InfraStack extends Stack {
       publicReadAccess: false,
     });
 
-    // --- 2.1.5 ECR Repository (핵심 수정) ---
-    // [핵심] 이제 우리 스택이 ECR 저장소를 직접 생성하고 소유합니다.
-    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
-
+    // --- 2.2. Next.js Server Lambda (CDK가 직접 빌드) ---
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      // [핵심 최종 수정] 올바른 'EcrImageCode' 클래스를 사용합니다.
-      code: lambda.DockerImageCode.fromEcr(ecrRepository, {
-        tagOrDigest: imageTag.valueAsString,
-      }),
+      // [핵심] fromImageAsset을 사용하여, CDK가 직접 이미지를 빌드하고 ECR에 푸시하도록 합니다.
+      code: lambda.DockerImageCode.fromImageAsset(
+        // 빌드 컨텍스트는 프로젝트 루트입니다.
+        projectRoot,
+        {
+          // Dockerfile의 위치를 명시합니다.
+          file: 'apps/frontend/Dockerfile',
+          // [핵심] .dockerignore 파일이 자동으로 적용되어, 재귀 복사 문제를 해결합니다.
+        }
+      ),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.ARM_64,
