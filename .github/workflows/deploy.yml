@@ -45,20 +45,21 @@ jobs:
           rm -f apps/frontend/node_modules.zip
           rm -f open-next.log
 
-      - name: "Step 2.2: Build Backend"
-        working-directory: ./apps/backend
-        run: pnpm run build
-
-      - name: "Step 2.3: Build Frontend standalone output"
+      - name: "Step 2.2: Build Next.js standalone output"
         working-directory: ./apps/frontend
         run: pnpm run build
 
-      - name: "Step 2.4 (Verification): Verify standalone output"
+      - name: "Step 2.3 (Failsafe): Manually copy public directory"
+        run: |
+          echo "--- Manually copying public directory to standalone output ---"
+          cp -r apps/frontend/public apps/frontend/.next/standalone/public
+
+      - name: "Step 2.4 (Integrity Verification): Verify standalone output"
         run: |
           echo "--- Verifying .next/standalone integrity ---"
           (test -f apps/frontend/.next/standalone/apps/frontend/server.js || test -f apps/frontend/.next/standalone/apps/frontend/server.mjs) || (echo "!!! CRITICAL: Nested server.js/mjs not found. !!!" && exit 1)
           test -d apps/frontend/.next/standalone/apps/frontend/node_modules || (echo "!!! CRITICAL: Nested node_modules not found. !!!" && exit 1)
-          test -d apps/frontend/.next/standalone/public || (echo "!!! CRITICAL: public directory not found. !!!" && exit 1)
+          test -d apps/frontend/.next/standalone/public || (echo "!!! CRITICAL: public directory not found after copy. !!!" && exit 1)
           echo "Standalone output verified successfully."
 
       - name: "Step 2.5: Package with open-next"
