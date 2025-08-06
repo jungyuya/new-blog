@@ -37,7 +37,22 @@ jobs:
       # Phase 2: Deploy to AWS
       # ===================================================================================
 
-      - name: "Step 2.1: Configure AWS Credentials"
+      - name: "Step 2.1: Clean previous artifacts"
+        run: pnpm run clean
+
+      - name: "Step 2.2: Build Backend"
+        working-directory: ./apps/backend
+        run: pnpm run build
+      
+      - name: "Step 2.3: Build Frontend"
+        working-directory: ./apps/frontend
+        run: pnpm run build  
+
+      # ===================================================================================
+      # Phase 3: Deploy to AWS
+      # ===================================================================================
+
+      - name: "Step 3.1: Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -46,17 +61,14 @@ jobs:
         id: get-aws-account-id
         run: echo "aws_account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
-      - name: "Step 2.2: Bootstrap CDK with Trust Policy"
-        working-directory: ./apps/infra
+      - name: "Step 3.2: Bootstrap CDK with Trust Policy"
+        # [핵심 최종 수정] pnpm exec를 사용하여, 우리 프로젝트가 보장하는 정확한 버전의 CDK를 실행합니다.
+        # working-directory는 더 이상 필요 없습니다. pnpm filter가 컨텍스트를 지정해줍니다.
         run: |
-          # [핵심] CDK가 모든 것을 처리할 수 있도록, 가장 완전한 형태로 부트스트랩합니다.
-          # 이는 ECR 리포지토리, S3 버킷, IAM 역할 등 CDK가 자산 관리를 위해 필요한 기반 리소스를 생성합니다.
-          cdk bootstrap \
+          pnpm --filter infra exec cdk bootstrap \
             --trust ${{ steps.get-aws-account-id.outputs.aws_account_id }} \
             --cloudformation-execution-policies 'arn:aws:iam::aws:policy/AdministratorAccess'
 
-      - name: "Step 2.3: Deploy All via CDK"
-        working-directory: ./apps/infra
-        # [핵심] 이 cdk deploy 명령어 하나가 Docker 이미지 빌드, 푸시, S3 정적 파일 배포,
-        # 그리고 모든 CloudFormation 리소스 생성을 원자적으로 처리합니다.
-        run: cdk deploy --all --require-approval never
+      - name: "Step 3.3: Deploy All via CDK"
+        # [핵심 최종 수정] 여기도 마찬가지로, pnpm exec를 사용하여 모든 것을 처리합니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never  
