@@ -49,16 +49,25 @@ jobs:
           # --no-cache 플래그는 유지하여, turbo의 내부 캐시도 비활성화합니다.
           pnpm run package --no-cache
 
-      # [핵심 2] 모든 복잡한 최적화 단계를 제거하고, 오직 순수한 standalone 결과물을 사용합니다.
-      - name: "Step 2.2: Create Lambda Layer Zip File"
+      # [핵심 최종 수정] npm을 이용한 최적화 단계를 추가합니다.
+      - name: "Step 2.2: Optimize Layer with npm and Zip"
         run: |
-          echo "--- Zipping the original standalone output ---"
+          echo "--- Optimizing standalone output with npm ---"
+          # 1. standalone 폴더로 직접 이동합니다.
           cd apps/frontend/.next/standalone
+
+          # 2. 기존의 거대한 node_modules를 제거합니다.
+          rm -rf node_modules
+
+          # 3. npm을 사용하여, 오직 production 의존성만 새로 설치합니다.
+          npm install --omit=dev
+
+          echo "--- Zipping the optimized standalone output ---"
+          # 4. 최적화된 폴더 전체를 압축합니다.
           zip -r ../../node_modules.zip .
           cd ../../../..
-
       - name: "Step 2.3: Verify Final Layer Zip Size"
-        run: du -h apps/frontend/node_modules.zip
+        run: du -h apps/frontend/node_modules.zip    
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
@@ -77,7 +86,7 @@ jobs:
             --layer-name new-blog-dependencies \
             --description "Frontend dependencies built on ${{ github.sha }}" \
             --zip-file fileb://apps/frontend/node_modules.zip \
-            --compatible-rpmtimes nodejs22.x \
+            --compatible-runtimes nodejs22.x \
             --query LayerVersionArn --output text)
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
 
