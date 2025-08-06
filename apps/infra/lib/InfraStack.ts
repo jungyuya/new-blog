@@ -194,25 +194,29 @@ export class InfraStack extends Stack {
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
     // --- 2.1. S3 Bucket for Static Assets ---
+    // Next.js의 정적 파일(_next/static)을 저장할 버킷. 역할은 그대로 유지됩니다.
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
 
-    // --- 2.2. Next.js Server Lambda (오직 페이지 렌더링만 담당) ---
-    const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
+    // --- 2.2. Next.js Server Lambda (컨테이너 이미지 사용) ---
+    const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions/default')),
+      // [핵심] 이제 Code는 Zip 파일이 아닌, Docker 이미지를 가리킵니다.
+      // CDK는 'cdk deploy' 시점에 'apps/frontend' 디렉토리의 Dockerfile을 사용하여
+      // 이미지를 빌드하고, ECR에 푸시한 뒤, 이 Lambda 함수와 연결합니다.
+      code: lambda.DockerImageCode.fromImageAsset(path.join(projectRoot, 'apps/frontend')),
       memorySize: 1024,
-      timeout: Duration.seconds(10),
-      layers: [
-        lambda.LayerVersion.fromLayerVersionArn(this, 'DependenciesLayer', layerArnParameter.valueAsString)
-      ],
+      timeout: Duration.seconds(30), // 컨테이너 Cold Start는 조금 더 길 수 있으므로 넉넉하게 설정
+      architecture: lambda.Architecture.ARM_64, // Dockerfile에서 ARM64 이미지를 사용했으므로 명시
       environment: {
-        // 이 환경 변수들은 이제 프론트엔드 '코드'에서 사용됩니다. Lambda 자체에서는 사용하지 않습니다.
+        // Lambda Web Adapter를 위한 환경 변수
+        AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
+        // Next.js 서버가 사용할 포트
+        PORT: '3000',
+        // 백엔드 API 정보를 프론트엔드 '코드'에서 사용할 수 있도록 전달
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
@@ -222,38 +226,36 @@ export class InfraStack extends Stack {
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // --- 2.3. CloudFront Distribution (똑똑한 트래픽 경찰) ---
+    // --- 2.3. CloudFront Distribution ---
+    // CloudFront 설정은 이전과 거의 동일합니다. 이제 더 안정적인 컨테이너 기반 Lambda를 가리킵니다.
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
-
-      // [핵심 1] 기본 동작(Default Behavior): 모든 요청은 기본적으로 Next.js 페이지 렌더링 서버로 갑니다.
       defaultBehavior: {
         origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url))),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
-      // [핵심 2] 추가 동작(Additional Behaviors): 특정 경로 패턴에 따라 요청을 다른 곳으로 보냅니다.
       additionalBehaviors: {
-        // 정적 파일 요청(_next/*, assets/*)은 S3로 보냅니다.
-        '_next/*': {
+        // [중요] 정적 파일 경로를 S3로 라우팅하는 것은 여전히 매우 중요합니다.
+        '/_next/static/*': {
           origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        'assets/*': {
+        '/assets/*': {
           origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        // API 요청(/api/*)은 백엔드 API 서버(API Gateway)로 보냅니다.
+        // API 요청은 여전히 백엔드 API 서버로 갑니다.
         '/api/*': {
           origin: new origins.HttpOrigin(httpApi.url!.replace('https://', '').replace('/', '')),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          // [중요] 인증 헤더 등을 백엔드로 전달하기 위한 정책
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         },
       },
@@ -261,11 +263,14 @@ export class InfraStack extends Stack {
     });
 
     // --- 2.4. S3 Bucket Deployment ---
+    // [중요] 이제는 .open-next가 아닌, .next/static 폴더를 S3에 배포합니다.
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
+      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
       destinationBucket: assetsBucket,
+      // S3 버킷 내에서도 CloudFront 경로와 일치하도록 '_next/static' 경로에 저장합니다.
+      destinationKeyPrefix: '_next/static',
       distribution: distribution,
-      distributionPaths: ['/*'],
+      distributionPaths: ['/_next/static/*'],
     });
 
     // --- 2.5. Route 53 Record 생성 ---
