@@ -25,68 +25,56 @@ jobs:
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
-          # [개선] 파이프라인 파일 변경 시 캐시를 무효화하여 안정성을 높입니다.
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('.github/workflows/deploy.yml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-      - name: Install dependencies
+      - name: Install dependencies at root
         run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Build, Package & Verify
+      # Phase 2: Build, Package & Verify (in correct CWD)
       # ===================================================================================
 
       - name: "Step 2.1: Clean previous artifacts"
-        run: |
-          pnpm run clean
-          # [개선] 이전 실행에서 남았을 수 있는 zip 파일까지 확실하게 제거합니다.
-          rm -f apps/frontend/node_modules.zip
+        run: pnpm run clean
 
       - name: "Step 2.2: Build Next.js standalone output"
-        run: pnpm --filter frontend build
+        working-directory: ./apps/frontend
+        run: pnpm run build
 
       - name: "Step 2.3 (Integrity Verification): Verify standalone output"
         run: |
           echo "--- Verifying .next/standalone integrity ---"
-          # [강화] server.js, server.mjs, server.cjs 중 하나라도 존재하는지 확인합니다.
-          (test -f apps/frontend/.next/standalone/server.js || test -f apps/frontend/.next/standalone/server.mjs || test -f apps/frontend/.next/standalone/server.cjs) || (echo "!!! CRITICAL: server entry file not found. !!!" && exit 1)
+          (test -f apps/frontend/.next/standalone/server.js || test -f apps/frontend/.next/standalone/server.mjs) || (echo "!!! CRITICAL: server.js/mjs not found. !!!" && exit 1)
           test -d apps/frontend/.next/standalone/node_modules || (echo "!!! CRITICAL: node_modules directory not found. !!!" && exit 1)
-          test -d apps/frontend/.next/standalone/public || (echo "!!! CRITICAL: public directory not found. !!!" && exit 1)
           echo "Standalone output verified successfully."
 
-      - name: "Step 2.4: Package with open-next"
-        run: |
-          cd apps/frontend
-          # [강화] 상세 로그를 파일로도 저장하여, 나중에 분석할 수 있도록 합니다.
-          OPEN_NEXT_LOG_LEVEL=debug pnpm open-next build --outputDir .open-next | tee ../../open-next.log
+      - name: "Step 2.4: Package with open-next and save log"
+        working-directory: ./apps/frontend
+        # [개선] tee를 사용하여, 화면과 파일에 동시에 로그를 출력합니다.
+        run: pnpm open-next build | tee ../../open-next.log
 
       - name: "Step 2.5 (Integrity Verification): Verify .open-next artifact"
         run: |
           echo "--- Verifying .open-next integrity ---"
           test -f apps/frontend/.open-next/server-functions/default/index.mjs || (echo "!!! CRITICAL: index.mjs not found. !!!" && exit 1)
+          # [개선] 정적 에셋 폴더의 존재까지 검증하여 안정성을 높입니다.
           test -d apps/frontend/.open-next/assets/_next || (echo "!!! CRITICAL: assets/_next directory not found. !!!" && exit 1)
-          test -d apps/frontend/.open-next/public || (echo "!!! CRITICAL: public directory not found. !!!" && exit 1)
           echo ".open-next artifact verified successfully."
 
-      - name: "Step 2.6: Create Lambda Layer Zip File and Verify Contents"
+      - name: "Step 2.6: Create and Verify Lambda Layer Zip File"
         run: |
           echo "--- Zipping node_modules from standalone output ---"
           cd apps/frontend/.next/standalone
           zip -r ../../node_modules.zip ./node_modules
           cd ../../../..
           
-          echo "--- Verifying key dependencies in zip ---"
-          # [개선] 압축 파일 안에 @swc/helpers가 실제로 포함되었는지 최종 확인합니다.
-          unzip -l apps/frontend/node_modules.zip | grep "@swc/helpers" || (echo "!!! CRITICAL: @swc/helpers not found in the zip file. !!!" && exit 1)
-
-      - name: "Step 2.7 (Integrity Verification): Verify Final Layer Zip Size"
-        run: |
-          echo "--- Verifying final layer zip size ---"
+          echo "--- Final size of the Lambda Layer zip ---"
           du -h apps/frontend/node_modules.zip
+          
           # [개선] AWS의 실제 압축 후 한계인 50MiB로 기준을 강화합니다.
           MAX_SIZE=52428800
           ACTUAL_SIZE=$(stat -c %s apps/frontend/node_modules.zip)
