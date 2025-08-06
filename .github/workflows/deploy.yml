@@ -31,7 +31,6 @@ jobs:
       - name: "Phase 2: Build Prerequisite Assets"
         run: |
           pnpm run clean
-          # 백엔드와 프론트엔드 빌드를 실행하여, CDK가 참조할 수 있는 결과물을 준비합니다.
           pnpm --filter backend run build
           pnpm --filter frontend run build
 
@@ -61,5 +60,8 @@ jobs:
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: "Step 3.4: Deploy Infrastructure via CDK"
-        # [핵심] build-image 단계에서 생성된 이미지 태그를 CDK에 파라미터로 전달합니다.
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never --parameters imageTag=${{ steps.build-image.outputs.image_tag }}
+        # [핵심] ECR 저장소를 미리 수동으로 생성해야 합니다.
+        # 또는 InfraStack에서 ecr.Repository를 사용하여 자동 생성할 수 있습니다.
+        # 우리는 InfraStack에서 fromRepositoryName을 사용하므로, 수동 생성이 필요합니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never \
+          --parameters imageTag=${{ steps.build-image.outputs.image_tag }}

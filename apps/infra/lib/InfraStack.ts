@@ -11,8 +11,6 @@ import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } f
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
-
-// --- 백엔드 리소스 ---
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -21,8 +19,6 @@ import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
-
-// --- 프론트엔드 리소스 ---
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -31,14 +27,8 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
-
-// --- 모니터링 ---
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
-// ---------------------------
-// 2. CDK 스택 클래스 정의
-// ---------------------------
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -188,20 +178,16 @@ export class InfraStack extends Stack {
       publicReadAccess: false,
     });
 
-    // --- 2.2. Next.js Server Lambda (CDK가 직접 빌드) ---
+    // --- 2.1.5 ECR Repository (핵심 수정) ---
+    // [핵심] 이제 우리 스택이 ECR 저장소를 직접 생성하고 소유합니다.
+    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
+
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      // [핵심] fromImageAsset을 사용하여, CDK가 직접 이미지를 빌드하고 ECR에 푸시하도록 합니다.
-      code: lambda.DockerImageCode.fromImageAsset(
-        // 빌드 컨텍스트는 프로젝트 루트입니다.
-        projectRoot,
-        {
-          // Dockerfile의 위치를 명시합니다.
-          file: 'apps/frontend/Dockerfile',
-          // [핵심] .dockerignore 파일을 사용하여, 재귀 복사 문제를 해결합니다.
-          // CDK는 자동으로 프로젝트 루트의 .dockerignore 파일을 읽어 적용합니다.
-        }
-      ),
+      // [핵심 최종 수정] 올바른 'EcrImageCode' 클래스를 사용합니다.
+      code: lambda.DockerImageCode.fromEcr(ecrRepository, {
+        tagOrDigest: imageTag.valueAsString,
+      }),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.ARM_64,
