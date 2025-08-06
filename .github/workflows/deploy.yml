@@ -46,38 +46,18 @@ jobs:
       - name: "Step 2.1: Clean and Build"
         run: |
           pnpm run clean
-          # --no-cache 플래그는 유지하여, turbo의 내부 캐시도 비활성화합니다.
           pnpm run package --no-cache
 
-      # [핵심 최종 수정] npm을 이용한 최적화 단계를 추가합니다.
-      - name: "Step 2.2: Create Zip, Investigate, and Clean"
+      # [핵심] 모든 최적화 단계를 제거하고, 오직 순수한 standalone 결과물을 사용합니다.
+      - name: "Step 2.2: Create Lambda Layer Zip File"
         run: |
-          echo "--- Creating zip file from standalone output ---"
+          echo "--- Zipping the original standalone output ---"
           cd apps/frontend/.next/standalone
           zip -r ../../node_modules.zip .
           cd ../../../..
-          
-          echo "--- Initial zip file size ---"
-          du -b apps/frontend/node_modules.zip
 
-          echo "--- Listing top 30 largest files/directories in the zip ---"
-          unzip -l apps/frontend/node_modules.zip | sort -k 1 -nr | head -n 30
-          
-          echo "--- Removing known large, unnecessary packages with precision ---"
-          zip -d apps/frontend/node_modules.zip \
-            "**/node_modules/typescript/*" \
-            "**/node_modules/@types/*" \
-            "**/node_modules/eslint/*" \
-            "**/node_modules/turbo/*" \
-            "**/node_modules/next/dist/compiled/webpack/*" \
-            "**/node_modules/next/dist/compiled/terser/*" \
-            "**/node_modules/sharp/*" \
-            "**/node_modules/@img/*" \
-            "**/node_modules/react/*" \
-            "**/node_modules/react-dom/*"
-
-          echo "--- Final zip file size after surgery ---"
-          du -b apps/frontend/node_modules.zip  
+      - name: "Step 2.3: Verify Final Layer Zip Size"
+        run: du -h apps/frontend/node_modules.zip 
 
       # ===================================================================================
       # Phase 3: Deploy to AWS

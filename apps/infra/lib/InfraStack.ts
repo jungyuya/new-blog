@@ -193,19 +193,18 @@ export class InfraStack extends Stack {
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
-    // --- 2.1. S3 Bucket:  ---
+    // --- 2.1. S3 Bucket for Static Assets ---
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       publicReadAccess: false,
     });
 
-    // --- 2.2. Next.js Server Lambda Function ---
+    // --- 2.2. Next.js Server Lambda (오직 페이지 렌더링만 담당) ---
     const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      // [핵심] 코드 경로는 이제 node_modules가 제외된, 순수한 애플리케이션 코드만 담고 있습니다.
       code: lambda.Code.fromAsset(path.join(projectRoot, 'apps/frontend/.open-next/server-functions/default')),
       memorySize: 1024,
       timeout: Duration.seconds(10),
@@ -213,6 +212,7 @@ export class InfraStack extends Stack {
         lambda.LayerVersion.fromLayerVersionArn(this, 'DependenciesLayer', layerArnParameter.valueAsString)
       ],
       environment: {
+        // 이 환경 변수들은 이제 프론트엔드 '코드'에서 사용됩니다. Lambda 자체에서는 사용하지 않습니다.
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
@@ -220,21 +220,23 @@ export class InfraStack extends Stack {
       },
     });
     assetsBucket.grantRead(serverLambda);
-
-    // --- 2.2.1. Lambda 함수 URL 생성 ---
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // --- 2.3. CloudFront Distribution ---
+    // --- 2.3. CloudFront Distribution (똑똑한 트래픽 경찰) ---
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
+
+      // [핵심 1] 기본 동작(Default Behavior): 모든 요청은 기본적으로 Next.js 페이지 렌더링 서버로 갑니다.
       defaultBehavior: {
         origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url))),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
       },
+      // [핵심 2] 추가 동작(Additional Behaviors): 특정 경로 패턴에 따라 요청을 다른 곳으로 보냅니다.
       additionalBehaviors: {
+        // 정적 파일 요청(_next/*, assets/*)은 S3로 보냅니다.
         '_next/*': {
           origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -245,18 +247,27 @@ export class InfraStack extends Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
+        // API 요청(/api/*)은 백엔드 API 서버(API Gateway)로 보냅니다.
+        '/api/*': {
+          origin: new origins.HttpOrigin(httpApi.url!.replace('https://', '').replace('/', '')),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          // [중요] 인증 헤더 등을 백엔드로 전달하기 위한 정책
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
       },
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
     });
 
     // --- 2.4. S3 Bucket Deployment ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      // [핵심 최종 수정] 여기도 마찬가지로, Docker 번들링을 제거하고 단순 경로 지정을 사용합니다.
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.open-next/assets'))],
       destinationBucket: assetsBucket,
       distribution: distribution,
       distributionPaths: ['/*'],
     });
+
     // --- 2.5. Route 53 Record 생성 ---
     new route53.ARecord(this, 'SiteARecord', {
       recordName: siteDomain,
