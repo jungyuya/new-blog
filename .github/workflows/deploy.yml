@@ -59,8 +59,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: "Step 3.2: Bootstrap CDK in the target environment"
-        run: pnpm --filter infra exec cdk bootstrap
+      - name: Set CDK Qualifier
+        run: echo "CDK_QUALIFIER=hnb659fds" >> $GITHUB_ENV
+
+      - name: "Step 3.2: Bootstrap CDK with explicit Qualifier"
+        run: pnpm --filter infra exec cdk bootstrap --qualifier ${{ env.CDK_QUALIFIER }}
 
       - name: "Step 3.3: Deploy Infrastructure and Application via CDK"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+        # [핵심] deploy 명령어에도 동일한 Qualifier를 전달하여,
+        # bootstrap과 deploy가 100% 동일한 저장소 이름을 사용하도록 보장합니다.
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never --qualifier ${{ env.CDK_QUALIFIER }}
