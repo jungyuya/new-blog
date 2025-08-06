@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml (CWD 명시 최종 완결본)
+# .github/workflows/deploy.yml (궁극의 최종 완결본 - 무결점 버전)
 
 name: "Deploy Full-Stack Application to AWS"
 
@@ -25,65 +25,74 @@ jobs:
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { run_install: false }
-      - uses: actions/cache@v4
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('.github/workflows/deploy.yml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
       - name: Install dependencies at root
         run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Build, Package & Verify (in correct CWD)
+      # Phase 2: Build, Package & Verify
       # ===================================================================================
 
-      - name: "Step 2.1: Clean previous artifacts"
-        # 루트에서 실행하는 것이 올바릅니다.
-        run: pnpm run clean
+      - name: "Step 2.1: Clean all previous artifacts"
+        run: |
+          pnpm run clean
+          rm -f apps/frontend/node_modules.zip
+          rm -f open-next.log
 
-      - name: "Step 2.2: Build Next.js standalone output"
-        # [핵심] frontend 폴더를 작업 디렉토리로 명시적으로 지정합니다.
+      - name: "Step 2.2: Build Backend"
+        working-directory: ./apps/backend
+        run: pnpm run build
+
+      - name: "Step 2.3: Build Frontend standalone output"
         working-directory: ./apps/frontend
         run: pnpm run build
 
-      - name: "Step 2.3 (Integrity Verification): Verify standalone output"
+      - name: "Step 2.4 (Verification): Verify standalone output"
         run: |
           echo "--- Verifying .next/standalone integrity ---"
-          # [핵심] 이제 이 검증은 반드시 통과해야 합니다.
           (test -f apps/frontend/.next/standalone/apps/frontend/server.js || test -f apps/frontend/.next/standalone/apps/frontend/server.mjs) || (echo "!!! CRITICAL: Nested server.js/mjs not found. !!!" && exit 1)
           test -d apps/frontend/.next/standalone/apps/frontend/node_modules || (echo "!!! CRITICAL: Nested node_modules not found. !!!" && exit 1)
+          test -d apps/frontend/.next/standalone/public || (echo "!!! CRITICAL: public directory not found. !!!" && exit 1)
           echo "Standalone output verified successfully."
 
-      - name: "Step 2.4: Package with open-next"
-        # [핵심] open-next도 동일하게 frontend 폴더에서 실행합니다.
+      - name: "Step 2.5: Package with open-next"
         working-directory: ./apps/frontend
-        run: pnpm open-next build
+        run: OPEN_NEXT_LOG_LEVEL=debug pnpm open-next build | tee ../../open-next.log
 
-      - name: "Step 2.5 (Integrity Verification): Verify .open-next artifact"
+      - name: "Step 2.6 (Verification): Verify .open-next artifact"
         run: |
           echo "--- Verifying .open-next integrity ---"
           test -f apps/frontend/.open-next/server-functions/default/index.mjs || (echo "!!! CRITICAL: index.mjs not found. !!!" && exit 1)
+          test -d apps/frontend/.open-next/assets/_next || (echo "!!! CRITICAL: assets/_next directory not found. !!!" && exit 1)
           echo ".open-next artifact verified successfully."
 
-      - name: "Step 2.6: Create and Verify Lambda Layer Zip File"
+      - name: "Step 2.7: Create and Verify Lambda Layer Zip File"
         run: |
           echo "--- Zipping node_modules from the correct standalone path ---"
-          # [핵심] 우리가 tree로 확인한, 정확한 위치의 node_modules를 압축합니다.
           cd apps/frontend/.next/standalone/apps/frontend
           zip -r ../../../../node_modules.zip ./node_modules
           cd ../../../../../..
           
-          echo "--- Final size of the Lambda Layer zip ---"
-          du -h apps/frontend/node_modules.zip
+          echo "--- Verifying key dependencies in zip ---"
+          unzip -l node_modules.zip | grep "@swc/helpers" || (echo "!!! CRITICAL: @swc/helpers not found in the zip file. !!!" && exit 1)
+
+          echo "--- Verifying final layer zip size ---"
+          du -h node_modules.zip
           
-          # 용량 검증은 일단 유지하여, 최종 크기를 확인합니다.
-          MAX_SIZE=70167211 
-          ACTUAL_SIZE=$(stat -c %s apps/frontend/node_modules.zip)
+          # AWS Lambda layer 압축 후 최대 50MiB
+          MAX_SIZE=52428800
+          ACTUAL_SIZE=$(stat -c %s node_modules.zip)
           if [ "$ACTUAL_SIZE" -ge "$MAX_SIZE" ]; then
-            echo "::error::Layer zip size ($ACTUAL_SIZE bytes) exceeds limit."
+            echo "::error::Layer zip size ($ACTUAL_SIZE bytes) exceeds AWS Lambda Layer limit ($MAX_SIZE bytes)."
             exit 1
           fi
+          echo "Layer size is within the limit."
 
       # ===================================================================================
       # Phase 3: Deploy to AWS
@@ -100,14 +109,25 @@ jobs:
           LAYER_ARN=$(aws lambda publish-layer-version \
             --layer-name new-blog-dependencies \
             --description "Frontend dependencies built on ${{ github.sha }}" \
-            --zip-file fileb://apps/frontend/node_modules.zip \
+            --zip-file fileb://node_modules.zip \
             --compatible-runtimes nodejs22.x \
+            --compatible-architectures arm64 \
             --query LayerVersionArn --output text)
           echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
 
       - name: "Deploy Infrastructure and Application Code via CDK"
         run: pnpm --filter infra exec cdk deploy --all --require-approval never --parameters layerArn=${{ steps.deploy-layer.outputs.layer_arn }}
 
+      - name: "Upload build logs as artifact"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-next-log
+          path: open-next.log
+
       - name: "Clean up temporary build artifacts"
         if: always()
-        run: rm -f apps/frontend/node_modules.zip
+        run: |
+          rm -f node_modules.zip
+          rm -f open-next.log
+          rm -rf apps/frontend/.open-next
