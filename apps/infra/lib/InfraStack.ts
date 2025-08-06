@@ -30,8 +30,8 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
-import * as ecr from 'aws-cdk-lib/aws-ecr'; // ECR을 import 합니다.
-
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 
 // --- 모니터링 ---
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -210,7 +210,27 @@ export class InfraStack extends Stack {
       publicReadAccess: false,
     });
 
-    // --- 2.2. Next.js Server Lambda (컨테이너 이미지 사용) ---
+
+        // --- 2.2. ECR Repository & Docker Image Asset ---
+    // [핵심] ECR 저장소가 없으면 자동으로 생성하고, 있으면 기존 저장소를 사용합니다.
+    const ecrRepository = new ecr.Repository(this, 'FrontendEcrRepo', {
+      repositoryName: 'new-blog-frontend',
+      // [핵심] ECR 수명 주기 정책: 태그 없는 이미지는 7일 후 자동 삭제
+      lifecycleRules: [{
+        description: 'Delete untagged images after 7 days',
+        maxImageAge: Duration.days(7),
+        tagStatus: ecr.TagStatus.UNTAGGED,
+      }],
+      removalPolicy: RemovalPolicy.DESTROY, // 스택 삭제 시 ECR 저장소도 함께 삭제
+    });
+
+    // [핵심] Docker 이미지를 빌드하고, 위에서 생성/참조한 ECR 저장소에 푸시합니다.
+    const imageAsset = new ecrAssets.DockerImageAsset(this, 'FrontendImageAsset', {
+      directory: path.join(projectRoot, 'apps/frontend'),
+      platform: ecrAssets.Platform.LINUX_ARM64,
+    });
+
+    // --- 2.2.1. Next.js Server Lambda (컨테이너 이미지 사용) ---
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       // ...
       code: lambda.DockerImageCode.fromImageAsset(

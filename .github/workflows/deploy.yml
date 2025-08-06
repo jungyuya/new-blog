@@ -59,21 +59,5 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: "Step 3.2: Login to Amazon ECR"
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: "Step 3.3: Build and push Docker image to ECR"
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: new-blog-frontend
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f apps/frontend/Dockerfile .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-
-      - name: "Step 3.4: Deploy Infrastructure and Application via CDK"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never \
-          --parameters imageTag=${{ steps.build-image.outputs.image_tag }}
+      - name: "Step 3.2: Deploy Infrastructure and Application via CDK"
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never
