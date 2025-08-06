@@ -6,22 +6,21 @@ FROM public.ecr.aws/sam/build-nodejs22.x:latest AS builder
 
 WORKDIR /app
 
-# pnpm 설치를 위해 corepack 활성화
 RUN corepack enable
 
-# 의존성 설치 레이어를 캐싱하기 위해, 먼저 package 관련 파일만 복사합니다.
-COPY package.json pnpm-lock.yaml ./
-# 모노레포의 다른 패키지를 참조할 수 있도록 워크스페이스 설정 파일도 복사합니다.
-COPY ../../pnpm-workspace.yaml ./
+# [핵심] 이제 컨텍스트가 루트이므로, 모든 경로는 루트를 기준으로 합니다.
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+# frontend의 package.json을 명시적으로 복사합니다.
+COPY apps/frontend/package.json ./apps/frontend/
 
-# --frozen-lockfile을 사용하여 lock 파일과 정확히 일치하는 의존성만 설치합니다.
-RUN pnpm install --frozen-lockfile
+# [핵심] pnpm은 workspace 설정을 읽어, frontend의 의존성만 설치합니다.
+RUN pnpm --filter frontend install --frozen-lockfile
 
-# 나머지 모든 소스 코드를 복사합니다.
+# [핵심] 프로젝트 전체 소스 코드를 복사합니다.
 COPY . .
 
-# next build --standalone 명령어를 실행하여, .next/standalone 폴더를 생성합니다.
-RUN pnpm run build
+# [핵심] frontend 워크스페이스를 명시하여 빌드를 실행합니다.
+RUN pnpm --filter frontend run build
 
 
 # ===================================================================================
@@ -30,22 +29,14 @@ RUN pnpm run build
 # ===================================================================================
 FROM public.ecr.aws/lambda/nodejs:22
 
-# Lambda Web Adapter를 설치합니다. (AWS 공식 권장)
-# 이것이 Next.js 서버와 Lambda 이벤트를 연결해주는 "만능 번역기"입니다.
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 WORKDIR /var/task
 
-# 환경 변수 설정
-# Lambda Web Adapter가 Next.js 서버를 찾을 수 있도록 포트를 지정합니다.
 ENV PORT=3000
-# Next.js가 프로덕션 모드로 실행되도록 합니다.
 ENV NODE_ENV=production
 
-# [핵심] Builder 스테이지의 빌드 결과물 중에서, 오직 '.next/standalone' 폴더만 복사해옵니다.
-# 이를 통해 빌드에만 필요했던 무거운 파일들은 최종 이미지에서 제외됩니다.
-COPY --from=builder /app/.next/standalone .
+# [핵심] builder 스테이지의 올바른 경로에서 standalone 결과물을 복사합니다.
+COPY --from=builder /app/apps/frontend/.next/standalone .
 
-# Lambda가 실행될 때, Next.js 프로덕션 서버를 시작하는 명령어를 지정합니다.
-# Web Adapter가 이 서버로 들어오는 요청을 자동으로 프록시해줍니다.
 CMD ["node", "server.js"]

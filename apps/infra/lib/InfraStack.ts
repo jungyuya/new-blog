@@ -203,11 +203,15 @@ export class InfraStack extends Stack {
 
     // --- 2.2. Next.js Server Lambda (컨테이너 이미지 사용) ---
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
-      functionName: `blog-frontend-server-${this.stackName}`,
-      // [핵심] 이제 Code는 Zip 파일이 아닌, Docker 이미지를 가리킵니다.
-      // CDK는 'cdk deploy' 시점에 'apps/frontend' 디렉토리의 Dockerfile을 사용하여
-      // 이미지를 빌드하고, ECR에 푸시한 뒤, 이 Lambda 함수와 연결합니다.
-      code: lambda.DockerImageCode.fromImageAsset(path.join(projectRoot, 'apps/frontend')),
+      // ...
+      code: lambda.DockerImageCode.fromImageAsset(
+        // [핵심] 빌드 컨텍스트를 프로젝트 루트로 변경합니다.
+        projectRoot,
+        {
+          // [핵심] Dockerfile이 어디에 있는지 명시적으로 알려줍니다.
+          file: 'apps/frontend/Dockerfile',
+        }
+      ),
       memorySize: 1024,
       timeout: Duration.seconds(30), // 컨테이너 Cold Start는 조금 더 길 수 있으므로 넉넉하게 설정
       architecture: lambda.Architecture.ARM_64, // Dockerfile에서 ARM64 이미지를 사용했으므로 명시
