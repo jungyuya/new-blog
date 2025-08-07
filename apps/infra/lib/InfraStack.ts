@@ -226,7 +226,7 @@ export class InfraStack extends Stack {
     // Origin Type을 'Custom Origin'으로 올바르게 설정합니다.
     const serverUrl = cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url));
 
-    const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
+    const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
       defaultBehavior: {
@@ -279,7 +279,7 @@ export class InfraStack extends Stack {
     deployment.node.addDependency(distribution);
 
     // --- 2.5. Route 53 Record 생성 ---
-    new route53.ARecord(this, 'SiteARecord', {
+    new route53.ARecord(this, 'NewSiteARecord', {
       recordName: siteDomain,
       zone: hostedZone,
       target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
