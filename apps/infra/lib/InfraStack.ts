@@ -103,6 +103,7 @@ export class InfraStack extends Stack {
 
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
+      description: 'Handles all backend API logic (CRUD, Auth, etc.) via Hono.',
       entry: path.join(projectRoot, 'apps', 'backend', 'src', 'index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -200,6 +201,7 @@ export class InfraStack extends Stack {
       // [핵심 최종 변경] fromImageAsset을 fromEcrImage로 교체합니다.
       // 이제 CDK는 빌드 과정에 전혀 관여하지 않고, 오직 ECR에 이미 존재하는 이미지를
       // 이름과 "송장 번호(imageTag)"를 사용하여 참조하기만 합니다.
+      description: 'Renders the Next.js frontend application (SSR).',
       code: lambda.DockerImageCode.fromEcr(ecrRepository, {
         tagOrDigest: imageTag.valueAsString,
       }),
@@ -218,6 +220,9 @@ export class InfraStack extends Stack {
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
+    cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic'); // [관리 Tip 2] 태그를 추가합니다.
+    cdk.Tags.of(serverLambda).add('Tier', 'Frontend');
+
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
     // --- 2.3. CloudFront Distribution ---
@@ -326,5 +331,43 @@ export class InfraStack extends Stack {
         comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription: 'API Gateway 5xx server errors detected!',
       });
+
+
+
+    // --- 3.3. S3 Bucket Policy for CloudFront OAC (신규 추가) ---
+    const cloudfrontOAC = new cloudfront.CfnOriginAccessControl(this, 'CloudFrontOAC', {
+      originAccessControlConfig: {
+        name: `OAC for ${assetsBucket.bucketName}`,
+        originAccessControlOriginType: 's3',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+    });
+
+    // CloudFront 배포의 S3 원본 설정을 OAC를 사용하도록 명시적으로 업데이트합니다.
+    // L2 Construct의 속성을 직접 수정하기 위해 Cfn* (L1) Construct를 사용합니다.
+    const cfnDistribution = distribution.node.defaultChild as cloudfront.CfnDistribution;
+
+    // S3 Origin 1 (_next/static)
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity', '');
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.0.OriginAccessControlId', cloudfrontOAC.attrId);
+
+    // S3 Origin 2 (assets)
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.1.S3OriginConfig.OriginAccessIdentity', '');
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.1.OriginAccessControlId', cloudfrontOAC.attrId);
+
+    const bucketPolicy = new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      resources: [assetsBucket.arnForObjects('*')],
+      conditions: {
+        'StringEquals': {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`
+        }
+      }
+    });
+
+    assetsBucket.addToResourcePolicy(bucketPolicy);
   }
 }
