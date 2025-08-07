@@ -151,50 +151,114 @@ export class InfraStack extends Stack {
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // [핵심] CloudFront Distribution 정의 (최종 통합본)
-    const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
-      domainNames: [siteDomain],
-      certificate: certificate,
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
-      defaultBehavior: {
-        // [핵심 1차 수정] cdk.Fn.select/split 대신, URL 객체를 사용하여 더 안정적으로 도메인을 추출합니다.
-        origin: new origins.HttpOrigin(new cdk.CfnJson(this, 'ServerUrlOrigin', {
-          value: cdk.Fn.parseDomainName(serverLambdaUrl.url),
-        }).toString()),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-      },
-      additionalBehaviors: {
-        '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+    // apps/infra/lib/InfraStack.ts (L1 Construct 최종 재작성)
+
+    // ... serverLambdaUrl 생성 코드 다음부터 ...
+
+    // [핵심 최종 수정] L2 Construct 대신 L1 CfnDistribution을 사용하여 모든 것을 수동으로 제어합니다.
+    const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
+      distributionConfig: {
+        enabled: true,
+        httpVersion: 'http2',
+        priceClass: 'PriceClass_200',
+        aliases: [siteDomain],
+        viewerCertificate: {
+          acmCertificateArn: certificate.certificateArn,
+          sslSupportMethod: 'sni-only',
+          minimumProtocolVersion: 'TLSv1.2_2021',
         },
-        '/assets/*': {
-          origin: new origins.S3Origin(assetsBucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+
+        // Origins: 모든 주방 목록
+        origins: [
+          {
+            id: 'FrontendServerOrigin', // Lambda 서버 주방
+            domainName: cdk.Fn.parseDomainName(serverLambdaUrl.url),
+            customOriginConfig: {
+              originProtocolPolicy: 'https-only',
+            },
+          },
+          {
+            id: 'S3AssetsOrigin', // S3 정적 파일 주방
+            domainName: assetsBucket.bucketRegionalDomainName,
+            s3OriginConfig: {
+              // OAI를 명시적으로 생성하고 연결합니다. 이것이 가장 확실한 방법입니다.
+              originAccessIdentity: new cloudfront.OriginAccessIdentity(this, 'OAI').originAccessIdentityId,
+            },
+          },
+          {
+            id: 'ApiGatewayOrigin', // API 게이트웨이 주방
+            domainName: cdk.Fn.parseDomainName(httpApi.url!),
+            customOriginConfig: {
+              originProtocolPolicy: 'https-only',
+            },
+          },
+        ],
+
+        // Default Behavior: 기본 손님 응대법 (Lambda 서버로 안내)
+        defaultCacheBehavior: {
+          targetOriginId: 'FrontendServerOrigin',
+          viewerProtocolPolicy: 'redirect-to-https',
+          allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+          cachedMethods: ['GET', 'HEAD'],
+          compress: true,
+          // Lambda 서버는 동적이므로 캐시하지 않고, 모든 정보를 그대로 전달합니다.
+          cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+          originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
-        '/api/*': {
-          // [핵심 2차 수정] API Gateway URL도 동일하게, parseDomainName을 사용하여 순수 도메인만 추출합니다.
-          origin: new origins.HttpOrigin(new cdk.CfnJson(this, 'ApiUrlOrigin', {
-            value: cdk.Fn.parseDomainName(httpApi.url!),
-          }).toString()),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        },
+
+        // Additional Behaviors: 특별한 손님 응대법
+        cacheBehaviors: [
+          {
+            pathPattern: '/_next/static/*', // 정적 파일 요청은
+            targetOriginId: 'S3AssetsOrigin', // S3 주방으로 안내
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+          {
+            pathPattern: '/assets/*', // assets 요청도
+            targetOriginId: 'S3AssetsOrigin', // S3 주방으로 안내
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+          {
+            pathPattern: '/api/*', // API 요청은
+            targetOriginId: 'ApiGatewayOrigin', // API 게이트웨이 주방으로 안내
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
+          },
+        ],
       },
     });
+
+    // S3 버킷 정책을 OAI에 맞게 수동으로 추가합니다.
+    assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [assetsBucket.arnForObjects('*')],
+      principals: [new iam.CanonicalUserPrincipal(
+        cdk.Fn.select(2, cdk.Fn.split('/', new cloudfront.OriginAccessIdentity(this, 'OAI-Principal').originAccessIdentityName))
+      )],
+    }));
+
 
     const deployment = new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_next/static',
-      distribution: distribution,
+      // L1 Construct는 distributionId 속성이 없으므로, Ref를 사용합니다.
+      distribution: cloudfront.Distribution.fromDistributionAttributes(this, 'ImportedDist', {
+        distributionId: distribution.ref,
+        domainName: distribution.attrDomainName,
+      }),
       distributionPaths: ['/_next/static/*'],
     });
     deployment.node.addDependency(distribution);
@@ -202,7 +266,13 @@ export class InfraStack extends Stack {
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: siteDomain,
       zone: hostedZone,
-      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
+      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(
+        // L1 Construct를 L2로 변환하여 Alias Target으로 사용합니다.
+        cloudfront.Distribution.fromDistributionAttributes(this, 'ImportedDistForAlias', {
+          distributionId: distribution.ref,
+          domainName: distribution.attrDomainName,
+        })
+      )),
     });
 
     // ===================================================================================
@@ -212,8 +282,14 @@ export class InfraStack extends Stack {
     new CfnOutput(this, 'UserPoolIdOutput', { value: userPool.userPoolId, description: 'Cognito User Pool ID' });
     new CfnOutput(this, 'UserPoolClientIdOutput', { value: userPoolClient.userPoolClientId, description: 'Cognito User Pool App Client ID' });
     new CfnOutput(this, 'RegionOutput', { value: this.region, description: 'AWS Region' });
-    new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.distributionDomainName}`, description: 'URL of the frontend CloudFront distribution' });
 
+    // [핵심 최종 수정] L1 Construct에서 속성을 가져오는 올바른 방법을 사용합니다.
+    // .distributionDomainName 대신 .attrDomainName을 사용합니다.
+    new CfnOutput(this, 'FrontendURL', {
+      value: `https://${distribution.attrDomainName}`,
+      description: 'URL of the frontend CloudFront distribution'
+    });
+    
     backendApiLambda.metricErrors({ period: Duration.minutes(5) }).createAlarm(this, 'BackendApiLambdaErrorsAlarm', {
       threshold: 1, evaluationPeriods: 1, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, alarmDescription: 'Lambda function errors detected!',
     });
