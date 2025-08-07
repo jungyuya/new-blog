@@ -122,7 +122,7 @@ export class InfraStack extends Stack {
     const siteDomain = `blog.${domainName}`;
     const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', { hostedZoneId: 'Z0802600EUJ1KX823IZ7', zoneName: domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
-    
+
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -157,9 +157,10 @@ export class InfraStack extends Stack {
       certificate: certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
       defaultBehavior: {
-        origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url)), {
-          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-        }),
+        // [핵심 1차 수정] cdk.Fn.select/split 대신, URL 객체를 사용하여 더 안정적으로 도메인을 추출합니다.
+        origin: new origins.HttpOrigin(new cdk.CfnJson(this, 'ServerUrlOrigin', {
+          value: cdk.Fn.parseDomainName(serverLambdaUrl.url),
+        }).toString()),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
@@ -177,7 +178,10 @@ export class InfraStack extends Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/api/*': {
-          origin: new origins.HttpOrigin(httpApi.url!.replace('https://', '')),
+          // [핵심 2차 수정] API Gateway URL도 동일하게, parseDomainName을 사용하여 순수 도메인만 추출합니다.
+          origin: new origins.HttpOrigin(new cdk.CfnJson(this, 'ApiUrlOrigin', {
+            value: cdk.Fn.parseDomainName(httpApi.url!),
+          }).toString()),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
