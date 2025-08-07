@@ -19,3 +19,6 @@ cdk.out
 
 # Git
 .git
+
+# AWS CDK context file - DO NOT COMMIT
+**/cdk.context.json
