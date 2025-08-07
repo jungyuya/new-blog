@@ -1,5 +1,5 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 수정일: 2025년 8월 6일 (Buildx 드라이버 업그레이드 적용)
+# 최종 수정일: 2025년 8월 6일 0422 (Buildx 드라이버 업그레이드 적용)
 # 역할: 책임 분리 원칙 + Buildx 캐싱 최적화가 적용된 최종 파이프라인
 
 name: "Build, Push, and Deploy Full-Stack Application"

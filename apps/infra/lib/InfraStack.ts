@@ -211,17 +211,29 @@ export class InfraStack extends Stack {
     });
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
-    // --- 2.3. CloudFront Distribution (변경 없음) ---
+    // --- 2.3. CloudFront Distribution ---
+    // [핵심 수정] Lambda Function URL에서 'https://' 프로토콜 부분을 제거합니다.
+    // 이렇게 하면 CDK의 HttpOrigin이 이 주소를 일반적인 웹 서버 도메인으로 인식하여,
+    // Origin Type을 'Custom Origin'으로 올바르게 설정합니다.
+    const serverUrl = cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url));
+
     const distribution = new cloudfront.Distribution(this, 'FrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
       defaultBehavior: {
-        origin: new origins.HttpOrigin(cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url))),
+        // [핵심 수정] HttpOrigin 생성자에 가공된 URL을 전달합니다.
+        origin: new origins.HttpOrigin(serverUrl, {
+          // [핵심 추가] Lambda Function URL은 HTTPS만 지원하므로, 프로토콜 정책을 명시합니다.
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+        }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        // [핵심 수정] 캐시 정책과 원본 요청 정책을 Lambda Web Adapter 권장안으로 변경합니다.
+        // 이 정책들은 인증 헤더(Authorization)와 같은 중요한 정보들을 Lambda로 안전하게 전달합니다.
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
+      // ... additionalBehaviors 부분은 변경 없습니다 ...
       additionalBehaviors: {
         '/_next/static/*': {
           origin: new origins.S3Origin(assetsBucket),
@@ -243,6 +255,7 @@ export class InfraStack extends Stack {
       },
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
     });
+
 
     // --- 2.4. S3 Bucket Deployment (변경 없음) ---
     new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
