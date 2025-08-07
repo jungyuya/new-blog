@@ -87,7 +87,7 @@ export class InfraStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // [핵심] 첫 배포를 위해 모든 GSI 정의를 잠시 주석 처리합니다.
+    // [핵심] 첫 배포를 위해 모든 GSI정의를 잠시 주석 처리합니다.
     /*
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI1',
