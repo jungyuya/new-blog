@@ -1,16 +1,14 @@
-// apps/frontend/src/app/page.tsx (임시 수정본)
-import Link from 'next/link';
+// apps/frontend/src/app/page.tsx (SignUp 폼 추가)
+import SignUp from '@/components/SignUp'; // SignUp 컴포넌트를 import 합니다.
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">블로그 프로젝트에 오신 것을 환영합니다!</h1>
-      <p className="text-lg mb-4">그라라라라라라! 현재 배포 파이프라인을 구축하고 있습니다.</p>
-      <div className="flex gap-4">
-        <Link href="/posts/new" className="p-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700">
-          새 글 작성 페이지 (임시 링크)
-        </Link>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
+      <div className="mb-8 text-center">
+        <h1 className="text-4xl font-bold">블로그 프로젝트</h1>
+        <p className="text-lg text-gray-600 mt-2">BFF 패턴을 사용한 커스텀 인증 구현</p>
       </div>
+      <SignUp />
     </main>
   );
 }
