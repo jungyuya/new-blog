@@ -16,9 +16,11 @@ export default function SignUp() {
         setError(null);
         setSuccess(null);
 
-        // [핵심] 우리 백엔드 API의 /auth/signup 엔드포인트를 직접 호출합니다.
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_ENDPOINT}auth/signup`;
+        console.log(`Requesting to: ${apiUrl}`); // 디버깅을 위한 로그 추가
+      
         try {
-            const response = await fetch('/api/auth/signup', {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

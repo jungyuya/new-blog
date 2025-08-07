@@ -1,14 +1,14 @@
-// apps/frontend/src/app/posts/new/page.tsx (임시 수정본)
+// apps/frontend/src/app/posts/new/page.tsx (미사용 변수 제거)
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation'; // 1. 미사용 import 제거
 
 export default function NewPostPage() {
-  const router = useRouter();
+  // const router = useRouter(); // 2. 미사용 변수 제거
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  // const [isLoading, setIsLoading] = useState(false); // 3. 미사용 변수 제거
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,6 +20,7 @@ export default function NewPostPage() {
     <main className="flex min-h-screen flex-col items-center p-24">
       <h1 className="text-4xl font-bold mb-8">새 글 작성</h1>
       <form onSubmit={handleSubmit} className="w-full max-w-2xl flex flex-col gap-4">
+        {/* ... 폼 내용은 동일 ... */}
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700">제목</label>
           <input
@@ -43,10 +44,10 @@ export default function NewPostPage() {
         </div>
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={false} // isLoading이 없으므로 false로 고정
           className="p-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:bg-gray-400"
         >
-          {isLoading ? '저장 중...' : '게시물 저장 (기능 비활성화)'}
+          게시물 저장 (기능 비활성화)
         </button>
         {error && <p className="text-red-500 mt-2">{error}</p>}
       </form>
