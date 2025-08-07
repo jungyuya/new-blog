@@ -278,7 +278,7 @@ export class InfraStack extends Stack {
     // [핵심 최종 수정] 명시적인 의존성을 추가합니다.
     deployment.node.addDependency(distribution);
 
-    // --- 2.5. Route 53 Record 생성 (변경 없음) ---
+    // --- 2.5. Route 53 Record 생성 ---
     new route53.ARecord(this, 'SiteARecord', {
       recordName: siteDomain,
       zone: hostedZone,
