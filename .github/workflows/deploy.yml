@@ -94,7 +94,8 @@ jobs:
       - name: "Bootstrap CDK"
         run: pnpm --filter infra exec cdk bootstrap
 
-      - name: "Synthesize CloudFormation Template via CDK" # 이름 변경
+      - name: "Deploy to AWS via CDK (송장 번호 전달)"
         run: |
-          # [핵심 수정] deploy를 synth로 변경하여, 배포 대신 템플릿만 생성하도록 합니다.
-          pnpm --filter infra exec cdk synth --all
+          pnpm --filter infra exec cdk deploy --all \
+            --require-approval never \
+            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}

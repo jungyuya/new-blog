@@ -168,9 +168,18 @@ export class InfraStack extends Stack {
     // --- 2.0. 도메인 및 인증서 준비 (변경 없음) ---
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
-    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', { domainName });
-    const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
+    // [핵심 최종 수정] fromLookup 대신 fromHostedZoneAttributes를 사용합니다.
+    // CI/CD 환경에서 불안정한 fromLookup의 자동 조회를 포기하고,
+    // 우리가 이미 알고 있는 정확한 Hosted Zone ID를 직접 주입합니다.
+    // 이를 통해 불확실성을 완전히 제거합니다.
+    const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+      hostedZoneId: 'Z0802600EUJ1KX823IZ7', // Jungyu님의 'jungyu.store' Hosted Zone ID
+      zoneName: domainName,
+    });
+
+    // 인증서 조회는 fromCertificateArn이 비교적 안정적이므로 그대로 둡니다.
+    const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
     // --- 2.1. S3 Bucket for Static Assets (변경 없음) ---
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
