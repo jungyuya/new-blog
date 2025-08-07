@@ -1,4 +1,4 @@
-# 파일 위치: .github/workflows/deploy.yml
+# 파일 위치: .github/workflows/deploy.yml (임시수정)
 # 최종 수정일: 2025년 8월 6일 0422 (Buildx 드라이버 업그레이드 적용)
 # 역할: 책임 분리 원칙 + Buildx 캐싱 최적화가 적용된 최종 파이프라인
 
@@ -94,8 +94,7 @@ jobs:
       - name: "Bootstrap CDK"
         run: pnpm --filter infra exec cdk bootstrap
 
-      - name: "Deploy to AWS via CDK (송장 번호 전달)"
+      - name: "Synthesize CloudFormation Template via CDK" # 이름 변경
         run: |
-          pnpm --filter infra exec cdk deploy --all \
-            --require-approval never \
-            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+          # [핵심 수정] deploy를 synth로 변경하여, 배포 대신 템플릿만 생성하도록 합니다.
+          pnpm --filter infra exec cdk synth --all
