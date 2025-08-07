@@ -1,16 +1,55 @@
-// apps/frontend/src/app/page.tsx (임시 수정본)
-import Link from 'next/link';
+// apps/frontend/src/app/posts/new/page.tsx (임시 수정본)
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function NewPostPage() {
+  const router = useRouter();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('현재 폼 제출 기능은 비활성화되어 있습니다.');
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-8">블로그 프로젝트에 오신 것을 환영합니다!</h1>
-      <p className="text-lg mb-4">그라라라라라라! 현재 배포 파이프라인을 구축하고 있습니다.</p>
-      <div className="flex gap-4">
-        <Link href="/posts/new" className="p-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700">
-          새 글 작성 페이지 (임시 링크)
-        </Link>
-      </div>
+    <main className="flex min-h-screen flex-col items-center p-24">
+      <h1 className="text-4xl font-bold mb-8">새 글 작성</h1>
+      <form onSubmit={handleSubmit} className="w-full max-w-2xl flex flex-col gap-4">
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">제목</label>
+          <input
+            id="title"
+            type="text"
+            placeholder="제목을 입력하세요"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="content" className="block text-sm font-medium text-gray-700">내용</label>
+          <textarea
+            id="content"
+            placeholder="내용을 입력하세요"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm h-64"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="p-3 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:bg-gray-400"
+        >
+          {isLoading ? '저장 중...' : '게시물 저장 (기능 비활성화)'}
+        </button>
+        {error && <p className="text-red-500 mt-2">{error}</p>}
+      </form>
     </main>
   );
 }
