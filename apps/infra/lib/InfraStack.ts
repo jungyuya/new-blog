@@ -267,13 +267,16 @@ export class InfraStack extends Stack {
 
 
     // --- 2.4. S3 Bucket Deployment (변경 없음) ---
-    new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
+    const deployment = new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
       destinationBucket: assetsBucket,
       destinationKeyPrefix: '_next/static',
       distribution: distribution,
       distributionPaths: ['/_next/static/*'],
     });
+
+    // [핵심 최종 수정] 명시적인 의존성을 추가합니다.
+    deployment.node.addDependency(distribution);
 
     // --- 2.5. Route 53 Record 생성 (변경 없음) ---
     new route53.ARecord(this, 'SiteARecord', {
