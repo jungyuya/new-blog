@@ -260,7 +260,10 @@ export class InfraStack extends Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/api/*': {
-          origin: new origins.HttpOrigin(httpApi.url!.replace('https://', '').replace('/', '')),
+          origin: new origins.HttpOrigin(httpApi.url!.replace('https://', '').replace('/', ''), {
+            // 이 옵션을 통해 Origin의 종류를 명확히 합니다.
+            originPath: '/',
+          }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
