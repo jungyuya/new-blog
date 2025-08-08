@@ -1,15 +1,19 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.08-TrueMasterpiece
-// 역할: 프로젝트의 모든 AWS 인프라를 정의하는, 보안과 모범 사례가 집대성된 단 하나의 진실 공급원
+// 최종 버전: v2025.08.08-Container-Final
+// 역할: "선건설, 후배송" 원칙에 입각한, 컨테이너 기반 최종 인프라 구성
 
 import * as cdk from 'aws-cdk-lib';
-import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as path from 'path';
+import * as fs from 'fs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { HttpApi, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -17,10 +21,17 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    // [복원] CI/CD로부터 Docker 이미지 태그를 전달받기 위한 파라미터
+    const imageTag = new CfnParameter(this, 'ImageTag', {
+      type: 'String',
+      description: 'The ECR image tag to deploy for the frontend server.',
+    });
 
     // ===================================================================================
     // SECTION 1: 백엔드 리소스 정의
@@ -75,7 +86,7 @@ export class InfraStack extends Stack {
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    
+
     // GSI1과 GSI2는 향후 기능 개발 단계(Phase 6+)에서 점진적으로 추가될 예정입니다.
     /*
     postsTable.addGlobalSecondaryIndex({ indexName: 'GSI1', ... });
@@ -83,12 +94,17 @@ export class InfraStack extends Stack {
     */
 
     // --- 1.3. 백엔드 Lambda 함수 "껍데기" 정의 ---
-    const backendApiLambda = new lambda.Function(this, 'BackendApiLambda', {
+    const projectRoot = path.join(__dirname, '..', '..', '..');
+    const backendPackageJsonPath = path.join(projectRoot, 'apps', 'backend', 'package.json');
+    const backendPackageJson = JSON.parse(fs.readFileSync(backendPackageJsonPath, 'utf8'));
+    const backendVersion = backendPackageJson.version;
+
+    const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
-      description: 'Handles all backend API logic. Code is deployed via GitHub Actions.',
+      description: 'Handles all backend API logic (CRUD, Auth, etc.) via Hono.',
+      entry: path.join(projectRoot, 'apps', 'backend', 'src', 'index.ts'),
+      handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline('exports.handler = async () => "Placeholder for backend";'),
       memorySize: 256,
       timeout: Duration.seconds(30),
       environment: {
@@ -97,13 +113,12 @@ export class InfraStack extends Stack {
         USER_POOL_ID: userPool.userPoolId,
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         REGION: this.region,
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        BACKEND_VERSION: backendVersion,
       },
+      tracing: lambda.Tracing.ACTIVE,
+      bundling: { minify: true, externalModules: [] },
     });
-    postsTable.grantReadWriteData(backendApiLambda);
-    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'],
-      resources: [userPool.userPoolArn],
-    }));
 
     // --- 1.4. API Gateway: 백엔드 API를 외부에 노출 ---
     const httpApi = new HttpApi(this, 'BlogHttpApiGateway', {
@@ -123,30 +138,36 @@ export class InfraStack extends Stack {
     const siteDomain = `blog.${domainName}`;
     const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', { hostedZoneId: 'Z0802600EUJ1KX823IZ7', zoneName: domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
-    
+
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
-    // --- 2.1. 프론트엔드 Lambda 함수 "껍데기" 정의 ---
-    const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
+    // [복원] CI/CD가 이미지를 푸시할 ECR 리포지토리를 이름으로 참조
+    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
+
+    // [복원] 프론트엔드 Lambda를 DockerImageFunction으로 정의
+    const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      description: 'Renders the Next.js frontend. Code is deployed via GitHub Actions.',
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline('exports.handler = async () => "Placeholder for frontend";'),
+      description: 'Renders the Next.js frontend application (SSR).',
+      code: lambda.DockerImageCode.fromEcr(ecrRepository, { tagOrDigest: imageTag.valueAsString }),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.ARM_64,
       environment: {
-        S3_BUCKET_NAME: assetsBucket.bucketName,
+        AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
+        PORT: '3000',
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
+        // [핵심 수정] 누락되었던 환경 변수들을 다시 추가하여 완전성을 확보합니다.
+        NEXT_PUBLIC_REGION: this.region,
+        NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
+        NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
 
-    // --- 2.2. CloudFront Distribution: CDN, 보안 및 트래픽 라우팅 ---
+    // [핵심 1] Function URL과 CloudFront를 OAC로 연결하는 가장 현대적이고 안전한 방법
     const functionOrigin = new origins.FunctionUrlOrigin(serverLambdaUrl);
 
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
@@ -154,16 +175,19 @@ export class InfraStack extends Stack {
       certificate: certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
       comment: `Distribution for ${siteDomain}`,
+
       defaultBehavior: {
-        origin: functionOrigin,
+        origin: functionOrigin, // IAM으로 보호된 Lambda URL을 OAC를 통해 안전하게 호출
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
+
       additionalBehaviors: {
+        // [핵심 2] S3 Origin 역시, 구식 OAI가 아닌 최신 OAC를 사용하도록 정의
         '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket),
+          origin: new origins.S3Origin(assetsBucket), // CDK가 자동으로 OAC를 생성하고 버킷 정책을 구성
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
@@ -175,7 +199,8 @@ export class InfraStack extends Stack {
       },
     });
 
-    // --- 2.3. Route 53: 커스텀 도메인 연결 ---
+    // [핵심] BucketDeployment는 사용하지 않습니다.
+
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: 'blog',
       zone: hostedZone,
@@ -185,9 +210,9 @@ export class InfraStack extends Stack {
     // ===================================================================================
     // SECTION 3: 스택 출력
     // ===================================================================================
-    new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url!, description: 'HTTP API Gateway endpoint URL' });
-    new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.distributionDomainName}`, description: 'URL of the frontend CloudFront distribution' });
-    new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.distributionId, description: 'ID of the CloudFront distribution for the frontend.' });
-    new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName, description: 'Name of the S3 bucket for frontend static assets.' });
+    new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url! });
+    new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.distributionDomainName}` });
+    new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName });
+    new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.distributionId });
   }
 }

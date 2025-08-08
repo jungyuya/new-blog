@@ -1,8 +1,8 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.08-OfficialAction
-# 역할: AWS Lambda 공식 Action을 사용하여 코드 배포를 자동화하는 최종 CI/CD 파이프라인
+# 최종 버전: v2025.08.08-Masterpiece
+# 역할: "선건설, 후배송" 원칙에 입각한, 컨테이너 기반 최종 CI/CD 파이프라인
 
-name: "Deploy Full-Stack Application via AWS Lambda Action"
+name: "Build, Push, Deploy, and Sync Full-Stack Application"
 
 on:
   push:
@@ -13,21 +13,26 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # AWS 리전과 ECR 리포지토리 이름을 변수로 지정하여 재사용성과 유지보수성을 높입니다.
   AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: new-blog-frontend
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # OIDC 인증을 위해 필수
-      contents: read   # 코드 체크아웃을 위해 필수
+      id-token: write   # OIDC를 통한 AWS 인증을 위해 필수
+      contents: read    # 코드 체크아웃을 위해 필수
+      packages: write   # ECR에 이미지를 푸시하기 위해 필수
 
     steps:
-      # ================== Phase 1: 환경 설정 ==================
+      # ===================================================================================
+      # Phase 1: 환경 설정 및 의존성 설치
+      # ===================================================================================
       - name: "Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "Setup Node.js"
+      - name: "Setup Node.js v22"
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -35,50 +40,70 @@ jobs:
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
 
-      - name: "Install dependencies at root"
+      - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      # ================== Phase 2: 애플리케이션 빌드 ==================
-      # AWS Lambda Deploy Action은 내부적으로 빌드 과정을 처리하지만,
-      # 배포 전 코드 유효성 검사 및 테스트를 위해 빌드 스텝을 유지하는 것이 좋습니다.
+      # ===================================================================================
+      # Phase 2: 애플리케이션 빌드
+      # ===================================================================================
+      - name: "Build Frontend for S3 Assets"
+        run: pnpm --filter frontend run build
+
       - name: "Build Backend for Validation"
         run: pnpm --filter backend run build
 
-      - name: "Build Frontend for Validation"
-        run: pnpm --filter frontend run build
-
-      # ================== Phase 3: AWS 인증 ==================
+      # ===================================================================================
+      # Phase 3: Docker 빌드 및 ECR 푸시
+      # ===================================================================================
       - name: "Configure AWS Credentials via OIDC"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ================== Phase 4: Lambda 함수 코드 배포 ==================
-      - name: "Deploy Backend Lambda Function"
-        uses: aws-actions/aws-lambda-deploy@v1
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Define unique Image Tag"
+        id: image-def
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: "Build and push Docker image to ECR"
+        uses: docker/build-push-action@v5
         with:
-          function-name: 'blog-backend-api-BlogInfraStack'
-          source-dir: 'apps/backend/dist' # 빌드 결과물을 명시적으로 지정
+          context: .
+          file: ./apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          platforms: linux/arm64
+          provenance: false # Lambda와의 호환성을 위한 옵션
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: "Deploy Frontend Lambda Function"
-        uses: aws-actions/aws-lambda-deploy@v1
-        with:
-          function-name: 'blog-frontend-server-BlogInfraStack'
-          source-dir: 'apps/frontend'
-
-      # ================== Phase 5: 인프라 변경사항 배포 ==================
-      - name: "Deploy Infrastructure Changes via CDK"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never --outputs-file outputs.json
-
-      # ================== Phase 6: 콘텐츠 배포 (Plan B) ==================
-      - name: "Sync Static Assets to S3 (Contingency)"
+      # ===================================================================================
+      # Phase 4: 인프라 건설 (선건설)
+      # ===================================================================================
+      - name: "Deploy Infrastructure via CDK"
         run: |
-          ASSET_BUCKET_NAME=$(cat outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
-          DISTRIBUTION_ID=$(cat outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
+          pnpm --filter infra exec cdk deploy --all \
+            --require-approval never \
+            --outputs-file ./apps/infra/outputs.json \
+            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-          echo "Contingency Sync: Syncing files to bucket: $ASSET_BUCKET_NAME"
+      # ===================================================================================
+      # Phase 5: 콘텐츠 배포 (후배송)
+      # ===================================================================================
+      - name: "Sync Static Assets and Invalidate CloudFront Cache"
+        run: |
+          # 1. CDK가 발행한 "배달 증명서(outputs.json)"를 읽습니다.
+          ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
+          DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
+
+          # 2. 증명서에 적힌 정확한 주소로 "직접 배송팀(AWS CLI)"이 배송을 시작합니다.
+          echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
-          echo "Contingency Invalidation: Invalidating cache for distribution: $DISTRIBUTION_ID"
+          # 3. 배송 완료 후, 캐시를 초기화하여 새 상품이 진열되었음을 알립니다.
+          echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
