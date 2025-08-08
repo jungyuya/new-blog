@@ -269,6 +269,13 @@ export class InfraStack extends Stack {
       })
     );
 
+    serverLambda.addPermission('AllowCloudFrontInvoke', {
+      principal: new iam.ServicePrincipal('cloudfront.amazonaws.com'),
+      action: 'lambda:InvokeFunctionUrl',
+      // 이 권한이 오직 우리의 CloudFront 배포에만 적용되도록 범위를 좁힙니다.
+      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
+    });
+
     // [수정 4] Route53 A 레코드를 L1 CfnDistribution에 직접 연결하는 올바른 방법으로 수정합니다.
     new route53.CfnRecordSet(this, 'NewSiteARecord', {
       name: siteDomain,
