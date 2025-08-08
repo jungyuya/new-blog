@@ -55,21 +55,30 @@ jobs:
       # ===================================================================================
       # Phase 3: Docker 빌드 및 ECR 푸시
       # ===================================================================================
-      - name: "Configure AWS Credentials via OIDC"
+      - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "Login to Amazon ECR"
+      # [핵심 1차 추가] Docker Buildx의 고급 기능을 사용하기 위해 QEMU를 설정합니다.
+      # (다중 아키텍처 빌드 및 고급 드라이버 사용에 필요)
+      - name: "Set up QEMU"
+        uses: docker/setup-qemu-action@v3
+
+      # [핵심 2차 추가] Docker Buildx 드라이버를 캐시 기능이 지원되는 'docker-container'로 설정합니다.
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Login to ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: "Define unique Image Tag"
+      
+      - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: "Build and push Docker image to ECR"
+      
+      - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -77,9 +86,11 @@ jobs:
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
-          provenance: false # Lambda와의 호환성을 위한 옵션
+          provenance: false
+          # 이제 이 캐시 옵션들이 정상적으로 작동할 것입니다.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
 
       # ===================================================================================
       # Phase 4: 인프라 건설 (선건설)
