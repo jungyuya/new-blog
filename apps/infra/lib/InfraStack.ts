@@ -1,6 +1,6 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.08-Container-Final
-// 역할: "선건설, 후배송" 원칙에 입각한, 컨테이너 기반 최종 인프라 구성
+// 최종 버전: v2025.08.08-GrandFinale
+// 역할: 프로젝트의 모든 AWS 인프라를 정의하는, 보안과 모범 사례가 집대성된 단 하나의 진실 공급원
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
@@ -11,9 +11,8 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpApi, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -27,7 +26,7 @@ export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // [복원] CI/CD로부터 Docker 이미지 태그를 전달받기 위한 파라미터
+    // CI/CD 파이프라인으로부터 Docker 이미지 태그를 전달받기 위한 CloudFormation 파라미터
     const imageTag = new CfnParameter(this, 'ImageTag', {
       type: 'String',
       description: 'The ECR image tag to deploy for the frontend server.',
@@ -79,7 +78,8 @@ export class InfraStack extends Stack {
     });
 
     // GSI는 AWS 제약에 따라 단계적으로 생성합니다.
-    // Phase 5.6에서는 백엔드가 즉시 필요로 하는 GSI3만 활성화합니다.
+    // 현재 백엔드 코드가 전체 게시물 조회를 위해 'GSI3'를 즉시 필요로 하므로,
+    // 이번 초기 배포에서는 GSI3만 먼저 생성합니다.
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI3',
       partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
@@ -87,13 +87,7 @@ export class InfraStack extends Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // GSI1과 GSI2는 향후 기능 개발 단계(Phase 6+)에서 점진적으로 추가될 예정입니다.
-    /*
-    postsTable.addGlobalSecondaryIndex({ indexName: 'GSI1', ... });
-    postsTable.addGlobalSecondaryIndex({ indexName: 'GSI2', ... });
-    */
-
-    // --- 1.3. 백엔드 Lambda 함수 "껍데기" 정의 ---
+    // --- 1.3. 백엔드 Lambda 함수: API 비즈니스 로직 ---
     const projectRoot = path.join(__dirname, '..', '..', '..');
     const backendPackageJsonPath = path.join(projectRoot, 'apps', 'backend', 'package.json');
     const backendPackageJson = JSON.parse(fs.readFileSync(backendPackageJsonPath, 'utf8'));
@@ -116,9 +110,12 @@ export class InfraStack extends Stack {
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
         BACKEND_VERSION: backendVersion,
       },
-      tracing: lambda.Tracing.ACTIVE,
-      bundling: { minify: true, externalModules: [] },
     });
+    postsTable.grantReadWriteData(backendApiLambda);
+    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'],
+      resources: [userPool.userPoolArn],
+    }));
 
     // --- 1.4. API Gateway: 백엔드 API를 외부에 노출 ---
     const httpApi = new HttpApi(this, 'BlogHttpApiGateway', {
@@ -144,10 +141,8 @@ export class InfraStack extends Stack {
       autoDeleteObjects: true,
     });
 
-    // [복원] CI/CD가 이미지를 푸시할 ECR 리포지토리를 이름으로 참조
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
 
-    // [복원] 프론트엔드 Lambda를 DockerImageFunction으로 정의
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
       description: 'Renders the Next.js frontend application (SSR).',
@@ -159,7 +154,6 @@ export class InfraStack extends Stack {
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
         PORT: '3000',
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
-        // [핵심 수정] 누락되었던 환경 변수들을 다시 추가하여 완전성을 확보합니다.
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -167,27 +161,23 @@ export class InfraStack extends Stack {
     });
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
 
-    // [핵심 1] Function URL과 CloudFront를 OAC로 연결하는 가장 현대적이고 안전한 방법
     const functionOrigin = new origins.FunctionUrlOrigin(serverLambdaUrl);
 
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
       comment: `Distribution for ${siteDomain}`,
-
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
       defaultBehavior: {
-        origin: functionOrigin, // IAM으로 보호된 Lambda URL을 OAC를 통해 안전하게 호출
+        origin: functionOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
-
       additionalBehaviors: {
-        // [핵심 2] S3 Origin 역시, 구식 OAI가 아닌 최신 OAC를 사용하도록 정의
         '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket), // CDK가 자동으로 OAC를 생성하고 버킷 정책을 구성
+          origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
@@ -199,8 +189,6 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심] BucketDeployment는 사용하지 않습니다.
-
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: 'blog',
       zone: hostedZone,
@@ -208,11 +196,38 @@ export class InfraStack extends Stack {
     });
 
     // ===================================================================================
-    // SECTION 3: 스택 출력
+    // SECTION 3: CI/CD 파이프라인을 위한 권한 부여
     // ===================================================================================
-    new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url! });
-    new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.distributionDomainName}` });
-    new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName });
-    new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.distributionId });
+    const GITHUB_ACTIONS_ROLE_NAME_FOR_CONTENT = 'ContentDeployRole';
+    const contentDeployRole = iam.Role.fromRoleName(this, 'ContentDeployRole', GITHUB_ACTIONS_ROLE_NAME_FOR_CONTENT);
+
+    // S3 버킷에 대한 읽기/쓰기 권한을 부여합니다. (이 부분은 정상 작동)
+    assetsBucket.grantReadWrite(contentDeployRole);
+
+    // [핵심 최종 수정] CloudFront 캐시 무효화 권한을 수동으로, 그리고 명시적으로 부여합니다.
+    // distribution.grantInvalidate(contentDeployRole); // 이 메서드는 존재하지 않으므로 삭제합니다.
+
+    // 새로운 IAM 정책을 생성합니다.
+    const invalidatePolicy = new iam.Policy(this, 'InvalidatePolicy', {
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['cloudfront:CreateInvalidation'],
+          // 이 정책이 적용될 리소스, 즉 우리의 CloudFront 배포의 ARN을 정확히 지정합니다.
+          resources: [`arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`],
+        }),
+      ],
+    });
+
+    // 생성된 정책을, 우리가 참조한 contentDeployRole에 연결(attach)합니다.
+    contentDeployRole.attachInlinePolicy(invalidatePolicy);
+
+    // ===================================================================================
+    // SECTION 4: 스택 출력
+    // ===================================================================================
+    new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url!, description: 'HTTP API Gateway endpoint URL' });
+    new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.distributionDomainName}`, description: 'URL of the frontend CloudFront distribution' });
+    new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName, description: 'Name of the S3 bucket for frontend static assets.' });
+    new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.distributionId, description: 'ID of the CloudFront distribution for the frontend.' });
   }
 }
