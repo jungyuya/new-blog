@@ -11,7 +11,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpApi, HttpMethod, CorsHttpMethod, } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -96,6 +96,14 @@ export class InfraStack extends Stack {
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:Query'], resources: [`${postsTable.tableArn}/index/*`] }));
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'], resources: [userPool.userPoolArn] }));
 
+    // [핵심 1] 상세 로깅을 위한 LogGroup을 명시적으로 생성합니다.
+    const apiLogGroup = new cdk.aws_logs.LogGroup(this, 'BlogHttpApiLogs', {
+      logGroupName: `/aws/api-gateway/${this.stackName}-HttpApi`,
+      retention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    // [핵심 2] HttpApi를 먼저 생성합니다. 이때는 로깅 설정을 포함하지 않습니다.
     const httpApi = new HttpApi(this, 'BlogHttpApiGateway', {
       apiName: `BlogHttpApi-${this.stackName}`,
       corsPreflight: {
@@ -105,9 +113,27 @@ export class InfraStack extends Stack {
         allowCredentials: true,
       },
     });
+
+    // [핵심 3] 생성된 httpApi 객체에서 기본 스테이지($default)를 참조하여,
+    // 그 스테이지에 대한 로깅 설정을 별도로 추가합니다. 이것이 올바른 순서입니다.
+    const stage = httpApi.defaultStage!.node.defaultChild as cdk.aws_apigatewayv2.CfnStage;
+    stage.accessLogSettings = {
+      destinationArn: apiLogGroup.logGroupArn,
+      format: JSON.stringify({
+        requestId: '$context.requestId',
+        ip: '$context.identity.sourceIp',
+        requestTime: '$context.requestTime',
+        httpMethod: '$context.httpMethod',
+        routeKey: '$context.routeKey',
+        status: '$context.status',
+        protocol: '$context.protocol',
+        responseLength: '$context.responseLength',
+        integrationErrorMessage: '$context.integration.error',
+      }),
+    };
+
     const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', backendApiLambda);
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
-
     // ===================================================================================
     // SECTION 2: 프론트엔드 리소스 정의
     // ===================================================================================
