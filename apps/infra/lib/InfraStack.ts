@@ -159,8 +159,17 @@ export class InfraStack extends Stack {
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
-    const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
-
+    const serverLambdaUrl = serverLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+      // [추가] CORS 설정을 Function URL 수준에서도 명시적으로 허용합니다.
+      // CloudFront 외에 로컬 테스트 등 다른 환경에서의 호출 가능성을 열어둡니다.
+      cors: {
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedOrigins: ['http://localhost:3000', `https://blog.jungyu.store`],
+        allowedHeaders: ['*'],
+      }
+    });
+    
     const functionOrigin = new origins.FunctionUrlOrigin(serverLambdaUrl);
 
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
@@ -187,6 +196,14 @@ export class InfraStack extends Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
       },
+    });
+
+
+    serverLambda.addPermission('AllowCloudFrontInvoke', {
+      principal: new iam.ServicePrincipal('cloudfront.amazonaws.com'),
+      action: 'lambda:InvokeFunctionUrl',
+      // [보안 강화] sourceArn을 사용하여, 이 권한이 오직 우리의 CloudFront 배포에만 적용되도록 범위를 좁힙니다.
+      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
     });
 
     new route53.ARecord(this, 'NewSiteARecord', {
