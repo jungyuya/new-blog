@@ -73,9 +73,11 @@ jobs:
 
       - name: "Deploy Infrastructure via CDK"
         run: |
+          # [핵심 수정] --outputs-file 경로를 상대 경로가 아닌,
+          # GitHub Actions가 제공하는 절대 경로 변수 ${GITHUB_WORKSPACE}를 사용하여 지정합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
-            --outputs-file ./apps/infra/outputs.json \
+            --outputs-file ${{ github.workspace }}/apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
