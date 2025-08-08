@@ -1,19 +1,21 @@
-# 파일 위치: .github/workflows/deploy.yml
-# 수정 버전: v2025.08.08-UnifiedRole-Debug
+# 파일 위치: .github/workflows/deploy.yml (임시수정)
+# 최종 수정일: 2025년 8월 6일 0422 (Buildx 드라이버 업그레이드 적용)
+# 역할: 책임 분리 원칙 + Buildx 캐싱 최적화가 적용된 최종 파이프라인
 
-name: "Build, Push, Deploy, and Sync Full-Stack Application"
+name: "Build, Push, and Deploy Full-Stack Application"
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: new-blog-frontend
+  AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
   deploy:
@@ -27,40 +29,51 @@ jobs:
       # ===================================================================================
       # Phase 1 & 2: 환경 설정 및 애플리케이션 빌드 (변경 없음)
       # ===================================================================================
-      - name: "Checkout & Setup"
+      - name: "Checkout repository"
         uses: actions/checkout@v4
-      - name: "Setup Node.js v22"
+
+      - name: "Setup Node.js"
         uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+        with: { node-version: '22' }
+
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
+        with: { run_install: false }
+
       - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
+
+      - name: "Clean previous artifacts"
+        run: pnpm run clean
+
       - name: "Build Frontend for S3 Assets"
         run: pnpm --filter frontend run build
+
       - name: "Build Backend for Validation"
         run: pnpm --filter backend run build
 
       # ===================================================================================
-      # Phase 3 & 4: AWS 인증, 빌드, 푸시, 인프라 배포 (단일 역할 사용)
+      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (Buildx 업그레이드 적용)
       # ===================================================================================
-      - name: "Configure AWS Credentials (Unified Role)"
+      - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # [핵심 수정] 파이프라인 전체에서 단 하나의 역할만 사용합니다.
-          # 이 역할은 ECR, CDK, S3, CloudFront에 대한 모든 권한을 가지고 있어야 합니다.
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "Login to Amazon ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      
-      - name: "Define unique Image Tag"
+
+      # [핵심 수정] docker/build-push-action이 고급 캐싱 기능을 사용할 수 있도록
+      # Buildx 드라이버를 설정하는 단계를 추가합니다.
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Define Image Tag (송장 번호 생성)"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-      
+
       - name: "Build and push Docker image to ECR"
         uses: docker/build-push-action@v5
         with:
@@ -68,42 +81,21 @@ jobs:
           file: ./apps/frontend/Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/amd64
+          platforms: linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # [핵심 최종 수정] 이미지 매니페스트 출력 형식을 명시적으로 지정합니다.
+          # Lambda가 확실하게 지원하는 Docker 표준 형식(V2, Schema 2)으로 포장 규격을 고정합니다.
           provenance: false
 
-      - name: "Deploy Infrastructure via CDK"
+      # ===================================================================================
+      # Phase 4: CDK를 통한 인프라 배포 (변경 없음)
+      # ===================================================================================
+      - name: "Bootstrap CDK"
+        run: pnpm --filter infra exec cdk bootstrap
+
+      - name: "Deploy to AWS via CDK (송장 번호 전달)"
         run: |
-          # [핵심 수정] --outputs-file 경로를 상대 경로가 아닌,
-          # GitHub Actions가 제공하는 절대 경로 변수 ${GITHUB_WORKSPACE}를 사용하여 지정합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
-            --outputs-file ${{ github.workspace }}/apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
-
-      # ===================================================================================
-      # Phase 5: 콘텐츠 배포 (동일한 역할 사용)
-      # ===================================================================================
-      # [핵심 수정] 별도의 역할 전환(Configure AWS Credentials) 단계를 삭제했습니다.
-      # 바로 위에서 인증받은 동일한 역할의 권한을 그대로 이어받아 사용합니다.
-      
-      - name: "Verify Current AWS Identity"
-        run: |
-          echo "Verifying the identity for the content deployment step..."
-          aws sts get-caller-identity
-
-      - name: "Sync Static Assets and Invalidate CloudFront Cache"
-        run: |
-          ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
-          DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
-
-          # 만약 cdk deploy가 실패했다면, 여기서 파이프라인이 멈추도록 방어 코드를 추가합니다.
-          if [ "$ASSET_BUCKET_NAME" == "null" ] || [ "$DISTRIBUTION_ID" == "null" ]; then
-            echo "::error::Failed to read outputs from cdk deploy. Halting execution."
-            exit 1
-          fi
-
-          echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
-
-          echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
-          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"

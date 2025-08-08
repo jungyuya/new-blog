@@ -25,7 +25,7 @@ export default function SignUp() {
         }
 
         // URL 객체를 사용하여, base URL 끝에 /가 있든 없든 상관없이 올바른 경로를 만듭니다.
-        const apiUrl = new URL('auth/signup', apiBaseUrl).toString();
+        const apiUrl = new URL('api/auth/signup', apiBaseUrl).toString();
         console.log(`Requesting to: ${apiUrl}`);
 
         try {
