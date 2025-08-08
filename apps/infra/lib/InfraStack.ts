@@ -169,8 +169,20 @@ export class InfraStack extends Stack {
         allowedHeaders: ['*'],
       }
     });
-    
-    const functionOrigin = new origins.FunctionUrlOrigin(serverLambdaUrl);
+
+    const oac = new cloudfront.CfnOriginAccessControl(this, 'LambdaOriginAccessControl', {
+      originAccessControlConfig: {
+        name: `OAC-for-Lambda-${this.stackName}`,
+        originAccessControlOriginType: 'lambda',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+    });
+
+    // [핵심 수정 2] Lambda Origin을 생성합니다.
+    const lambdaOrigin = new origins.FunctionUrlOrigin(serverLambdaUrl);
+
+    const s3Origin = new origins.S3Origin(assetsBucket);
 
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
@@ -178,7 +190,7 @@ export class InfraStack extends Stack {
       comment: `Distribution for ${siteDomain}`,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
       defaultBehavior: {
-        origin: functionOrigin,
+        origin: lambdaOrigin, // 기본 Origin은 Lambda
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
@@ -186,25 +198,32 @@ export class InfraStack extends Stack {
       },
       additionalBehaviors: {
         '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket),
+          origin: s3Origin, // 정적 파일은 S3 Origin
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/assets/*': {
-          origin: new origins.S3Origin(assetsBucket),
+          origin: s3Origin, // 에셋 파일도 S3 Origin
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
       },
     });
 
+    // [핵심 수정 4] 생성된 Distribution(L2)의 내부 CfnDistribution(L1) 속성을 직접 덮어씁니다.
+    // 이것이 바로 L2 구성 요소에 L1의 세부 설정을 주입하는 정석적인 방법입니다.
+    const cfnDistribution = distribution.node.defaultChild as cloudfront.CfnDistribution;
 
-    serverLambda.addPermission('AllowCloudFrontInvoke', {
-      principal: new iam.ServicePrincipal('cloudfront.amazonaws.com'),
-      action: 'lambda:InvokeFunctionUrl',
-      // [보안 강화] sourceArn을 사용하여, 이 권한이 오직 우리의 CloudFront 배포에만 적용되도록 범위를 좁힙니다.
-      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
-    });
+    // Lambda Origin에 OAC ID를 설정합니다. (Origin 목록의 첫 번째가 Lambda Origin)
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.0.OriginAccessControlId', oac.attrId);
+
+    // S3 Origin에는 OAC를 사용하지 않으므로, 명시적으로 빈 문자열로 설정하여 OAI와의 혼동을 방지합니다.
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.1.OriginAccessControlId', '');
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.2.OriginAccessControlId', '');
+
+    // S3 Origin에 대해서는 기존의 OAI를 사용하지 않도록 S3OriginConfig를 제거합니다.
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.1.S3OriginConfig.OriginAccessIdentity', '');
+    cfnDistribution.addPropertyOverride('DistributionConfig.Origins.2.S3OriginConfig.OriginAccessIdentity', '');
 
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: 'blog',
