@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'apps/infra/**'
 
 concurrency:
   group: ${{ github.ref }}

@@ -28,7 +28,7 @@ jobs:
         # [수정] pnpm/action-setup@v4는 node 설치를 포함하므로 setup-node 불필요
         uses: pnpm/action-setup@v4
         with:
-          version: 10 # pnpm 버전 명시
+
           run_install: |
             - recursive: true
               args: [--frozen-lockfile]

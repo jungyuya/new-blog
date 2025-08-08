@@ -11,6 +11,10 @@ export default function SignUp() {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
+        console.log("--- DEBUG ---");
+        console.log("NEXT_PUBLIC_API_ENDPOINT:", process.env.NEXT_PUBLIC_API_ENDPOINT);
+        console.log("--- END DEBUG ---");
+
         e.preventDefault();
         setIsLoading(true);
         setError(null);
