@@ -92,9 +92,17 @@ jobs:
       # Phase 4: CDK를 통한 인프라 배포 (변경 없음)
       # ===================================================================================
       - name: "Bootstrap CDK"
-        run: pnpm --filter infra exec cdk bootstrap
+        run: pnpm --filter infra exec cdk bootstrap --region ${{ env.AWS_REGION }}
 
-      - name: "Deploy to AWS via CDK (송장 번호 전달)"
+      # [핵심 디버깅 단계 추가]
+      # cdk deploy를 실행하기 전에, S3에 업로드될 파일들이
+      # 정말로 존재하는지, 어떤 파일들이 있는지 직접 확인합니다.
+      - name: "Verify Frontend Build Artifacts"
+        run: |
+          echo "Listing contents of apps/frontend/.next/static directory:"
+          ls -laR apps/frontend/.next/static
+
+      - name: "Deploy to AWS via CDK"
         run: |
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
