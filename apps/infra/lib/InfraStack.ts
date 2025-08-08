@@ -114,6 +114,7 @@ export class InfraStack extends Stack {
       },
     });
 
+
     // [핵심 3] 생성된 httpApi 객체에서 기본 스테이지($default)를 참조하여,
     // 그 스테이지에 대한 로깅 설정을 별도로 추가합니다. 이것이 올바른 순서입니다.
     const stage = httpApi.defaultStage!.node.defaultChild as cdk.aws_apigatewayv2.CfnStage;
@@ -219,6 +220,15 @@ export class InfraStack extends Stack {
       distributionPaths: ['/_next/static/*'],
     });
     deployment.node.addDependency(distribution);
+
+    serverLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      // HttpApi에 대한 호출 권한의 정확한 이름입니다.
+      actions: ['execute-api:Invoke'],
+      // 모든 경로(*)의 모든 메서드(*)를 호출할 수 있도록 하되,
+      // 오직 이 httpApi에 대해서만 권한을 부여합니다.
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${httpApi.apiId}/*`],
+    }));
 
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: siteDomain,
