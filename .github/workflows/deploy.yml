@@ -1,6 +1,6 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.08-SelfSufficient
-# 역할: 외부 의존성을 최소화하고, 가장 안정적인 방식으로 컨테이너를 빌드하고 배포한다.
+# 최종 버전: v2025.08.08-AdaptToEnvironment
+# 역할: x86_64 아키텍처로 통일된, 가장 단순하고 안정적인 최종 CI/CD 파이프라인
 
 name: "Build, Push, Deploy, and Sync Full-Stack Application"
 
@@ -50,7 +50,8 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
       
-      # [핵심] Docker Hub 로그인 및 고급 Buildx 설정 없이, 가장 기본적인 방식으로 빌드합니다.
+      # [핵심] 모든 고급 설정(QEMU, Buildx, Docker Hub Login, platforms, cache)을 제거하고,
+      # Runner의 기본 환경을 사용하여 가장 단순하고 안정적으로 빌드합니다.
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
@@ -58,7 +59,6 @@ jobs:
           file: ./apps/frontend/Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/arm64
           provenance: false
 
       # ================== Phase 4 & 5: 인프라 건설 및 콘텐츠 배포 ==================
