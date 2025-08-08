@@ -97,13 +97,9 @@ jobs:
       # [핵심 디버깅 단계 추가]
       # cdk deploy를 실행하기 전에, S3에 업로드될 파일들이
       # 정말로 존재하는지, 어떤 파일들이 있는지 직접 확인합니다.
-      - name: "Verify Frontend Build Artifacts"
-        run: |
-          echo "Listing contents of apps/frontend/.next/static directory:"
-          ls -laR apps/frontend/.next/static
-
-      - name: "Deploy to AWS via CDK"
+      - name: "Deploy Infrastructure via CDK"
         run: |
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
+            --verbose \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
