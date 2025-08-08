@@ -302,7 +302,7 @@ export class InfraStack extends Stack {
       ],
     });
 
-    // 생성된 정책을, 우리가 참조한 contentDeployRole에 연결(attach)합니다.
+    // 생성된 정책을, 우리가 참조한 contentDeployRole에 연결(attach) 합니다.
     contentDeployRole.attachInlinePolicy(invalidatePolicy);
 
     // ===================================================================================
