@@ -25,13 +25,16 @@ jobs:
         uses: actions/checkout@v4
 
       - name: "Setup Node.js & pnpm"
-        # [수정] pnpm/action-setup@v4는 node 설치를 포함하므로 setup-node 불필요
         uses: pnpm/action-setup@v4
         with:
 
           run_install: |
             - recursive: true
               args: [--frozen-lockfile]
+
+
+      - name: "Build Frontend for S3 Assets"
+        run: pnpm --filter frontend run build
 
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
@@ -41,9 +44,6 @@ jobs:
 
       - name: "Deploy to AWS via CDK"
         run: |
-          # [핵심] ImageTag 파라미터는 'infra-only'와 같은 고정된 더미 값으로 전달합니다.
-          # 이 워크플로우는 Lambda 이미지를 바꾸는 목적이 아니므로,
-          # CDK가 파라미터 부재로 오류를 일으키지 않도록만 합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
             --parameters ImageTag=infra-only-deploy
