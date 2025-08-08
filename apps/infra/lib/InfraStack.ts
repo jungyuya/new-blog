@@ -157,7 +157,7 @@ export class InfraStack extends Stack {
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.X86_64,
       environment: {
-        AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
+        // AWS_LAMBDA_EXEC_WRAPPER는 더 이상 필요 없으므로 삭제합니다.
         PORT: '3000',
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
