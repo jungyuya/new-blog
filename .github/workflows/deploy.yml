@@ -61,17 +61,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "Set up QEMU"
-        uses: docker/setup-qemu-action@v3
-      - name: "Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v3
-
-      # [핵심 추가] Docker Hub에 로그인하여 Rate Limiting 문제를 회피합니다.
-      - name: "Login to Docker Hub"
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # [핵심 수정] 고급 빌드 환경 설정을 모두 제거합니다.
+      # - name: "Set up QEMU" ...
+      # - name: "Set up Docker Buildx" ...
+      # - name: "Login to Docker Hub" ...
 
       - name: "Login to ECR"
         id: login-ecr
@@ -79,7 +72,7 @@ jobs:
       
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
       
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
@@ -90,9 +83,9 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          # 이제 이 캐시 옵션들이 정상적으로 작동할 것입니다.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # [핵심 수정] 캐시 관련 옵션을 모두 제거하여, 기본 드라이버와의 충돌을 피합니다.
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
 
 
       # ===================================================================================
