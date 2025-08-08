@@ -6,7 +6,7 @@
 # STAGE 1: Builder
 # ===================================================================================
 # [핵심] pnpm/pnpm 대신, 가장 표준적인 공식 node 이미지를 사용합니다.
-FROM --platform=linux/arm64 node:22-alpine AS builder
+FROM node:22-alpine AS builder
 
 # 작업 디렉토리를 설정합니다.
 WORKDIR /app
