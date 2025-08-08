@@ -1,4 +1,4 @@
-// apps/frontend/src/components/SignUp.tsx (신규 생성)
+// apps/frontend/src/components/SignUp.tsx 
 'use client';
 
 import { useState } from 'react';
@@ -16,35 +16,37 @@ export default function SignUp() {
         setError(null);
         setSuccess(null);
 
-        const apiUrl = `${process.env.NEXT_PUBLIC_API_ENDPOINT}auth/signup`;
-        console.log(`Requesting to: ${apiUrl}`); // 디버깅을 위한 로그 추가
-      
+        // [핵심] 환경 변수에서 백엔드의 "진짜 주소"를 가져옵니다.
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_ENDPOINT;
+        if (!apiBaseUrl) {
+            setError('API 엔드포인트가 설정되지 않았습니다.');
+            setIsLoading(false);
+            return;
+        }
+
+        // URL 객체를 사용하여, base URL 끝에 /가 있든 없든 상관없이 올바른 경로를 만듭니다.
+        const apiUrl = new URL('auth/signup', apiBaseUrl).toString();
+        console.log(`Requesting to: ${apiUrl}`);
+
         try {
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                // 백엔드(Hono)에서 보낸 에러 메시지를 사용자에게 보여줍니다.
                 throw new Error(data.message || '회원가입에 실패했습니다.');
             }
 
             setSuccess('회원가입에 성공했습니다! 이메일을 확인하여 계정을 활성화해주세요.');
 
-        } catch (err) { // [핵심 수정] (err: any) 에서 (err)로 변경
-            // TypeScript는 catch 블록의 에러를 기본적으로 'unknown' 타입으로 간주합니다.
-            // 이것이 'any'보다 안전한 타입입니다.
-            // err가 Error 객체인지 확인하고, 그렇다면 message 속성을 사용합니다.
+        } catch (err) {
             if (err instanceof Error) {
                 setError(err.message);
             } else {
-                // 에러가 Error 객체가 아닌 경우 (예: 문자열이 throw된 경우)
                 setError('알 수 없는 오류가 발생했습니다.');
             }
         } finally {

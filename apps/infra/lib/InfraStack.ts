@@ -121,11 +121,12 @@ export class InfraStack extends Stack {
       autoDeleteObjects: true,
     });
 
-    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
+    const oai = new cloudfront.OriginAccessIdentity(this, 'BlogOAI');
+    assetsBucket.grantRead(oai);
 
+    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      description: 'Renders the Next.js frontend application (SSR).',
       code: lambda.DockerImageCode.fromEcr(ecrRepository, { tagOrDigest: imageTag.valueAsString }),
       memorySize: 1024,
       timeout: Duration.seconds(30),
@@ -133,30 +134,21 @@ export class InfraStack extends Stack {
       environment: {
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
         PORT: '3000',
+        // [핵심] 프론트엔드가 백엔드의 "진짜 주소"를 알게 합니다.
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
-    cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic');
-    cdk.Tags.of(serverLambda).add('Tier', 'Frontend');
-    assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    const oai = new cloudfront.OriginAccessIdentity(this, 'BlogOAI', {
-      comment: `OAI for ${siteDomain}`,
-    });
-    assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
-      actions: ['s3:GetObject'],
-      resources: [assetsBucket.arnForObjects('*')],
-      principals: [oai.grantPrincipal],
-    }));
-
+    // [핵심] CloudFront는 이제 오직 프론트엔드 세상만 책임집니다.
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
+      // 기본 동작: 모든 요청은 기본적으로 프론트엔드 Lambda 서버로 갑니다.
       defaultBehavior: {
         origin: new origins.HttpOrigin(cdk.Fn.parseDomainName(serverLambdaUrl.url)),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -164,6 +156,7 @@ export class InfraStack extends Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
+      // 추가 동작: 정적 에셋 요청만 S3로 보냅니다. API 경로는 더 이상 여기서 처리하지 않습니다.
       additionalBehaviors: {
         '/_next/static/*': {
           origin: new origins.S3Origin(assetsBucket, { originAccessIdentity: oai }),
@@ -174,13 +167,6 @@ export class InfraStack extends Stack {
           origin: new origins.S3Origin(assetsBucket, { originAccessIdentity: oai }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-        '/api/*': {
-          origin: new origins.HttpOrigin(cdk.Fn.parseDomainName(httpApi.url!)),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         },
       },
     });
