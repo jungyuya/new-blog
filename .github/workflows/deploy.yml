@@ -95,7 +95,7 @@ jobs:
       - name: "Configure AWS Credentials for Content Deploy"
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # [핵심] "배송팀 비자" (S3/CloudFront 권한)로 역할을 교체합니다.
+          # [핵심] "배송팀 비자"  (S3/CloudFront 권한)로 역할을 교체합니다.
           role-to-assume: ${{ secrets.AWS_ROLE_FOR_CONTENT_DEPLOY }}
           aws-region: ${{ env.AWS_REGION }}
 
