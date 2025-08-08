@@ -174,7 +174,7 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심 1] Lambda와 S3를 위한 OAC를 각각 L1 수준에서 명확하게 생성합니다.
+    // [수정 1] Lambda와 S3를 위한 OAC를 각각 L1 수준에서 명확하게 생성합니다.
     const lambdaOac = new cloudfront.CfnOriginAccessControl(this, 'LambdaOAC', {
       originAccessControlConfig: {
         name: `OAC-for-Lambda-${this.stackName}`,
@@ -193,7 +193,7 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심 2] CloudFront 배포 전체를 L1 Construct인 CfnDistribution으로 직접 정의합니다.
+    // [수정 2] CloudFront 배포 전체를 L1 Construct인 CfnDistribution으로 직접 정의합니다.
     const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
       distributionConfig: {
         comment: `Distribution for ${siteDomain}`,
@@ -255,7 +255,7 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심 3] S3 버킷 정책을 'distribution'이 선언된 후에 추가하여 순서 문제를 해결합니다.
+    // [수정 3] S3 버킷 정책을 'distribution'이 선언된 후에 추가하여 순서 문제를 해결합니다.
     assetsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -263,20 +263,22 @@ export class InfraStack extends Stack {
         resources: [assetsBucket.arnForObjects('*')],
         principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
         conditions: {
-          // [핵심 4] L1 distribution의 ID는 .ref로 올바르게 참조합니다.
+          // L1 distribution의 ID는 .ref로 올바르게 참조합니다.
           StringEquals: { 'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}` },
         },
       })
     );
 
-    new route53.ARecord(this, 'NewSiteARecord', {
-      recordName: 'blog',
-      zone: hostedZone,
-      // [핵심 5] L1 Distribution의 속성을 사용하여 Route53 별칭 레코드를 올바르게 생성합니다.
-      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget({
-        distributionDomainName: distribution.attrDomainName,
-        distributionId: distribution.ref,
-      } as any)),
+    // [수정 4] Route53 A 레코드를 L1 CfnDistribution에 직접 연결하는 올바른 방법으로 수정합니다.
+    new route53.CfnRecordSet(this, 'NewSiteARecord', {
+      name: siteDomain,
+      type: 'A',
+      hostedZoneId: hostedZone.hostedZoneId,
+      aliasTarget: {
+        // CloudFront의 공식 Hosted Zone ID는 상수 값입니다.
+        hostedZoneId: 'Z2FDTNDATAQYW2',
+        dnsName: distribution.attrDomainName,
+      },
     });
 
     // ===================================================================================
@@ -294,7 +296,7 @@ export class InfraStack extends Stack {
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: ['cloudfront:CreateInvalidation'],
-          // [핵심 6] L1 distribution의 ARN을 올바르게 구성합니다.
+          // [수정 5] L1 distribution의 ARN을 올바르게 구성합니다.
           resources: [`arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`],
         }),
       ],
@@ -307,7 +309,7 @@ export class InfraStack extends Stack {
     // SECTION 4: 스택 출력
     // ===================================================================================
     new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url!, description: 'HTTP API Gateway endpoint URL' });
-    // [핵심 7] L1 distribution의 속성을 올바르게 참조합니다.
+    // [수정 6] L1 distribution의 속성을 올바르게 참조합니다.
     new CfnOutput(this, 'FrontendURL', { value: `https://${distribution.attrDomainName}`, description: 'URL of the frontend CloudFront distribution' });
     new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName, description: 'Name of the S3 bucket for frontend static assets.' });
     new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.ref, description: 'ID of the CloudFront distribution for the frontend.' });
