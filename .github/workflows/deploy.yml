@@ -1,6 +1,6 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.08-Masterpiece
-# 역할: "선건설, 후배송" 원칙에 입각한, 컨테이너 기반 최종 CI/CD 파이프라인
+# 최종 버전: v2025.08.08-TotalRecall
+# 역할: 모든 교훈을 담은, 컨테이너 기반 "선건설, 후배송" 최종 CI/CD 파이프라인
 
 name: "Build, Push, Deploy, and Sync Full-Stack Application"
 
@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # AWS 리전과 ECR 리포지토리 이름을 변수로 지정하여 재사용성과 유지보수성을 높입니다.
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: new-blog-frontend
 
@@ -21,50 +20,38 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # OIDC를 통한 AWS 인증을 위해 필수
-      contents: read    # 코드 체크아웃을 위해 필수
-      packages: write   # ECR에 이미지를 푸시하기 위해 필수
+      id-token: write
+      contents: read
+      packages: write
 
     steps:
-      # ===================================================================================
-      # Phase 1: 환경 설정 및 의존성 설치
-      # ===================================================================================
-      - name: "Checkout repository"
+      # ================== Phase 1 & 2: 설정 및 빌드 ==================
+      - name: "Checkout & Setup"
         uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter frontend run build
+      - run: pnpm --filter backend run build
 
-      - name: "Setup Node.js v22"
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: "Setup pnpm"
-        uses: pnpm/action-setup@v4
-
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
-
-      # ===================================================================================
-      # Phase 2: 애플리케이션 빌드
-      # ===================================================================================
-      - name: "Build Frontend for S3 Assets"
-        run: pnpm --filter frontend run build
-
-      - name: "Build Backend for Validation"
-        run: pnpm --filter backend run build
-
-      # ===================================================================================
-      # Phase 3: Docker 빌드 및 ECR 푸시
-      # ===================================================================================
+      # ================== Phase 3: Docker 빌드 및 ECR 푸시 ==================
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # [핵심 수정] 고급 빌드 환경 설정을 모두 제거합니다.
-      # - name: "Set up QEMU" ...
-      # - name: "Set up Docker Buildx" ...
-      # - name: "Login to Docker Hub" ...
+      # [복원] Docker Hub 인증 문제를 해결하기 위한 필수 스텝들
+      - name: "Set up QEMU"
+        uses: docker/setup-qemu-action@v3
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+      - name: "Login to Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: "Login to ECR"
         id: login-ecr
@@ -72,7 +59,7 @@ jobs:
       
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
       
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
@@ -83,14 +70,10 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          # [핵심 수정] 캐시 관련 옵션을 모두 제거하여, 기본 드라이버와의 충돌을 피합니다.
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-
-      # ===================================================================================
-      # Phase 4: 인프라 건설 (선건설)
-      # ===================================================================================
+      # ================== Phase 4: 인프라 건설 (선건설) ==================
       - name: "Deploy Infrastructure via CDK"
         run: |
           pnpm --filter infra exec cdk deploy --all \
@@ -98,19 +81,10 @@ jobs:
             --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      # ===================================================================================
-      # Phase 5: 콘텐츠 배포 (후배송)
-      # ===================================================================================
-      - name: "Sync Static Assets and Invalidate CloudFront Cache"
+      # ================== Phase 5: 콘텐츠 배포 (후배송) ==================
+      - name: "Sync Assets and Invalidate Cache"
         run: |
-          # 1. CDK가 발행한 "배달 증명서(outputs.json)"를 읽습니다.
           ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
           DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
-
-          # 2. 증명서에 적힌 정확한 주소로 "직접 배송팀(AWS CLI)"이 배송을 시작합니다.
-          echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
-
-          # 3. 배송 완료 후, 캐시를 초기화하여 새 상품이 진열되었음을 알립니다.
-          echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
