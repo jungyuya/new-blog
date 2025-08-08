@@ -1,0 +1,49 @@
+# 파일 위치: .github/workflows/deploy-infra.yml
+# 역할: 오직 인프라 변경사항만을 '수동으로' 신속하게 배포하는 워크플로우
+
+name: "Manual Deploy Infrastructure"
+
+on:
+  workflow_dispatch: # [핵심] 수동 실행을 가능하게 합니다.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Setup Node.js & pnpm"
+        # [수정] pnpm/action-setup@v4는 node 설치를 포함하므로 setup-node 불필요
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10 # pnpm 버전 명시
+          run_install: |
+            - recursive: true
+              args: [--frozen-lockfile]
+
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "Deploy to AWS via CDK"
+        run: |
+          # [핵심] ImageTag 파라미터는 'infra-only'와 같은 고정된 더미 값으로 전달합니다.
+          # 이 워크플로우는 Lambda 이미지를 바꾸는 목적이 아니므로,
+          # CDK가 파라미터 부재로 오류를 일으키지 않도록만 합니다.
+          pnpm --filter infra exec cdk deploy --all \
+            --require-approval never \
+            --parameters ImageTag=infra-only-deploy
