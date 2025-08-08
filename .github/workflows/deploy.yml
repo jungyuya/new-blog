@@ -1,6 +1,6 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.08-TotalRecall
-# 역할: 모든 교훈을 담은, 컨테이너 기반 "선건설, 후배송" 최종 CI/CD 파이프라인
+# 최종 버전: v2025.08.08-SelfSufficient
+# 역할: 외부 의존성을 최소화하고, 가장 안정적인 방식으로 컨테이너를 빌드하고 배포한다.
 
 name: "Build, Push, Deploy, and Sync Full-Stack Application"
 
@@ -42,25 +42,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # [복원] Docker Hub 인증 문제를 해결하기 위한 필수 스텝들
-      - name: "Set up QEMU"
-        uses: docker/setup-qemu-action@v3
-      - name: "Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v3
-      - name: "Login to Docker Hub"
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: "Login to ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
       
+      # [핵심] Docker Hub 로그인 및 고급 Buildx 설정 없이, 가장 기본적인 방식으로 빌드합니다.
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
@@ -70,10 +60,8 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      # ================== Phase 4: 인프라 건설 (선건설) ==================
+      # ================== Phase 4 & 5: 인프라 건설 및 콘텐츠 배포 ==================
       - name: "Deploy Infrastructure via CDK"
         run: |
           pnpm --filter infra exec cdk deploy --all \
@@ -81,7 +69,6 @@ jobs:
             --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      # ================== Phase 5: 콘텐츠 배포 (후배송) ==================
       - name: "Sync Assets and Invalidate Cache"
         run: |
           ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
