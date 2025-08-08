@@ -1,6 +1,8 @@
-# .github/workflows/deploy.yml (새로운 Action을 위한 최종본)
+# 파일 위치: .github/workflows/deploy.yml
+# 최종 버전: v2025.08.08-OfficialAction
+# 역할: AWS Lambda 공식 Action을 사용하여 코드 배포를 자동화하는 최종 CI/CD 파이프라인
 
-name: "Deploy Full-Stack Application to AWS"
+name: "Deploy Full-Stack Application via AWS Lambda Action"
 
 on:
   push:
@@ -17,54 +19,66 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      id-token: write # OIDC 인증을 위해 필수
+      contents: read   # 코드 체크아웃을 위해 필수
 
     steps:
       # ================== Phase 1: 환경 설정 ==================
       - name: "Checkout repository"
         uses: actions/checkout@v4
+
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with:
+          node-version: '22'
+
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
-      # [핵심] pnpm install은 이제 각 Action 내부에서 처리될 수 있으므로,
-      # 루트에서의 설치는 선택사항이 됩니다. 하지만 일관성을 위해 유지합니다.
+
       - name: "Install dependencies at root"
         run: pnpm install --frozen-lockfile
 
-      # ================== Phase 2: AWS 인증 ==================
+      # ================== Phase 2: 애플리케이션 빌드 ==================
+      # AWS Lambda Deploy Action은 내부적으로 빌드 과정을 처리하지만,
+      # 배포 전 코드 유효성 검사 및 테스트를 위해 빌드 스텝을 유지하는 것이 좋습니다.
+      - name: "Build Backend for Validation"
+        run: pnpm --filter backend run build
+
+      - name: "Build Frontend for Validation"
+        run: pnpm --filter frontend run build
+
+      # ================== Phase 3: AWS 인증 ==================
       - name: "Configure AWS Credentials via OIDC"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ================== Phase 3: 백엔드 배포 ==================
-      # [핵심] 백엔드 배포는 새로운 공식 Action을 사용합니다.
+      # ================== Phase 4: Lambda 함수 코드 배포 ==================
       - name: "Deploy Backend Lambda Function"
-        uses: aws-actions/lambda-deploy@v1 # (이름은 공식 문서에 따라 최종 확정)
+        uses: aws-actions/aws-lambda-deploy@v1
         with:
           function-name: 'blog-backend-api-BlogInfraStack'
-          source-dir: 'apps/backend'
-          # Action이 pnpm 모노레포를 자동으로 감지하고 처리해 줄 것입니다.
+          source-dir: 'apps/backend/dist' # 빌드 결과물을 명시적으로 지정
 
-      # ================== Phase 4: 프론트엔드 배포 ==================
-      # [핵심] 프론트엔드 배포도 새로운 공식 Action을 사용합니다.
-      - name: "Deploy Frontend Lambda Function & Static Assets"
-        uses: aws-actions/lambda-deploy@v1
+      - name: "Deploy Frontend Lambda Function"
+        uses: aws-actions/aws-lambda-deploy@v1
         with:
           function-name: 'blog-frontend-server-BlogInfraStack'
           source-dir: 'apps/frontend'
-          # Action은 Next.js 프로젝트임을 감지하고,
-          # 1. Lambda용 Zip 패키지를 만들고,
-          # 2. .next/static 폴더의 내용을 S3에 업로드하고,
-          # 3. CloudFront 캐시를 무효화하는 모든 작업을 자동으로 처리할 것입니다.
-          # (S3 버킷 이름 등은 Lambda 함수의 환경 변수나 태그를 통해 찾아낼 것입니다.)
 
       # ================== Phase 5: 인프라 변경사항 배포 ==================
-      # [핵심] Lambda 코드 배포와 인프라 배포를 분리합니다.
-      # 코드 변경이 아닌, InfraStack.ts의 변경사항만 있을 때를 대비한 단계입니다.
-      - name: "Deploy Infrastructure Changes via CDK (if any)"
-        run: pnpm --filter infra exec cdk deploy --all --require-approval never
+      - name: "Deploy Infrastructure Changes via CDK"
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never --outputs-file outputs.json
+
+      # ================== Phase 6: 콘텐츠 배포 (Plan B) ==================
+      - name: "Sync Static Assets to S3 (Contingency)"
+        run: |
+          ASSET_BUCKET_NAME=$(cat outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
+          DISTRIBUTION_ID=$(cat outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
+
+          echo "Contingency Sync: Syncing files to bucket: $ASSET_BUCKET_NAME"
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+
+          echo "Contingency Invalidation: Invalidating cache for distribution: $DISTRIBUTION_ID"
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
