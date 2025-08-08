@@ -8,9 +8,7 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'apps/infra/**'
-      - '.github/workflows/deploy-infra.yml'
+
 
 concurrency:
   group: ${{ github.ref }}

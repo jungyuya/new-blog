@@ -1,6 +1,6 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.08-TheOneTruth-v2
-// 역할: Phase 5.6을 위한 가장 안정적이고 표준적인 최종 인프라 구성
+// 최종 버전: v2025.08.09-TheUltimateMasterpiece
+// 역할: 모든 디버깅의 교훈을 담아 완성한, 안정성과 명확성을 최우선으로 하는 최종 인프라 구성
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
@@ -11,7 +11,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { HttpApi, HttpMethod, CorsHttpMethod, } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -23,6 +23,7 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs'; // aws_logs 모듈 import 추가
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -96,14 +97,6 @@ export class InfraStack extends Stack {
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:Query'], resources: [`${postsTable.tableArn}/index/*`] }));
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'], resources: [userPool.userPoolArn] }));
 
-    // [핵심 1] 상세 로깅을 위한 LogGroup을 명시적으로 생성합니다.
-    const apiLogGroup = new cdk.aws_logs.LogGroup(this, 'BlogHttpApiLogs', {
-      logGroupName: `/aws/api-gateway/${this.stackName}-HttpApi`,
-      retention: cdk.aws_logs.RetentionDays.ONE_WEEK,
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
-
-    // [핵심 2] HttpApi를 먼저 생성합니다. 이때는 로깅 설정을 포함하지 않습니다.
     const httpApi = new HttpApi(this, 'BlogHttpApiGateway', {
       apiName: `BlogHttpApi-${this.stackName}`,
       corsPreflight: {
@@ -114,27 +107,9 @@ export class InfraStack extends Stack {
       },
     });
 
-
-    // [핵심 3] 생성된 httpApi 객체에서 기본 스테이지($default)를 참조하여,
-    // 그 스테이지에 대한 로깅 설정을 별도로 추가합니다. 이것이 올바른 순서입니다.
-    const stage = httpApi.defaultStage!.node.defaultChild as cdk.aws_apigatewayv2.CfnStage;
-    stage.accessLogSettings = {
-      destinationArn: apiLogGroup.logGroupArn,
-      format: JSON.stringify({
-        requestId: '$context.requestId',
-        ip: '$context.identity.sourceIp',
-        requestTime: '$context.requestTime',
-        httpMethod: '$context.httpMethod',
-        routeKey: '$context.routeKey',
-        status: '$context.status',
-        protocol: '$context.protocol',
-        responseLength: '$context.responseLength',
-        integrationErrorMessage: '$context.integration.error',
-      }),
-    };
-
     const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', backendApiLambda);
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
+
     // ===================================================================================
     // SECTION 2: 프론트엔드 리소스 정의
     // ===================================================================================
@@ -171,15 +146,6 @@ export class InfraStack extends Stack {
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    const oai = new cloudfront.OriginAccessIdentity(this, 'BlogOAI', {
-      comment: `OAI for ${siteDomain}`,
-    });
-    assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
-      actions: ['s3:GetObject'],
-      resources: [assetsBucket.arnForObjects('*')],
-      principals: [oai.grantPrincipal],
-    }));
-
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
@@ -193,12 +159,12 @@ export class InfraStack extends Stack {
       },
       additionalBehaviors: {
         '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket, { originAccessIdentity: oai }),
+          origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/assets/*': {
-          origin: new origins.S3Origin(assetsBucket, { originAccessIdentity: oai }),
+          origin: new origins.S3Origin(assetsBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
@@ -223,10 +189,7 @@ export class InfraStack extends Stack {
 
     serverLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      // HttpApi에 대한 호출 권한의 정확한 이름입니다.
       actions: ['execute-api:Invoke'],
-      // 모든 경로(*)의 모든 메서드(*)를 호출할 수 있도록 하되,
-      // 오직 이 httpApi에 대해서만 권한을 부여합니다.
       resources: [`arn:aws:execute-api:${this.region}:${this.account}:${httpApi.apiId}/*`],
     }));
 
@@ -236,9 +199,9 @@ export class InfraStack extends Stack {
       target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
     });
 
-    // ==================================================================================
+    // ===================================================================================
     // SECTION 3: 스택 출력 및 모니터링
-    // ==================================================================================
+    // ===================================================================================
     new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url!, description: 'HTTP API Gateway endpoint URL' });
     new CfnOutput(this, 'UserPoolIdOutput', { value: userPool.userPoolId, description: 'Cognito User Pool ID' });
     new CfnOutput(this, 'UserPoolClientIdOutput', { value: userPoolClient.userPoolClientId, description: 'Cognito User Pool App Client ID' });
