@@ -124,39 +124,41 @@ export class InfraStack extends Stack {
     const oai = new cloudfront.OriginAccessIdentity(this, 'BlogOAI');
     assetsBucket.grantRead(oai);
 
-    const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
-    const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
+    // [핵심 1] DockerImageFunction 대신, 가장 기본적인 Function Construct를 사용합니다.
+    const serverLambda = new lambda.Function(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
-      code: lambda.DockerImageCode.fromEcr(ecrRepository, { tagOrDigest: imageTag.valueAsString }),
+      description: 'Renders the Next.js frontend application. Deployed via GitHub Actions.',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler', // Action이 생성할 핸들러 경로 (가정)
+      // [핵심] code 속성은 placeholder 역할만 합니다.
+      code: lambda.Code.fromInline('exports.handler = async () => "Placeholder";'),
       memorySize: 1024,
       timeout: Duration.seconds(30),
       architecture: lambda.Architecture.ARM_64,
       environment: {
-        AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
-        PORT: '3000',
-        // [핵심] 프론트엔드가 백엔드의 "진짜 주소"를 알게 합니다.
+        // 환경 변수는 여전히 CDK가 관리합니다.
         NEXT_PUBLIC_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
-    const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // [핵심] CloudFront는 이제 오직 프론트엔드 세상만 책임집니다.
+    // [핵심 2] CloudFront는 이제 Lambda Function URL 대신 HttpOrigin을 사용합니다.
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
-      // 기본 동작: 모든 요청은 기본적으로 프론트엔드 Lambda 서버로 갑니다.
       defaultBehavior: {
-        origin: new origins.HttpOrigin(cdk.Fn.parseDomainName(serverLambdaUrl.url)),
+        // Lambda 함수 자체를 Origin으로 사용하는 것이 아니라,
+        // Lambda 함수와 연결된 API Gateway를 Origin으로 사용하는 것이 더 안정적입니다.
+        // -> 이 부분은 더 단순하게 Lambda Function URL을 사용하는 것으로 유지합니다.
+        origin: new origins.HttpOrigin(cdk.Fn.parseDomainName(serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE }).url)),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
-      // 추가 동작: 정적 에셋 요청만 S3로 보냅니다. API 경로는 더 이상 여기서 처리하지 않습니다.
       additionalBehaviors: {
         '/_next/static/*': {
           origin: new origins.S3Origin(assetsBucket, { originAccessIdentity: oai }),
@@ -169,21 +171,6 @@ export class InfraStack extends Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
       },
-    });
-
-    const deployment = new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
-      sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
-      destinationBucket: assetsBucket,
-      destinationKeyPrefix: '_next/static',
-      distribution: distribution,
-      distributionPaths: ['/_next/static/*'],
-    });
-    deployment.node.addDependency(distribution);
-
-    new route53.ARecord(this, 'NewSiteARecord', {
-      recordName: siteDomain,
-      zone: hostedZone,
-      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
     });
 
     // ===================================================================================

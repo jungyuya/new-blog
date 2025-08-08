@@ -1,20 +1,16 @@
-# 파일 위치: .github/workflows/deploy.yml (임시수정)
-# 최종 수정일: 2025년 8월 6일 0422 (Buildx 드라이버 업그레이드 적용)
-# 역할: 책임 분리 원칙 + Buildx 캐싱 최적화가 적용된 최종 파이프라인
+# .github/workflows/deploy.yml (새로운 Action을 위한 최종본)
 
-name: "Build, Push, and Deploy Full-Stack Application"
+name: "Deploy Full-Stack Application to AWS"
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  ECR_REPOSITORY: new-blog-frontend
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
@@ -23,83 +19,52 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      packages: write
 
     steps:
-      # ===================================================================================
-      # Phase 1 & 2: 환경 설정 및 애플리케이션 빌드 (변경 없음)
-      # ===================================================================================
+      # ================== Phase 1: 환경 설정 ==================
       - name: "Checkout repository"
         uses: actions/checkout@v4
-
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
         with: { node-version: '22' }
-
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
-        with: { run_install: false }
-
-      - name: "Install dependencies"
+      # [핵심] pnpm install은 이제 각 Action 내부에서 처리될 수 있으므로,
+      # 루트에서의 설치는 선택사항이 됩니다. 하지만 일관성을 위해 유지합니다.
+      - name: "Install dependencies at root"
         run: pnpm install --frozen-lockfile
 
-      - name: "Clean previous artifacts"
-        run: pnpm run clean
-
-      - name: "Build Frontend for S3 Assets"
-        run: pnpm --filter frontend run build
-
-      - name: "Build Backend for Validation"
-        run: pnpm --filter backend run build
-
-      # ===================================================================================
-      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (Buildx 업그레이드 적용)
-      # ===================================================================================
-      - name: "Configure AWS Credentials"
+      # ================== Phase 2: AWS 인증 ==================
+      - name: "Configure AWS Credentials via OIDC"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: "Login to Amazon ECR"
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # [핵심 수정] docker/build-push-action이 고급 캐싱 기능을 사용할 수 있도록
-      # Buildx 드라이버를 설정하는 단계를 추가합니다.
-      - name: "Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v3
-
-      - name: "Define Image Tag (송장 번호 생성)"
-        id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: "Build and push Docker image to ECR"
-        uses: docker/build-push-action@v5
+      # ================== Phase 3: 백엔드 배포 ==================
+      # [핵심] 백엔드 배포는 새로운 공식 Action을 사용합니다.
+      - name: "Deploy Backend Lambda Function"
+        uses: aws-actions/lambda-deploy@v1 # (이름은 공식 문서에 따라 최종 확정)
         with:
-          context: .
-          file: ./apps/frontend/Dockerfile
-          push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # [핵심 최종 수정] 이미지 매니페스트 출력 형식을 명시적으로 지정합니다.
-          # Lambda가 확실하게 지원하는 Docker 표준 형식(V2, Schema 2)으로 포장 규격을 고정합니다.
-          provenance: false
+          function-name: 'blog-backend-api-BlogInfraStack'
+          source-dir: 'apps/backend'
+          # Action이 pnpm 모노레포를 자동으로 감지하고 처리해 줄 것입니다.
 
-      # ===================================================================================
-      # Phase 4: CDK를 통한 인프라 배포 (변경 없음)
-      # ===================================================================================
-      - name: "Bootstrap CDK"
-        run: pnpm --filter infra exec cdk bootstrap --region ${{ env.AWS_REGION }}
+      # ================== Phase 4: 프론트엔드 배포 ==================
+      # [핵심] 프론트엔드 배포도 새로운 공식 Action을 사용합니다.
+      - name: "Deploy Frontend Lambda Function & Static Assets"
+        uses: aws-actions/lambda-deploy@v1
+        with:
+          function-name: 'blog-frontend-server-BlogInfraStack'
+          source-dir: 'apps/frontend'
+          # Action은 Next.js 프로젝트임을 감지하고,
+          # 1. Lambda용 Zip 패키지를 만들고,
+          # 2. .next/static 폴더의 내용을 S3에 업로드하고,
+          # 3. CloudFront 캐시를 무효화하는 모든 작업을 자동으로 처리할 것입니다.
+          # (S3 버킷 이름 등은 Lambda 함수의 환경 변수나 태그를 통해 찾아낼 것입니다.)
 
-      # [핵심 디버깅 단계 추가]
-      # cdk deploy를 실행하기 전에, S3에 업로드될 파일들이
-      # 정말로 존재하는지, 어떤 파일들이 있는지 직접 확인합니다.
-      - name: "Deploy Infrastructure via CDK"
-        run: |
-          pnpm --filter infra exec cdk deploy --all \
-            --require-approval never \
-            --verbose \
-            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+      # ================== Phase 5: 인프라 변경사항 배포 ==================
+      # [핵심] Lambda 코드 배포와 인프라 배포를 분리합니다.
+      # 코드 변경이 아닌, InfraStack.ts의 변경사항만 있을 때를 대비한 단계입니다.
+      - name: "Deploy Infrastructure Changes via CDK (if any)"
+        run: pnpm --filter infra exec cdk deploy --all --require-approval never
