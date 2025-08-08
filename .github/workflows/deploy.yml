@@ -1,6 +1,5 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.08-GrandFinale
-# 역할: "역할 분리"와 "선건설, 후배송" 원칙에 입각한, 컨테이너 기반 최종 CI/CD 파이프라인
+# 수정 버전: v2025.08.08-UnifiedRole-Debug
 
 name: "Build, Push, Deploy, and Sync Full-Stack Application"
 
@@ -13,7 +12,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # AWS 리전과 ECR 리포지토리 이름을 변수로 지정하여 재사용성과 유지보수성을 높입니다.
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: new-blog-frontend
 
@@ -21,13 +19,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # OIDC를 통한 AWS 인증을 위해 필수
-      contents: read    # 코드 체크아웃을 위해 필수
-      packages: write   # ECR에 이미지를 푸시하기 위해 필수
+      id-token: write
+      contents: read
+      packages: write
 
     steps:
       # ===================================================================================
-      # Phase 1 & 2: 환경 설정 및 애플리케이션 빌드
+      # Phase 1 & 2: 환경 설정 및 애플리케이션 빌드 (변경 없음)
       # ===================================================================================
       - name: "Checkout & Setup"
         uses: actions/checkout@v4
@@ -45,12 +43,13 @@ jobs:
         run: pnpm --filter backend run build
 
       # ===================================================================================
-      # Phase 3: Docker 빌드 및 ECR 푸시 (프론트엔드 코드 배포 준비)
+      # Phase 3 & 4: AWS 인증, 빌드, 푸시, 인프라 배포 (단일 역할 사용)
       # ===================================================================================
-      - name: "Configure AWS Credentials (for ECR Push)"
+      - name: "Configure AWS Credentials (Unified Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # ECR 푸시 권한이 있는 역할을 사용합니다. CdkDeployRole에 포함되어 있습니다.
+          # [핵심 수정] 파이프라인 전체에서 단 하나의 역할만 사용합니다.
+          # 이 역할은 ECR, CDK, S3, CloudFront에 대한 모든 권한을 가지고 있어야 합니다.
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
@@ -69,18 +68,8 @@ jobs:
           file: ./apps/frontend/Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/amd64 # x86_64 아키텍처로 빌드
+          platforms: linux/amd64
           provenance: false
-
-      # ===================================================================================
-      # Phase 4: 인프라 건설 (선건설, "건축가" 역할 사용)
-      # ===================================================================================
-      - name: "Configure AWS Credentials for CDK Deploy"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          # [핵심] "건축가 비자" (CDK 배포 권한)를 사용합니다.
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: "Deploy Infrastructure via CDK"
         run: |
@@ -90,15 +79,11 @@ jobs:
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
-      # Phase 5: 콘텐츠 배포 (후배송, "배송팀" 역할 사용)
+      # Phase 5: 콘텐츠 배포 (동일한 역할 사용)
       # ===================================================================================
-      - name: "Configure AWS Credentials for Content Deploy"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_FOR_CONTENT_DEPLOY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      # [핵심 추가] 현재 내가 누구인지 확인하는 검증 단계
+      # [핵심 수정] 별도의 역할 전환(Configure AWS Credentials) 단계를 삭제했습니다.
+      # 바로 위에서 인증받은 동일한 역할의 권한을 그대로 이어받아 사용합니다.
+      
       - name: "Verify Current AWS Identity"
         run: |
           echo "Verifying the identity for the content deployment step..."
@@ -106,14 +91,17 @@ jobs:
 
       - name: "Sync Static Assets and Invalidate CloudFront Cache"
         run: |
-          # 1. CDK가 발행한 "배달 증명서(outputs.json)"를 읽습니다.
           ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
           DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
 
-          # 2. 증명서에 적힌 정확한 주소로 "직접 배송팀(AWS CLI)"이 배송을 시작합니다.
+          # 만약 cdk deploy가 실패했다면, 여기서 파이프라인이 멈추도록 방어 코드를 추가합니다.
+          if [ "$ASSET_BUCKET_NAME" == "null" ] || [ "$DISTRIBUTION_ID" == "null" ]; then
+            echo "::error::Failed to read outputs from cdk deploy. Halting execution."
+            exit 1
+          fi
+
           echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
-          # 3. 배송 완료 후, 캐시를 초기화하여 새 상품이 진열되었음을 알립니다.
           echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
