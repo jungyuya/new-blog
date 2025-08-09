@@ -1,6 +1,6 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.09-The-Final-Architecture
-# 역할: 인프라와 콘텐츠 배포 책임을 모두 수행하는 단일 최종 파이프라인
+# 최종 버전: v2025.08.09-Single-Source-of-Truth
+# 역할: Dockerfile을 유일한 빌드 주체로 삼고, 그 결과물을 S3와 Lambda에 공급하는 최종 파이프라인
 
 name: "Build, Push, and Deploy Full-Stack Application"
 
@@ -27,7 +27,7 @@ jobs:
 
     steps:
       # ===================================================================================
-      # Phase 1 & 2: 환경 설정 및 애플리케이션 빌드 (변경 없음)
+      # Phase 1: 환경 설정 (변경 없음)
       # ===================================================================================
       - name: "Checkout repository"
         uses: actions/checkout@v4
@@ -40,17 +40,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with: { run_install: false }
 
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
-
-      - name: "Build Frontend"
-        run: pnpm --filter frontend run build
-
-      - name: "Build Backend"
-        run: pnpm --filter backend run build
-
       # ===================================================================================
-      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (변경 없음)
+      # Phase 2: Docker 이미지 빌드 및 결과물 추출 (핵심 수정)
       # ===================================================================================
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
@@ -69,7 +60,8 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image to ECR"
+      # [핵심 수정 1] 이 단계의 이름을 변경하여, 빌드, 푸시, 그리고 '추출'까지 담당함을 명시합니다.
+      - name: "Build, Push Docker Image and Export Static Assets"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -80,55 +72,47 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+          # [핵심 수정 2] 빌드가 완료된 후, Docker 이미지의 특정 폴더 내용을
+          # CI 실행 환경의 로컬 경로로 '꺼내옵니다(export)'.
+          outputs: type=local,dest=./output
 
       # ===================================================================================
-      # Phase 4: CDK를 통한 인프라 배포 ("오직 건설만")
+      # Phase 3: CDK를 통한 인프라 배포 (변경 없음)
       # ===================================================================================
+      - name: "Install dependencies for CDK"
+        run: pnpm install --frozen-lockfile
+
       - name: "Deploy Infrastructure via CDK"
         id: cdk-deploy
         run: |
-          # [핵심 수정] --outputs-file의 경로를 상대 경로가 아닌,
-          # GitHub Actions의 절대 경로 변수 '${{ github.workspace }}'를 사용하여 지정합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
-            --outputs-file ${{ github.workspace }}/apps/infra/outputs.json \
+            --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
-      # Phase 5: 콘텐츠 배포 ("화물 운송 및 마무리")
+      # Phase 4: 콘텐츠 배포 ("Docker가 만든 결과물" 사용)
       # ===================================================================================
-      
-      - name: "Debug CDK Outputs"
-        run: |
-          echo "--- CDK outputs.json content ---"
-          cat ./apps/infra/outputs.json | jq .
-          echo "--------------------------------"
-      
       - name: "Sync Static Assets to S3"
         run: |
-          # cdk deploy의 결과물(outputs.json)에서 S3 버킷 이름을 읽어옵니다.
           ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
-          
-          # 만약 버킷 이름을 읽어오지 못했다면, 파이프라인을 즉시 중단시킵니다.
           if [ -z "$ASSET_BUCKET_NAME" ] || [ "$ASSET_BUCKET_NAME" == "null" ]; then
             echo "::error::Failed to read S3 bucket name from CDK outputs."
             exit 1
           fi
           
-          echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
-          # AWS CLI를 사용하여 빌드 결과물을 S3 버킷에 직접 업로드합니다.
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+          echo "Syncing exported static assets to bucket: $ASSET_BUCKET_NAME"
+          # [핵심 수정 3] 소스 경로를, Docker 빌드에서 추출한 'output' 디렉토리 내부의
+          # .next/static 폴더로 변경합니다.
+          aws s3 sync ./output/apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
       - name: "Invalidate CloudFront Cache"
         run: |
-          # cdk deploy의 결과물(outputs.json)에서 CloudFront 배포 ID를 읽어옵니다.
           DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
-
           if [ -z "$DISTRIBUTION_ID" ] || [ "$DISTRIBUTION_ID" == "null" ]; then
             echo "::error::Failed to read CloudFront distribution ID from CDK outputs."
             exit 1
           fi
           
           echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
-          # AWS CLI를 사용하여 CloudFront 캐시를 무효화하여, 사용자들이 즉시 최신 파일을 볼 수 있도록 합니다.
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"

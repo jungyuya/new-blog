@@ -216,14 +216,17 @@ export class InfraStack extends Stack {
 
     // 불필요한 execute-api:Invoke 권한은 제거된 상태를 유지합니다.
 
-    new route53.CfnRecordSet(this, 'NewSiteARecord', {
-      name: siteDomain,
-      type: 'A',
-      hostedZoneId: hostedZone.hostedZoneId,
-      aliasTarget: {
-        hostedZoneId: 'Z2FDTNDATAQYW2',
-        dnsName: distribution.attrDomainName,
-      },
+    const distributionTarget = cloudfront.Distribution.fromDistributionAttributes(this, 'ImportedDistribution', {
+      distributionId: distribution.ref,
+      domainName: distribution.attrDomainName,
+    });
+
+    // 이제, L2 ARecord가 이해할 수 있는 L2 객체를 사용하여 레코드를 생성합니다.
+    new route53.ARecord(this, 'NewSiteARecord', {
+      recordName: siteDomain,
+      zone: hostedZone,
+      // CloudFrontTarget은 내부적으로 올바른 Hosted Zone ID('Z2FDTNDATAQYW2')를 사용합니다.
+      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distributionTarget)),
     });
     // ===================================================================================
     // SECTION 3: 스택 출력 및 모니터링
