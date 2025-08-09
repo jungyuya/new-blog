@@ -120,6 +120,10 @@ export class InfraStack extends Stack {
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      // [핵심 수정 1] 모든 퍼블릭 액세스를 차단하여 보안을 강화합니다.
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      // [핵심 수정 2] OAC 사용을 위한 권장 설정으로, 버킷 소유자가 모든 객체의 소유권을 갖도록 강제합니다.
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
     });
 
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
@@ -207,7 +211,11 @@ export class InfraStack extends Stack {
       resources: [assetsBucket.arnForObjects('*')],
       principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
       conditions: {
-        StringEquals: { 'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}` },
+        StringEquals: {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
+          // [핵심 수정 3] 요청을 보내는 주체의 계정 ID가 우리 계정과 일치하는지 추가로 확인합니다.
+          'AWS:SourceAccount': this.account,
+        },
       },
     }));
 
@@ -218,7 +226,8 @@ export class InfraStack extends Stack {
     serverLambda.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['execute-api:Invoke'],
-      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${httpApi.apiId}/*`],
+      // [핵심 수정 4] 모든 스테이지와 경로를 포함하도록 와일드카드를 추가합니다.
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${httpApi.apiId}/*/*`],
     }));
 
     // [핵심 6] Route53 A 레코드를 L1 CfnDistribution에 맞게 수정합니다.

@@ -96,6 +96,13 @@ jobs:
       # ===================================================================================
       # Phase 5: 콘텐츠 배포 ("화물 운송 및 마무리")
       # ===================================================================================
+      
+      - name: "Debug CDK Outputs"
+        run: |
+          echo "--- CDK outputs.json content ---"
+          cat ./apps/infra/outputs.json | jq .
+          echo "--------------------------------"
+      
       - name: "Sync Static Assets to S3"
         run: |
           # cdk deploy의 결과물(outputs.json)에서 S3 버킷 이름을 읽어옵니다.
