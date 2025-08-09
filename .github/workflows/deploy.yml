@@ -91,9 +91,11 @@ jobs:
       - name: "Deploy Infrastructure via CDK"
         id: cdk-deploy
         run: |
+          # [핵심 최종 수정] --outputs-file의 경로를, 변덕스러운 상대 경로가 아닌,
+          # CI 환경의 루트 디렉토리를 가리키는 '절대 경로'로 명시합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
-            --outputs-file ./apps/infra/outputs.json \
+            --outputs-file ${{ github.workspace }}/apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
