@@ -1,6 +1,7 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 최종 버전: v2025.08.09-Single-Source-of-Truth
-# 역할: Dockerfile을 유일한 빌드 주체로 삼고, 그 결과물을 S3와 Lambda에 공급하는 최종 파이프라인
+# 최종 버전: v2025.08.09-The-Purified-Masterpiece
+# 역할: Dockerfile을 유일한 빌드 주체로 삼고, 그 결과물을 이미지와 S3에 공급하며,
+#       모든 단계를 자동으로 검증하는, 궁극의 최종 파이프라인
 
 name: "Build, Push, and Deploy Full-Stack Application"
 
@@ -27,21 +28,26 @@ jobs:
 
     steps:
       # ===================================================================================
-      # Phase 1: 환경 설정 (변경 없음)
+      # Phase 1: 환경 설정 및 의존성 설치
       # ===================================================================================
       - name: "Checkout repository"
         uses: actions/checkout@v4
 
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
-        with: { node-version: '22' }
+        with:
+          node-version: '22'
 
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
-        with: { run_install: false }
+        with:
+          run_install: false
+
+      - name: "Install dependencies"
+        run: pnpm install --frozen-lockfile
 
       # ===================================================================================
-      # Phase 2: Docker 이미지 빌드 및 결과물 추출 (핵심 수정)
+      # Phase 2: Docker를 통한 단일 빌드, 푸시, 그리고 결과물 추출
       # ===================================================================================
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
@@ -60,7 +66,6 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      # [핵심 수정 1] 이 단계의 이름을 변경하여, 빌드, 푸시, 그리고 '추출'까지 담당함을 명시합니다.
       - name: "Build, Push Docker Image and Export Static Assets"
         uses: docker/build-push-action@v5
         with:
@@ -72,16 +77,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
-          # [핵심 수정 2] 빌드가 완료된 후, Docker 이미지의 특정 폴더 내용을
-          # CI 실행 환경의 로컬 경로로 '꺼내옵니다(export)'.
           outputs: type=local,dest=./output
 
-      # ===================================================================================
-      # Phase 3: CDK를 통한 인프라 배포 (변경 없음)
-      # ===================================================================================
-      - name: "Install dependencies for CDK"
-        run: pnpm install --frozen-lockfile
+      # [안전장치 1] 추출된 결과물의 구조를 로그로 남겨, 문제가 생겼을 때 확인할 수 있도록 합니다.
+      - name: "Verify Exported Artifacts"
+        run: |
+          echo "--- Verifying contents of ./output directory ---"
+          ls -lR ./output
 
+      # ===================================================================================
+      # Phase 3: CDK를 통한 인프라 배포
+      # ===================================================================================
       - name: "Deploy Infrastructure via CDK"
         id: cdk-deploy
         run: |
@@ -91,21 +97,30 @@ jobs:
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
-      # Phase 4: 콘텐츠 배포 ("Docker가 만든 결과물" 사용)
+      # Phase 4: 콘텐츠 배포 (추출된 결과물 사용)
       # ===================================================================================
       - name: "Sync Static Assets to S3"
         run: |
+          set -euo pipefail
           ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
           if [ -z "$ASSET_BUCKET_NAME" ] || [ "$ASSET_BUCKET_NAME" == "null" ]; then
             echo "::error::Failed to read S3 bucket name from CDK outputs."
             exit 1
           fi
-          
-          echo "Syncing exported static assets to bucket: $ASSET_BUCKET_NAME"
-          # [핵심 수정 3] 소스 경로를, Docker 빌드에서 추출한 'output' 디렉토리 내부의
-          # .next/static 폴더로 변경합니다.
-          aws s3 sync ./output/apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
+          # [핵심] find 명령어로 .next/static 디렉토리를 동적으로 찾아, 경로 불일치 문제를 원천 차단합니다.
+          FOUND_STATIC_DIR=$(find ./output -type d -path '*/.next/static' -print -quit)
+          if [ -z "$FOUND_STATIC_DIR" ]; then
+            echo "::error::No .next/static directory found in exported image output."
+            exit 1
+          fi
+
+          echo "Syncing static assets from '$FOUND_STATIC_DIR' to s3://${ASSET_BUCKET_NAME}/_next/static"
+          aws s3 sync "$FOUND_STATIC_DIR" "s3://${ASSET_BUCKET_NAME}/_next/static" --delete
+
+      # ===================================================================================
+      # Phase 5: CloudFront 캐시 무효화
+      # ===================================================================================
       - name: "Invalidate CloudFront Cache"
         run: |
           DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')

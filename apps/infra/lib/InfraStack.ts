@@ -1,6 +1,6 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.09-TheUltimateMasterpiece
-// 역할: 모든 디버깅의 교훈을 담아 완성한, 안정성과 명확성을 최우선으로 하는 최종 인프라 구성
+// 최종 버전: v2025.08.09-The-Purified-Masterpiece
+// 역할: 모든 불순물을 제거하고, CDK의 원칙에 가장 부합하도록 정화된 최종 인프라 구성
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
@@ -22,7 +22,8 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as logs from 'aws-cdk-lib/aws-logs'; // aws_logs 모듈 import 추가
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as targets from 'aws-cdk-lib/aws-route53-targets';
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -36,7 +37,7 @@ export class InfraStack extends Stack {
     });
 
     // ===================================================================================
-    // SECTION 1: 백엔드 리소스 정의
+    // SECTION 1: 백엔드 리소스 정의 (변경 없음)
     // ===================================================================================
     const userPool = new cognito.UserPool(this, 'BlogUserPool', {
       userPoolName: `BlogUserPool-${this.stackName}`,
@@ -110,7 +111,7 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (강화된 최종 완성본)
+    // SECTION 2: 프론트엔드 리소스 정의 (정화된 최종 완성본)
     // ===================================================================================
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
@@ -120,9 +121,7 @@ export class InfraStack extends Stack {
     const assetsBucket = new s3.Bucket(this, 'FrontendAssetsBucket', {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
-      // [핵심 수정 1] 모든 퍼블릭 액세스를 차단하여 보안을 강화합니다.
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      // [핵심 수정 2] OAC 사용을 위한 권장 설정으로, 버킷 소유자가 모든 객체의 소유권을 갖도록 강제합니다.
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
     });
 
@@ -176,7 +175,7 @@ export class InfraStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            s3OriginConfig: {},
+            // [핵심 수정 1] OAC와 충돌하는 s3OriginConfig를 완전히 제거합니다.
           },
           {
             id: 'BackendApiOrigin',
@@ -193,8 +192,8 @@ export class InfraStack extends Stack {
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
         cacheBehaviors: [
-          { pathPattern: '/_next/static/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId },
-          { pathPattern: '/assets/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId },
+          { pathPattern: '/_next/static/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId, compress: true },
+          { pathPattern: '/assets/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId, compress: true },
           { pathPattern: '/api/*', targetOriginId: 'BackendApiOrigin', viewerProtocolPolicy: 'redirect-to-https', allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'], cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId, originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId },
         ],
       },
@@ -208,26 +207,24 @@ export class InfraStack extends Stack {
       conditions: {
         StringEquals: {
           'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
-          // [핵심 수정 3] 요청을 보내는 주체의 계정 ID가 우리 계정과 일치하는지 추가로 확인합니다.
           'AWS:SourceAccount': this.account,
         },
       },
     }));
 
-    // 불필요한 execute-api:Invoke 권한은 제거된 상태를 유지합니다.
+    // [핵심 수정 2] 불필요한 execute-api:Invoke 권한 부여 코드를 완전히 삭제합니다.
 
     const distributionTarget = cloudfront.Distribution.fromDistributionAttributes(this, 'ImportedDistribution', {
       distributionId: distribution.ref,
       domainName: distribution.attrDomainName,
     });
 
-    // 이제, L2 ARecord가 이해할 수 있는 L2 객체를 사용하여 레코드를 생성합니다.
     new route53.ARecord(this, 'NewSiteARecord', {
       recordName: siteDomain,
       zone: hostedZone,
-      // CloudFrontTarget은 내부적으로 올바른 Hosted Zone ID('Z2FDTNDATAQYW2')를 사용합니다.
-      target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distributionTarget)),
+      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distributionTarget)),
     });
+
     // ===================================================================================
     // SECTION 3: 스택 출력 및 모니터링
     // ===================================================================================

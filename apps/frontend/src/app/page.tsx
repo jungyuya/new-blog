@@ -5,8 +5,8 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold">NEW 그라라라라라라</h1>
-        <p className="text-lg text-gray-600 mt-2">BFF 패턴을 사용, 커스텀 인증 구현, 신기술도입</p>
+        <h1 className="text-4xl font-bold">어서오세요. 반갑습니다.</h1>
+        <p className="text-lg text-gray-600 mt-2">BFF 패턴을 사용, 커스텀 인증 구현 중</p>
       </div>
       <SignUp />
     </main>
