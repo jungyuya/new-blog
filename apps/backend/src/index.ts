@@ -109,7 +109,7 @@ const UpdatePostSchema = z.object({
 // ---------------------------
 // 6. Hono 앱 초기화
 // ---------------------------
-const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
+const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>().basePath('/api');
 
 // ---------------------------
 // 7. 커스텀 미들웨어: JWT 인증

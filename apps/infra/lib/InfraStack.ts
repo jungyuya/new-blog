@@ -182,6 +182,7 @@ export class InfraStack extends Stack {
           {
             id: 'BackendApiOrigin',
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
+            // originPath가 없는 것이 올바른 설정입니다.
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
         ],
