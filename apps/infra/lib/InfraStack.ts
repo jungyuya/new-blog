@@ -175,7 +175,9 @@ export class InfraStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            // [핵심 수정 1] OAC와 충돌하는 s3OriginConfig를 완전히 제거합니다.
+            // [핵심] OAC를 사용하므로 s3OriginConfig는 "빈 객체"로 전달해야 합니다.
+            // 내부에 originAccessIdentity 키 자체를 포함해서는 안 됩니다.
+            s3OriginConfig: {},
           },
           {
             id: 'BackendApiOrigin',
