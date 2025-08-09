@@ -182,6 +182,12 @@ export class InfraStack extends Stack {
           {
             id: 'BackendApiOrigin',
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
+            
+            // [핵심 최종 수정] 이 Origin으로 요청을 보낼 때, 경로의 맨 앞에 '/api'를 제거합니다.
+            // CloudFront는 이 속성을 보고, /api/auth/signup 요청을 받으면,
+            // Origin에는 /auth/signup 경로로만 요청을 전달하게 됩니다.
+            originPath: '/api',
+
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
         ],
