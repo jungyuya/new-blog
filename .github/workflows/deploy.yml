@@ -1,6 +1,6 @@
-# 파일 위치: .github/workflows/deploy.yml (임시수정)
-# 최종 수정일: 2025년 8월 6일 0422 (Buildx 드라이버 업그레이드 적용)
-# 역할: 책임 분리 원칙 + Buildx 캐싱 최적화가 적용된 최종 파이프라인
+# 파일 위치: .github/workflows/deploy.yml
+# 최종 버전: v2025.08.09-The-Final-Architecture
+# 역할: 인프라와 콘텐츠 배포 책임을 모두 수행하는 단일 최종 파이프라인
 
 name: "Build, Push, and Deploy Full-Stack Application"
 
@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-
 
 concurrency:
   group: ${{ github.ref }}
@@ -44,17 +43,14 @@ jobs:
       - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "Clean previous artifacts"
-        run: pnpm run clean
-
-      - name: "Build Frontend for S3 Assets"
+      - name: "Build Frontend"
         run: pnpm --filter frontend run build
 
-      - name: "Build Backend for Validation"
+      - name: "Build Backend"
         run: pnpm --filter backend run build
 
       # ===================================================================================
-      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (Buildx 업그레이드 적용)
+      # Phase 3: Docker 이미지 빌드 및 ECR 푸시 (변경 없음)
       # ===================================================================================
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
@@ -66,12 +62,10 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # [핵심 수정] docker/build-push-action이 고급 캐싱 기능을 사용할 수 있도록
-      # Buildx 드라이버를 설정하는 단계를 추가합니다.
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
-      - name: "Define Image Tag (송장 번호 생성)"
+      - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
@@ -85,18 +79,48 @@ jobs:
           platforms: linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # [핵심 최종 수정] 이미지 매니페스트 출력 형식을 명시적으로 지정합니다.
-          # Lambda가 확실하게 지원하는 Docker 표준 형식(V2, Schema 2)으로 포장 규격을 고정합니다.
           provenance: false
 
       # ===================================================================================
-      # Phase 4: CDK를 통한 인프라 배포 (변경 없음)
+      # Phase 4: CDK를 통한 인프라 배포 ("오직 건설만")
       # ===================================================================================
-      - name: "Bootstrap CDK"
-        run: pnpm --filter infra exec cdk bootstrap
-
-      - name: "Deploy to AWS via CDK (송장 번호 전달)"
+      - name: "Deploy Infrastructure via CDK"
+        id: cdk-deploy # [핵심] 이 단계에 ID를 부여하여, 결과물을 다음 단계에서 사용할 수 있도록 합니다.
         run: |
+          # 배포 결과물을 outputs.json 파일로 저장합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
+            --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+
+      # ===================================================================================
+      # Phase 5: 콘텐츠 배포 ("화물 운송 및 마무리")
+      # ===================================================================================
+      - name: "Sync Static Assets to S3"
+        run: |
+          # cdk deploy의 결과물(outputs.json)에서 S3 버킷 이름을 읽어옵니다.
+          ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
+          
+          # 만약 버킷 이름을 읽어오지 못했다면, 파이프라인을 즉시 중단시킵니다.
+          if [ -z "$ASSET_BUCKET_NAME" ] || [ "$ASSET_BUCKET_NAME" == "null" ]; then
+            echo "::error::Failed to read S3 bucket name from CDK outputs."
+            exit 1
+          fi
+          
+          echo "Syncing ./apps/frontend/.next/static to bucket: $ASSET_BUCKET_NAME"
+          # AWS CLI를 사용하여 빌드 결과물을 S3 버킷에 직접 업로드합니다.
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+
+      - name: "Invalidate CloudFront Cache"
+        run: |
+          # cdk deploy의 결과물(outputs.json)에서 CloudFront 배포 ID를 읽어옵니다.
+          DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
+
+          if [ -z "$DISTRIBUTION_ID" ] || [ "$DISTRIBUTION_ID" == "null" ]; then
+            echo "::error::Failed to read CloudFront distribution ID from CDK outputs."
+            exit 1
+          fi
+          
+          echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
+          # AWS CLI를 사용하여 CloudFront 캐시를 무효화하여, 사용자들이 즉시 최신 파일을 볼 수 있도록 합니다.
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
