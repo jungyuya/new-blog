@@ -11,25 +11,26 @@ export default function SignUp() {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        console.log("--- DEBUG ---");
-        console.log("NEXT_PUBLIC_API_ENDPOINT:", process.env.NEXT_PUBLIC_API_ENDPOINT);
-        console.log("--- END DEBUG ---");
+        // [핵심 수정 1] console.log 디버깅 코드는 이제 제거합니다.
+        // console.log("--- DEBUG ---"); ...
 
         e.preventDefault();
         setIsLoading(true);
         setError(null);
         setSuccess(null);
 
-        // [핵심] 환경 변수에서 백엔드의 "진짜 주소"를 가져옵니다.
+        // [핵심 수정 2] 환경 변수를 읽는 로직 전체를 삭제합니다.
+        /*
         const apiBaseUrl = process.env.NEXT_PUBLIC_API_ENDPOINT;
         if (!apiBaseUrl) {
             setError('API 엔드포인트가 설정되지 않았습니다.');
             setIsLoading(false);
             return;
         }
+        */
 
-        // URL 객체를 사용하여, base URL 끝에 /가 있든 없든 상관없이 올바른 경로를 만듭니다.
-        const apiUrl = new URL('api/auth/signup', apiBaseUrl).toString();
+        // [핵심 수정 3] 이제부터는 항상 우리 사이트 내부의 상대 경로로 요청을 보냅니다.
+        const apiUrl = '/api/auth/signup';
         console.log(`Requesting to: ${apiUrl}`);
 
         try {
