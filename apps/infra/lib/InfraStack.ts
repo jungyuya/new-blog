@@ -111,7 +111,7 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의
+    // SECTION 2: 프론트엔드 리소스 정의 (리서치 기반 최종 완성본)
     // ===================================================================================
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
@@ -146,6 +146,20 @@ export class InfraStack extends Stack {
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
+    // [핵심 1] S3 Origin을 위한 OAC를 L2 수준에서, '올바른 속성 이름'으로 생성합니다.
+    const s3Oac = new cloudfront.S3OriginAccessControl(this, 'S3OAC', {
+      // originAccessControlName is the correct prop name
+      originAccessControlName: `OAC-for-S3-${this.stackName}`,
+      // 명시적으로 서명 동작 지정 (선택) — 필요에 따라 변경 가능
+      signing: cloudfront.Signing.SIGV4_NO_OVERRIDE,
+    });
+
+    // [핵심 2] S3Origin을 생성할 때, L2 헬퍼를 통해 OAC를 연결합니다.
+    // 직접 origins.S3Origin(..., { originAccessControl: ... }) 형태는 타입이 맞지 않아 에러가 발생합니다.
+    const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(assetsBucket, {
+      originAccessControl: s3Oac,
+    });
+
     const distribution = new cloudfront.Distribution(this, 'NewFrontendDistribution', {
       domainNames: [siteDomain],
       certificate: certificate,
@@ -159,12 +173,12 @@ export class InfraStack extends Stack {
       },
       additionalBehaviors: {
         '/_next/static/*': {
-          origin: new origins.S3Origin(assetsBucket),
+          origin: s3Origin, // [핵심 3] OAC와 연결된 S3 Origin을 사용합니다.
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         '/assets/*': {
-          origin: new origins.S3Origin(assetsBucket),
+          origin: s3Origin, // [핵심 3] 여기도 동일하게 사용합니다.
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
@@ -177,6 +191,20 @@ export class InfraStack extends Stack {
         },
       },
     });
+
+    // [핵심 3] CDK의 자동 정책 생성을 믿지 않고, OAC를 위한 버킷 정책을 '직접' 추가합니다.
+    // 이것이 리서치 문서에서 권장하는 가장 확실한 방법입니다.
+    assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject'],
+      resources: [assetsBucket.arnForObjects('*')],
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      conditions: {
+        StringEquals: {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+        },
+      },
+    }));
 
     const deployment = new s3deploy.BucketDeployment(this, 'DeployFrontendAssets', {
       sources: [s3deploy.Source.asset(path.join(projectRoot, 'apps/frontend/.next/static'))],
