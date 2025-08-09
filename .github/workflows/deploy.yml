@@ -85,12 +85,13 @@ jobs:
       # Phase 4: CDK를 통한 인프라 배포 ("오직 건설만")
       # ===================================================================================
       - name: "Deploy Infrastructure via CDK"
-        id: cdk-deploy # [핵심] 이 단계에 ID를 부여하여, 결과물을 다음 단계에서 사용할 수 있도록 합니다.
+        id: cdk-deploy
         run: |
-          # 배포 결과물을 outputs.json 파일로 저장합니다.
+          # [핵심 수정] --outputs-file의 경로를 상대 경로가 아닌,
+          # GitHub Actions의 절대 경로 변수 '${{ github.workspace }}'를 사용하여 지정합니다.
           pnpm --filter infra exec cdk deploy --all \
             --require-approval never \
-            --outputs-file ./apps/infra/outputs.json \
+            --outputs-file ${{ github.workspace }}/apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
       # ===================================================================================
