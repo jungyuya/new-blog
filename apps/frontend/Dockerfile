@@ -42,4 +42,4 @@ COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt
 
 # [핵심 4] server.js 파일의 '절대 경로'를 사용하여 실행 명령을 내립니다.
 # 이렇게 하면 WORKDIR 설정에 관계없이 항상 정확한 파일을 실행할 수 있습니다.
-CMD ["node", "/app/standalone/server.js"]
+CMD ["node", "/app/standalone/apps/frontend/server.js"]
