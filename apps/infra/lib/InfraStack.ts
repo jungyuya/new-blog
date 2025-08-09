@@ -176,6 +176,7 @@ export class InfraStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
+            s3OriginConfig: {},
           },
           {
             id: 'BackendApiOrigin',
