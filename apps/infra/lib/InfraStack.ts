@@ -184,7 +184,9 @@ export class InfraStack extends Stack {
           },
           {
             id: 'BackendApiOrigin',
-            domainName: cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)),
+            // [핵심 수정] httpApi.url에서 'https://'와 마지막 '/'를 모두 제거합니다.
+            // cdk.Fn.select(0, cdk.Fn.split('/', ...)) 를 사용하여 '/' 이전의 도메인 부분만 정확히 추출합니다.
+            domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
         ],
