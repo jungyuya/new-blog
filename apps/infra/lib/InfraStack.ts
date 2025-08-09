@@ -110,7 +110,7 @@ export class InfraStack extends Stack {
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (L2 헬퍼 최종본)
+    // SECTION 2: 프론트엔드 리소스 정의 (강화된 최종 완성본)
     // ===================================================================================
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
@@ -149,9 +149,6 @@ export class InfraStack extends Stack {
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // [핵심 1] S3 Origin을 생성하기 위해, CDK가 제공하는 가장 표준적인 L2 헬퍼 메서드를 사용합니다.
-    // 이 한 줄의 코드는, 내부적으로 OAC를 생성하고, S3Origin에 연결하며,
-    // 올바른 S3 버킷 정책까지 모두 '알아서' 생성해줍니다.
     const s3Oac = new cloudfront.CfnOriginAccessControl(this, 'S3OAC', {
       originAccessControlConfig: {
         name: `OAC-for-S3-${this.stackName}`,
@@ -161,7 +158,6 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심 2] CloudFront 배포 전체를 L1 Construct인 CfnDistribution으로 직접 정의하여 CDK의 자동 동작을 배제합니다.
     const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
       distributionConfig: {
         comment: `Distribution for ${siteDomain}`,
@@ -180,12 +176,9 @@ export class InfraStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            s3OriginConfig: { originAccessIdentity: '' },
           },
           {
             id: 'BackendApiOrigin',
-            // [핵심 수정] httpApi.url에서 'https://'와 마지막 '/'를 모두 제거합니다.
-            // cdk.Fn.select(0, cdk.Fn.split('/', ...)) 를 사용하여 '/' 이전의 도메인 부분만 정확히 추출합니다.
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
@@ -206,7 +199,6 @@ export class InfraStack extends Stack {
       },
     });
 
-    // [핵심 3] OAC를 위한 S3 버킷 정책을 명시적으로 추가합니다.
     assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['s3:GetObject'],
@@ -221,24 +213,14 @@ export class InfraStack extends Stack {
       },
     }));
 
-    // [핵심 4] s3deploy.BucketDeployment 관련 코드를 모두 삭제합니다.
-    // const deployment = new s3deploy.BucketDeployment(...)
+    // 불필요한 execute-api:Invoke 권한은 제거된 상태를 유지합니다.
 
-    // [핵심 5] FrontendServerLambda가 Backend API를 호출할 수 있는 권한을 부여합니다.
-    serverLambda.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['execute-api:Invoke'],
-      // [핵심 수정 4] 모든 스테이지와 경로를 포함하도록 와일드카드를 추가합니다.
-      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${httpApi.apiId}/*/*`],
-    }));
-
-    // [핵심 6] Route53 A 레코드를 L1 CfnDistribution에 맞게 수정합니다.
     new route53.CfnRecordSet(this, 'NewSiteARecord', {
       name: siteDomain,
       type: 'A',
       hostedZoneId: hostedZone.hostedZoneId,
       aliasTarget: {
-        hostedZoneId: 'Z2FDTNDATAQYW2', // CloudFront의 공식 Hosted Zone ID
+        hostedZoneId: 'Z2FDTNDATAQYW2',
         dnsName: distribution.attrDomainName,
       },
     });
