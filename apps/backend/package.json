@@ -2,8 +2,11 @@
   "name": "backend",
   "version": "1.0.1",
   "description": "Backend Lambda function for the blog service",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
+    "dev": "cross-env NODE_ENV=development tsx watch --clear-screen=false src/index.ts",
+    "check": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf dist"
   },
@@ -11,9 +14,12 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@hono/node-server": "^1.18.1",
     "@types/aws-lambda": "^8.10.152",
     "@types/uuid": "^10.0.0",
+    "cross-env": "^10.0.0",
     "esbuild": "^0.21.0",
+    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },
   "dependencies": {

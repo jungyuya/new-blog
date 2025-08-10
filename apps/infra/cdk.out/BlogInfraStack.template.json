@@ -1,0 +1,1714 @@
+{
+ "Parameters": {
+  "ImageTag": {
+   "Type": "String",
+   "Description": "The ECR image tag to deploy."
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Resources": {
+  "BlogUserPoolBB1AE2CC": {
+   "Type": "AWS::Cognito::UserPool",
+   "Properties": {
+    "AccountRecoverySetting": {
+     "RecoveryMechanisms": [
+      {
+       "Name": "verified_phone_number",
+       "Priority": 1
+      },
+      {
+       "Name": "verified_email",
+       "Priority": 2
+      }
+     ]
+    },
+    "AdminCreateUserConfig": {
+     "AllowAdminCreateUserOnly": false
+    },
+    "AutoVerifiedAttributes": [
+     "email"
+    ],
+    "EmailVerificationMessage": "The verification code to your new account is {####}",
+    "EmailVerificationSubject": "Verify your new account",
+    "Policies": {
+     "PasswordPolicy": {
+      "MinimumLength": 8,
+      "RequireLowercase": true,
+      "RequireNumbers": true,
+      "RequireSymbols": true,
+      "RequireUppercase": true
+     }
+    },
+    "Schema": [
+     {
+      "Mutable": true,
+      "Name": "email",
+      "Required": true
+     }
+    ],
+    "SmsVerificationMessage": "The verification code to your new account is {####}",
+    "UserPoolName": "BlogUserPool-BlogInfraStack",
+    "UsernameAttributes": [
+     "email"
+    ],
+    "VerificationMessageTemplate": {
+     "DefaultEmailOption": "CONFIRM_WITH_CODE",
+     "EmailMessage": "The verification code to your new account is {####}",
+     "EmailSubject": "Verify your new account",
+     "SmsMessage": "The verification code to your new account is {####}"
+    }
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogUserPool/Resource"
+   }
+  },
+  "BlogUserPoolBlogAppClientFC769CAF": {
+   "Type": "AWS::Cognito::UserPoolClient",
+   "Properties": {
+    "AccessTokenValidity": 1440,
+    "AllowedOAuthFlows": [
+     "implicit",
+     "code"
+    ],
+    "AllowedOAuthFlowsUserPoolClient": true,
+    "AllowedOAuthScopes": [
+     "profile",
+     "phone",
+     "email",
+     "openid",
+     "aws.cognito.signin.user.admin"
+    ],
+    "CallbackURLs": [
+     "https://example.com"
+    ],
+    "ClientName": "WebAppClient",
+    "ExplicitAuthFlows": [
+     "ALLOW_USER_PASSWORD_AUTH",
+     "ALLOW_USER_SRP_AUTH",
+     "ALLOW_REFRESH_TOKEN_AUTH"
+    ],
+    "GenerateSecret": false,
+    "IdTokenValidity": 1440,
+    "RefreshTokenValidity": 129600,
+    "SupportedIdentityProviders": [
+     "COGNITO"
+    ],
+    "TokenValidityUnits": {
+     "AccessToken": "minutes",
+     "IdToken": "minutes",
+     "RefreshToken": "minutes"
+    },
+    "UserPoolId": {
+     "Ref": "BlogUserPoolBB1AE2CC"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogUserPool/BlogAppClient/Resource"
+   }
+  },
+  "BlogPostsTable95467250": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "PK",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "SK",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "PK",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "SK",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "BlogPosts-BlogInfraStack"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogPostsTable/Resource"
+   }
+  },
+  "BackendApiLambdaServiceRoleED0D8CBE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Purpose",
+      "Value": "Application Logic"
+     },
+     {
+      "Key": "Tier",
+      "Value": "Backend"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BackendApiLambda/ServiceRole/Resource"
+   }
+  },
+  "BackendApiLambdaServiceRoleDefaultPolicyFB6B1772": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "BlogPostsTable95467250",
+          "Arn"
+         ]
+        },
+        {
+         "Ref": "AWS::NoValue"
+        }
+       ]
+      },
+      {
+       "Action": "dynamodb:Query",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "BlogPostsTable95467250",
+            "Arn"
+           ]
+          },
+          "/index/*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": [
+        "cognito-idp:SignUp",
+        "cognito-idp:InitiateAuth",
+        "cognito-idp:GlobalSignOut"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "BlogUserPoolBB1AE2CC",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "BackendApiLambdaServiceRoleDefaultPolicyFB6B1772",
+    "Roles": [
+     {
+      "Ref": "BackendApiLambdaServiceRoleED0D8CBE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BackendApiLambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "BackendApiLambda22D4E71D": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+     "S3Key": "934b9777c0afc26aa24e8484bd7bdcbca4f72a31d955f899e5ff4de39732d741.zip"
+    },
+    "Description": "Handles all backend API logic (CRUD, Auth, etc.) via Hono.",
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "production",
+      "TABLE_NAME": {
+       "Ref": "BlogPostsTable95467250"
+      },
+      "USER_POOL_ID": {
+       "Ref": "BlogUserPoolBB1AE2CC"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Ref": "BlogUserPoolBlogAppClientFC769CAF"
+      },
+      "REGION": "ap-northeast-2",
+      "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1"
+     }
+    },
+    "FunctionName": "blog-backend-api-BlogInfraStack",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "BackendApiLambdaServiceRoleED0D8CBE",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Tags": [
+     {
+      "Key": "Purpose",
+      "Value": "Application Logic"
+     },
+     {
+      "Key": "Tier",
+      "Value": "Backend"
+     }
+    ],
+    "Timeout": 30,
+    "TracingConfig": {
+     "Mode": "Active"
+    }
+   },
+   "DependsOn": [
+    "BackendApiLambdaServiceRoleDefaultPolicyFB6B1772",
+    "BackendApiLambdaServiceRoleED0D8CBE"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BackendApiLambda/Resource",
+    "aws:asset:path": "asset.934b9777c0afc26aa24e8484bd7bdcbca4f72a31d955f899e5ff4de39732d741",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "BlogHttpApiGatewayCD53D1DC": {
+   "Type": "AWS::ApiGatewayV2::Api",
+   "Properties": {
+    "CorsConfiguration": {
+     "AllowCredentials": true,
+     "AllowHeaders": [
+      "Content-Type",
+      "Authorization"
+     ],
+     "AllowMethods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS"
+     ],
+     "AllowOrigins": [
+      "http://localhost:3000",
+      "https://blog.jungyu.store"
+     ]
+    },
+    "Name": "BlogHttpApi-BlogInfraStack",
+    "ProtocolType": "HTTP"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/Resource"
+   }
+  },
+  "BlogHttpApiGatewayDefaultStage8637BB43": {
+   "Type": "AWS::ApiGatewayV2::Stage",
+   "Properties": {
+    "ApiId": {
+     "Ref": "BlogHttpApiGatewayCD53D1DC"
+    },
+    "AutoDeploy": true,
+    "StageName": "$default"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/DefaultStage/Resource"
+   }
+  },
+  "BlogHttpApiGatewayANYproxyLambdaIntegration98027455": {
+   "Type": "AWS::ApiGatewayV2::Integration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "BlogHttpApiGatewayCD53D1DC"
+    },
+    "IntegrationType": "AWS_PROXY",
+    "IntegrationUri": {
+     "Fn::GetAtt": [
+      "BackendApiLambda22D4E71D",
+      "Arn"
+     ]
+    },
+    "PayloadFormatVersion": "2.0"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/LambdaIntegration/Resource"
+   }
+  },
+  "BlogHttpApiGatewayANYproxyLambdaIntegrationPermissionAD440C12": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "BackendApiLambda22D4E71D",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "BlogHttpApiGatewayCD53D1DC"
+       },
+       "/*/*/{proxy+}"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/LambdaIntegration-Permission"
+   }
+  },
+  "BlogHttpApiGatewayANYproxyF2BA0DA1": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "BlogHttpApiGatewayCD53D1DC"
+    },
+    "AuthorizationType": "NONE",
+    "RouteKey": "ANY /{proxy+}",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "BlogHttpApiGatewayANYproxyLambdaIntegration98027455"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/Resource"
+   }
+  },
+  "CacheBucket41D9D0B0": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "new-blog-remote-cache-786382940028-ap-northeast-2",
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 30,
+       "Id": "ExpireOldCache",
+       "Status": "Enabled"
+      },
+      {
+       "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 1
+       },
+       "Id": "AbortIncompleteMultipartUploads",
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheBucket/Resource"
+   }
+  },
+  "CacheBucketPolicyE2F00ED4": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "CacheBucket41D9D0B0"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CacheBucket41D9D0B0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CacheBucket41D9D0B0",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:PutBucketPolicy",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CacheBucket41D9D0B0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CacheBucket41D9D0B0",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheBucket/Policy/Resource"
+   }
+  },
+  "CacheBucketAutoDeleteObjectsCustomResource12E72BBC": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "CacheBucket41D9D0B0"
+    }
+   },
+   "DependsOn": [
+    "CacheBucketPolicyE2F00ED4"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "CacheBucket41D9D0B0"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:property": "Code"
+   }
+  },
+  "CacheGatewayLambdaServiceRole59AFFB4D": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/ServiceRole/Resource"
+   }
+  },
+  "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CacheBucket41D9D0B0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CacheBucket41D9D0B0",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":secretsmanager:ap-northeast-2:786382940028:secret:new-blog/turbo-token-??????"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C",
+    "Roles": [
+     {
+      "Ref": "CacheGatewayLambdaServiceRole59AFFB4D"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CacheGatewayLambdaBAF0D5E4": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+     "S3Key": "a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf.zip"
+    },
+    "Description": "Handles Turborepo remote cache requests and generates S3 presigned URLs.",
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "production",
+      "CACHE_BUCKET_NAME": {
+       "Ref": "CacheBucket41D9D0B0"
+      },
+      "TURBO_TOKEN_SECRET_ARN": "arn:aws:secretsmanager:ap-northeast-2:786382940028:secret:new-blog/turbo-token"
+     }
+    },
+    "FunctionName": "blog-cache-gateway-BlogInfraStack",
+    "Handler": "index.handler",
+    "MemorySize": 128,
+    "Role": {
+     "Fn::GetAtt": [
+      "CacheGatewayLambdaServiceRole59AFFB4D",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Timeout": 10
+   },
+   "DependsOn": [
+    "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C",
+    "CacheGatewayLambdaServiceRole59AFFB4D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/Resource",
+    "aws:asset:path": "asset.a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CacheHttpApiGatewayDCDB4C40": {
+   "Type": "AWS::ApiGatewayV2::Api",
+   "Properties": {
+    "CorsConfiguration": {
+     "AllowHeaders": [
+      "Authorization",
+      "Content-Type"
+     ],
+     "AllowMethods": [
+      "GET",
+      "PUT"
+     ],
+     "AllowOrigins": [
+      "*"
+     ]
+    },
+    "Description": "API Gateway for Turborepo remote cache",
+    "Name": "CacheHttpApi-BlogInfraStack",
+    "ProtocolType": "HTTP"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/Resource"
+   }
+  },
+  "CacheHttpApiGatewayDefaultStageA2763150": {
+   "Type": "AWS::ApiGatewayV2::Stage",
+   "Properties": {
+    "ApiId": {
+     "Ref": "CacheHttpApiGatewayDCDB4C40"
+    },
+    "AutoDeploy": true,
+    "StageName": "$default"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/DefaultStage/Resource"
+   }
+  },
+  "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC": {
+   "Type": "AWS::ApiGatewayV2::Integration",
+   "Properties": {
+    "ApiId": {
+     "Ref": "CacheHttpApiGatewayDCDB4C40"
+    },
+    "IntegrationType": "AWS_PROXY",
+    "IntegrationUri": {
+     "Fn::GetAtt": [
+      "CacheGatewayLambdaBAF0D5E4",
+      "Arn"
+     ]
+    },
+    "PayloadFormatVersion": "2.0"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration/Resource"
+   }
+  },
+  "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationPermission4C3055F8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CacheGatewayLambdaBAF0D5E4",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "CacheHttpApiGatewayDCDB4C40"
+       },
+       "/*/*/v8/artifacts/{proxy+}"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission"
+   }
+  },
+  "CacheHttpApiGatewayGETv8artifactsproxyF74CEC1E": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "CacheHttpApiGatewayDCDB4C40"
+    },
+    "AuthorizationType": "NONE",
+    "RouteKey": "GET /v8/artifacts/{proxy+}",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/Resource"
+   }
+  },
+  "CacheHttpApiGatewayPUTv8artifactsproxyCacheLambdaIntegrationPermissionC1C8B7DC": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CacheGatewayLambdaBAF0D5E4",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:ap-northeast-2:786382940028:",
+       {
+        "Ref": "CacheHttpApiGatewayDCDB4C40"
+       },
+       "/*/*/v8/artifacts/{proxy+}"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission"
+   }
+  },
+  "CacheHttpApiGatewayPUTv8artifactsproxy06A19174": {
+   "Type": "AWS::ApiGatewayV2::Route",
+   "Properties": {
+    "ApiId": {
+     "Ref": "CacheHttpApiGatewayDCDB4C40"
+    },
+    "AuthorizationType": "NONE",
+    "RouteKey": "PUT /v8/artifacts/{proxy+}",
+    "Target": {
+     "Fn::Join": [
+      "",
+      [
+       "integrations/",
+       {
+        "Ref": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC"
+       }
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/Resource"
+   }
+  },
+  "FrontendAssetsBucket52F4AD30": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerEnforced"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendAssetsBucket/Resource"
+   }
+  },
+  "FrontendAssetsBucketPolicyC3DA97EC": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "FrontendAssetsBucket52F4AD30"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:PutBucketPolicy",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "FrontendAssetsBucket52F4AD30",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "FrontendAssetsBucket52F4AD30",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetObject",
+       "Condition": {
+        "StringEquals": {
+         "AWS:SourceArn": {
+          "Fn::Join": [
+           "",
+           [
+            "arn:aws:cloudfront::786382940028:distribution/",
+            {
+             "Ref": "NewFrontendDistribution"
+            }
+           ]
+          ]
+         },
+         "AWS:SourceAccount": "786382940028"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "cloudfront.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "FrontendAssetsBucket52F4AD30",
+            "Arn"
+           ]
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendAssetsBucket/Policy/Resource"
+   }
+  },
+  "FrontendAssetsBucketAutoDeleteObjectsCustomResource81511928": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "FrontendAssetsBucket52F4AD30"
+    }
+   },
+   "DependsOn": [
+    "FrontendAssetsBucketPolicyC3DA97EC"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendAssetsBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "FrontendServerLambdaServiceRole1087CF04": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Purpose",
+      "Value": "Application Logic"
+     },
+     {
+      "Key": "Tier",
+      "Value": "Frontend"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendServerLambda/ServiceRole/Resource"
+   }
+  },
+  "FrontendServerLambdaServiceRoleDefaultPolicy691C032A": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "FrontendAssetsBucket52F4AD30",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "FrontendAssetsBucket52F4AD30",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "FrontendServerLambdaServiceRoleDefaultPolicy691C032A",
+    "Roles": [
+     {
+      "Ref": "FrontendServerLambdaServiceRole1087CF04"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendServerLambda/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "FrontendServerLambdaDC0C127D": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "arm64"
+    ],
+    "Code": {
+     "ImageUri": {
+      "Fn::Join": [
+       "",
+       [
+        "786382940028.dkr.ecr.ap-northeast-2.",
+        {
+         "Ref": "AWS::URLSuffix"
+        },
+        "/new-blog-frontend:",
+        {
+         "Ref": "ImageTag"
+        }
+       ]
+      ]
+     }
+    },
+    "Description": "Renders the Next.js frontend application (SSR).",
+    "Environment": {
+     "Variables": {
+      "AWS_LAMBDA_EXEC_WRAPPER": "/opt/extensions/lambda-adapter",
+      "PORT": "3000",
+      "NEXT_PUBLIC_API_ENDPOINT": {
+       "Fn::Join": [
+        "",
+        [
+         "https://",
+         {
+          "Ref": "BlogHttpApiGatewayCD53D1DC"
+         },
+         ".execute-api.ap-northeast-2.",
+         {
+          "Ref": "AWS::URLSuffix"
+         },
+         "/"
+        ]
+       ]
+      },
+      "NEXT_PUBLIC_REGION": "ap-northeast-2",
+      "NEXT_PUBLIC_USER_POOL_ID": {
+       "Ref": "BlogUserPoolBB1AE2CC"
+      },
+      "NEXT_PUBLIC_USER_POOL_CLIENT_ID": {
+       "Ref": "BlogUserPoolBlogAppClientFC769CAF"
+      }
+     }
+    },
+    "FunctionName": "blog-frontend-server-BlogInfraStack",
+    "MemorySize": 1024,
+    "PackageType": "Image",
+    "Role": {
+     "Fn::GetAtt": [
+      "FrontendServerLambdaServiceRole1087CF04",
+      "Arn"
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "Purpose",
+      "Value": "Application Logic"
+     },
+     {
+      "Key": "Tier",
+      "Value": "Frontend"
+     }
+    ],
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "FrontendServerLambdaServiceRoleDefaultPolicy691C032A",
+    "FrontendServerLambdaServiceRole1087CF04"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendServerLambda/Resource"
+   }
+  },
+  "FrontendServerLambdaFunctionUrl0E7F662D": {
+   "Type": "AWS::Lambda::Url",
+   "Properties": {
+    "AuthType": "NONE",
+    "TargetFunctionArn": {
+     "Fn::GetAtt": [
+      "FrontendServerLambdaDC0C127D",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendServerLambda/FunctionUrl/Resource"
+   }
+  },
+  "FrontendServerLambdainvokefunctionurl813AF87B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunctionUrl",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "FrontendServerLambdaDC0C127D",
+      "Arn"
+     ]
+    },
+    "FunctionUrlAuthType": "NONE",
+    "Principal": "*"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/FrontendServerLambda/invoke-function-url"
+   }
+  },
+  "S3OAC": {
+   "Type": "AWS::CloudFront::OriginAccessControl",
+   "Properties": {
+    "OriginAccessControlConfig": {
+     "Name": "OAC-for-S3-BlogInfraStack",
+     "OriginAccessControlOriginType": "s3",
+     "SigningBehavior": "always",
+     "SigningProtocol": "sigv4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/S3OAC"
+   }
+  },
+  "NewFrontendDistribution": {
+   "Type": "AWS::CloudFront::Distribution",
+   "Properties": {
+    "DistributionConfig": {
+     "Aliases": [
+      "blog.jungyu.store"
+     ],
+     "CacheBehaviors": [
+      {
+       "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+       "Compress": true,
+       "PathPattern": "/_next/static/*",
+       "TargetOriginId": "FrontendAssetsOrigin",
+       "ViewerProtocolPolicy": "redirect-to-https"
+      },
+      {
+       "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+       "Compress": true,
+       "PathPattern": "/assets/*",
+       "TargetOriginId": "FrontendAssetsOrigin",
+       "ViewerProtocolPolicy": "redirect-to-https"
+      },
+      {
+       "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT",
+        "POST",
+        "PATCH",
+        "DELETE"
+       ],
+       "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+       "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+       "PathPattern": "/api/*",
+       "TargetOriginId": "BackendApiOrigin",
+       "ViewerProtocolPolicy": "redirect-to-https"
+      }
+     ],
+     "Comment": "Distribution for blog.jungyu.store",
+     "DefaultCacheBehavior": {
+      "AllowedMethods": [
+       "GET",
+       "HEAD",
+       "OPTIONS",
+       "PUT",
+       "POST",
+       "PATCH",
+       "DELETE"
+      ],
+      "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+      "CachedMethods": [
+       "GET",
+       "HEAD"
+      ],
+      "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+      "TargetOriginId": "FrontendServerOrigin",
+      "ViewerProtocolPolicy": "redirect-to-https"
+     },
+     "Enabled": true,
+     "HttpVersion": "http2",
+     "Origins": [
+      {
+       "CustomOriginConfig": {
+        "OriginProtocolPolicy": "https-only",
+        "OriginSSLProtocols": [
+         "TLSv1.2"
+        ]
+       },
+       "DomainName": {
+        "Fn::Select": [
+         2,
+         {
+          "Fn::Split": [
+           "/",
+           {
+            "Fn::GetAtt": [
+             "FrontendServerLambdaFunctionUrl0E7F662D",
+             "FunctionUrl"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       "Id": "FrontendServerOrigin"
+      },
+      {
+       "DomainName": {
+        "Fn::GetAtt": [
+         "FrontendAssetsBucket52F4AD30",
+         "RegionalDomainName"
+        ]
+       },
+       "Id": "FrontendAssetsOrigin",
+       "OriginAccessControlId": {
+        "Fn::GetAtt": [
+         "S3OAC",
+         "Id"
+        ]
+       },
+       "S3OriginConfig": {}
+      },
+      {
+       "CustomOriginConfig": {
+        "OriginProtocolPolicy": "https-only",
+        "OriginSSLProtocols": [
+         "TLSv1.2"
+        ]
+       },
+       "DomainName": {
+        "Fn::Select": [
+         0,
+         {
+          "Fn::Split": [
+           "/",
+           {
+            "Fn::Select": [
+             1,
+             {
+              "Fn::Split": [
+               "://",
+               {
+                "Fn::Join": [
+                 "",
+                 [
+                  "https://",
+                  {
+                   "Ref": "BlogHttpApiGatewayCD53D1DC"
+                  },
+                  ".execute-api.ap-northeast-2.",
+                  {
+                   "Ref": "AWS::URLSuffix"
+                  },
+                  "/"
+                 ]
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       "Id": "BackendApiOrigin"
+      }
+     ],
+     "PriceClass": "PriceClass_200",
+     "ViewerCertificate": {
+      "AcmCertificateArn": "arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081",
+      "MinimumProtocolVersion": "TLSv1.2_2021",
+      "SslSupportMethod": "sni-only"
+     }
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/NewFrontendDistribution"
+   }
+  },
+  "NewSiteARecord3521D75B": {
+   "Type": "AWS::Route53::RecordSet",
+   "Properties": {
+    "AliasTarget": {
+     "DNSName": {
+      "Fn::GetAtt": [
+       "NewFrontendDistribution",
+       "DomainName"
+      ]
+     },
+     "HostedZoneId": {
+      "Fn::FindInMap": [
+       "AWSCloudFrontPartitionHostedZoneIdMap",
+       {
+        "Ref": "AWS::Partition"
+       },
+       "zoneId"
+      ]
+     }
+    },
+    "HostedZoneId": "Z0802600EUJ1KX823IZ7",
+    "Name": "blog.jungyu.store.",
+    "Type": "A"
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/NewSiteARecord/Resource"
+   }
+  },
+  "BackendApiLambdaErrorsAlarm50331283": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Lambda function errors detected!",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "BackendApiLambda22D4E71D"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/BackendApiLambdaErrorsAlarm/Resource"
+   }
+  },
+  "ApiGatewayServerErrorAlarm002176CB": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "API Gateway 5xx server errors detected!",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "ApiId",
+      "Value": {
+       "Ref": "BlogHttpApiGatewayCD53D1DC"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "5xx",
+    "Namespace": "AWS/ApiGateway",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Threshold": 1
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/ApiGatewayServerErrorAlarm/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12SwW7bMAyGn6V3RcscDNvVdTGsh7aBs54DWqY9JbZkUFSCQNC7D5LmrNvp/yhSP0nZlay2X+X2Aa5uo/rzZtKdDAcGdRbNYPZAMCMjCbi6Y1B2NJqtDO8OaW/tlGruvEIzaTT8MVVOouhvBmbbdzL8hG7CVJIhignmroejsT2enHzN8t0bxdoaoWGWobXlQta9nbS65QkzReF2R3AO2ck6iXA7GR69OiM/gkNRMF34Q0X++nyM13FkaAZznyI1Q5q1cyl6suqM9DzDiPeKFd6pPAxNUcCiR2C8wu1SyfCDeakXnbJJUnhgGPNiBdJRaz0XejaMI8Ha/78w10WBimSLi3WaLd3yumqyvh/IGs47vJEetamVQucaa5jKl3vSjkl3PvlFQcnty06GukVlqc8dMh2QY7G8AqtfMtQT0JyXSBCjaNFZTwpFfvy0iTajaLxjO99z2W/lf1J7shfdI+XZm8G8wLJkg8G8eV48R5H+DHlyny5VJT9/k9uHk9N6Q96wnlG2RX8DgoCK680CAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Mappings": {
+  "AWSCloudFrontPartitionHostedZoneIdMap": {
+   "aws": {
+    "zoneId": "Z2FDTNDATAQYW2"
+   },
+   "aws-cn": {
+    "zoneId": "Z3RFFRIM2A3IF5"
+   }
+  }
+ },
+ "Outputs": {
+  "ApiGatewayEndpoint": {
+   "Description": "HTTP API Gateway endpoint URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "BlogHttpApiGatewayCD53D1DC"
+      },
+      ".execute-api.ap-northeast-2.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "UserPoolIdOutput": {
+   "Description": "Cognito User Pool ID",
+   "Value": {
+    "Ref": "BlogUserPoolBB1AE2CC"
+   }
+  },
+  "UserPoolClientIdOutput": {
+   "Description": "Cognito User Pool App Client ID",
+   "Value": {
+    "Ref": "BlogUserPoolBlogAppClientFC769CAF"
+   }
+  },
+  "RegionOutput": {
+   "Description": "AWS Region",
+   "Value": "ap-northeast-2"
+  },
+  "FrontendURL": {
+   "Description": "URL of the frontend CloudFront distribution",
+   "Value": "https://blog.jungyu.store"
+  },
+  "FrontendAssetsBucketName": {
+   "Description": "S3 Bucket for frontend assets",
+   "Value": {
+    "Ref": "FrontendAssetsBucket52F4AD30"
+   }
+  },
+  "CloudFrontDistributionId": {
+   "Description": "ID of the CloudFront distribution",
+   "Value": {
+    "Ref": "NewFrontendDistribution"
+   }
+  },
+  "CacheApiGatewayEndpoint": {
+   "Description": "HTTP API Gateway endpoint URL for Turborepo remote cache",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "CacheHttpApiGatewayDCDB4C40"
+      },
+      ".execute-api.ap-northeast-2.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/"
+     ]
+    ]
+   }
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

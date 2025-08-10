@@ -27,6 +27,8 @@ import { handle, LambdaEvent, LambdaContext } from 'hono/aws-lambda'; // LambdaE
 import { z, ZodError, ZodIssue } from 'zod'; // Zod 라이브러리 및 ZodError, ZodIssue 타입 임포트
 import { zValidator } from '@hono/zod-validator'; // 올바른 패키지: @hono/zod-validator 임포트
 import { CognitoJwtVerifier } from 'aws-jwt-verify'; // AWS JWT Verify 라이브러리
+import { serve } from '@hono/node-server'; // [추가] 로컬 개발 서버 구동을 위한 로직
+
 
 // ---------------------------
 // 2. 환경 변수 로드
@@ -320,3 +322,16 @@ console.log("LAMBDA CODE VERSION 1.0.1 DEPLOYED SUCCESSFULLY!");
 // 10. Lambda 핸들러 내보내기
 // ---------------------------
 export const handler = handle(app);
+
+
+// 'production' 환경(AWS Lambda)이 아닐 때만 이 코드가 실행됩니다.
+if (process.env.NODE_ENV !== 'production') {
+  serve({
+    fetch: app.fetch,
+    port: 4000, // 백엔드 서버는 4000번 포트를 사용합니다.
+  }, (info) => {
+    // 서버가 성공적으로 시작되면 터미널에 메시지를 출력합니다.
+    console.log(`[BACKEND] Development server is running at http://localhost:${info.port}`);
+  });
+}
+

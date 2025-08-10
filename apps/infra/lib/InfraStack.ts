@@ -24,6 +24,8 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+
 
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -104,6 +106,77 @@ export class InfraStack extends Stack {
 
     const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', backendApiLambda);
     httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
+
+
+    // ===================================================================================
+    // SECTION 1.5: 원격 캐시 리소스 정의 (Turborepo)
+    // ===================================================================================
+
+    // 1. 캐시 아티팩트를 저장할 S3 버킷 (The Vault)
+    const cacheBucket = new s3.Bucket(this, 'CacheBucket', {
+      bucketName: `new-blog-remote-cache-${this.account}-${this.region}`, // 전역적으로 고유한 버킷 이름
+      removalPolicy: RemovalPolicy.DESTROY, // 스택 삭제 시 버킷도 함께 삭제
+      autoDeleteObjects: true, // 스택 삭제 시 버킷 안의 객체들도 모두 삭제
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // 모든 퍼블릭 접근 차단
+      encryption: s3.BucketEncryption.S3_MANAGED, // 서버 측 암호화 활성화
+      enforceSSL: true, // SSL/TLS를 통해서만 접근하도록 강제
+      lifecycleRules: [
+        {
+          // [핵심] 30일이 지난 오래된 캐시는 자동으로 삭제하여 비용을 관리합니다.
+          id: 'ExpireOldCache',
+          enabled: true,
+          expiration: Duration.days(30),
+        },
+        {
+          // [핵심] 실패한 대용량 업로드의 조각들을 하루 뒤에 정리합니다.
+          id: 'AbortIncompleteMultipartUploads',
+          enabled: true,
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+        },
+      ],
+    });
+
+    const cacheGatewayLambda = new NodejsFunction(this, 'CacheGatewayLambda', {
+      functionName: `blog-cache-gateway-${this.stackName}`,
+      description: 'Handles Turborepo remote cache requests and generates S3 presigned URLs.',
+      entry: path.join(projectRoot, 'apps', 'cache-gateway', 'src', 'index.ts'), // [임시] 실제 파일은 나중에 만듭니다.
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      memorySize: 128,
+      timeout: Duration.seconds(10),
+      environment: {
+        NODE_ENV: 'production',
+        CACHE_BUCKET_NAME: cacheBucket.bucketName,
+        // [추가] Secrets Manager의 ARN을 환경 변수로 전달합니다.
+        TURBO_TOKEN_SECRET_ARN: `arn:aws:secretsmanager:${this.region}:${this.account}:secret:new-blog/turbo-token`,
+      },
+    });
+
+    // 3. Lambda를 외부에서 호출할 수 있는 API Gateway (The Gateway)
+    const cacheHttpApi = new HttpApi(this, 'CacheHttpApiGateway', {
+      apiName: `CacheHttpApi-${this.stackName}`,
+      description: 'API Gateway for Turborepo remote cache',
+      corsPreflight: {
+        allowOrigins: ['*'], // 모든 출처에서의 요청을 허용 (Turborepo CI 환경)
+        allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.PUT],
+        allowHeaders: ['Authorization', 'Content-Type'],
+      },
+    });
+
+    const cacheLambdaIntegration = new HttpLambdaIntegration('CacheLambdaIntegration', cacheGatewayLambda);
+
+    cacheHttpApi.addRoutes({
+      path: '/v8/artifacts/{proxy+}', // Turborepo의 표준 캐시 경로
+      methods: [HttpMethod.GET, HttpMethod.PUT],
+      integration: cacheLambdaIntegration,
+    });
+
+    // 4. Lambda가 S3 버킷에 접근할 수 있도록 최소한의 권한을 부여합니다.
+    cacheBucket.grantReadWrite(cacheGatewayLambda);
+    const secret = secretsmanager.Secret.fromSecretNameV2(this, 'TurboTokenSecret', 'new-blog/turbo-token');
+    secret.grantRead(cacheGatewayLambda);
+
+
 
     // ===================================================================================
     // SECTION 2: 프론트엔드 리소스 정의 (정화된 최종 완성본)
@@ -228,6 +301,7 @@ export class InfraStack extends Stack {
     new CfnOutput(this, 'FrontendURL', { value: `https://${siteDomain}`, description: 'URL of the frontend CloudFront distribution' });
     new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName, description: 'S3 Bucket for frontend assets' });
     new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.ref, description: 'ID of the CloudFront distribution' });
+    new CfnOutput(this, 'CacheApiGatewayEndpoint', { value: cacheHttpApi.url!, description: 'HTTP API Gateway endpoint URL for Turborepo remote cache', });
 
     backendApiLambda.metricErrors({ period: Duration.minutes(5) }).createAlarm(this, 'BackendApiLambdaErrorsAlarm', {
       threshold: 1, evaluationPeriods: 1, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, alarmDescription: 'Lambda function errors detected!',
