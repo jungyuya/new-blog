@@ -60,6 +60,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_API: ${{ vars.TURBO_API_ENDPOINT }}
           TURBO_TEAM: "jungyu-dev"
+          TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
         run: pnpm exec turbo run build --filter=frontend --verbosity=3
 
       - name: "Login to Amazon ECR"
