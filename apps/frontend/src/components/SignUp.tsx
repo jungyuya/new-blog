@@ -19,15 +19,6 @@ export default function SignUp() {
         setError(null);
         setSuccess(null);
 
-        // [핵심 수정 2] 환경 변수를 읽는 로직 전체를 삭제합니다.
-        /*
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_ENDPOINT;
-        if (!apiBaseUrl) {
-            setError('API 엔드포인트가 설정되지 않았습니다.');
-            setIsLoading(false);
-            return;
-        }
-        */
 
         // [핵심 수정 3] 이제부터는 항상 우리 사이트 내부의 상대 경로로 요청을 보냅니다.
         const apiUrl = '/api/auth/signup';
@@ -61,7 +52,7 @@ export default function SignUp() {
 
     return (
         <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-center text-gray-900">회원가입</h2>
+            <h2 className="text-2xl font-bold text-center text-gray-900">회원 가입</h2>
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
