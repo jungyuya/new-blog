@@ -36,7 +36,7 @@ jobs:
       - name: "Setup Node.js"
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: "Setup pnpm"
         uses: pnpm/action-setup@v4
@@ -56,9 +56,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "Build with Turborepo Remote Cache"
-        env : 
+        env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_API: ${{ secrets.TURBO_API_ENDPOINT }}
+          TURBO_API: ${{ vars.TURBO_API_ENDPOINT }}
         run: pnpm --filter frontend run build
 
       - name: "Login to Amazon ECR"
@@ -136,6 +136,6 @@ jobs:
             echo "::error::Failed to read CloudFront distribution ID from CDK outputs."
             exit 1
           fi
-          
+
           echo "Invalidating cache for distribution: $DISTRIBUTION_ID"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"

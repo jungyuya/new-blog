@@ -52,11 +52,11 @@ export default function SignUp() {
 
     return (
         <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-center text-gray-900">회원 가입</h2>
+            <h2 className="text-2xl font-bold text-center text-gray-900">*회원 가입*</h2>
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                        이메일 주소
+                        E-mail
                     </label>
                     <input
                         id="email"
@@ -71,7 +71,7 @@ export default function SignUp() {
                 </div>
                 <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                        비밀번호
+                        Password
                     </label>
                     <input
                         id="password"
