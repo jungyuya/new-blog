@@ -66,10 +66,6 @@ export class InfraStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    const backendPackageJsonPath = path.join(projectRoot, 'apps', 'backend', 'package.json');
-    const backendPackageJson = JSON.parse(fs.readFileSync(backendPackageJsonPath, 'utf8'));
-    const backendVersion = backendPackageJson.version;
-
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
       description: 'Handles all backend API logic (CRUD, Auth, etc.) via Hono.',
@@ -85,7 +81,6 @@ export class InfraStack extends Stack {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         REGION: this.region,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-        BACKEND_VERSION: backendVersion,
       },
       tracing: lambda.Tracing.ACTIVE,
       bundling: { minify: true, externalModules: [] },
@@ -175,14 +170,11 @@ export class InfraStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            // [핵심] OAC를 사용하므로 s3OriginConfig는 "빈 객체"로 전달해야 합니다.
-            // 내부에 originAccessIdentity 키 자체를 포함해서는 안 됩니다.
             s3OriginConfig: {},
           },
           {
             id: 'BackendApiOrigin',
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
-            // originPath가 없는 것이 올바른 설정입니다.
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
         ],
@@ -214,8 +206,6 @@ export class InfraStack extends Stack {
         },
       },
     }));
-
-    // [핵심 수정 2] 불필요한 execute-api:Invoke 권한 부여 코드를 완전히 삭제합니다.
 
     const distributionTarget = cloudfront.Distribution.fromDistributionAttributes(this, 'ImportedDistribution', {
       distributionId: distribution.ref,

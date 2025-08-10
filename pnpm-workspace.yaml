@@ -1,3 +1,4 @@
+#new-blog/pnpm-workspace.yaml
 packages:
   - "apps/*"
   - "packages/*"
