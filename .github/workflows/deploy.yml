@@ -59,7 +59,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_API: ${{ vars.TURBO_API_ENDPOINT }}
-        run: pnpm --filter frontend run build
+        run: pnpm exec turbo run build --filter=frontend --log-level=debug
 
       - name: "Login to Amazon ECR"
         id: login-ecr
