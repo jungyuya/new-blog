@@ -1,6 +1,6 @@
 # 파일 위치: apps/frontend/Dockerfile
-# 버전: v3.0.0 (The Masterpiece)
-# 역할: 빌드 타임 정규화, 멱등성 보장, 디버깅 편의성까지 모두 갖춘 최종 결정판
+# 최종 안정화 버전: v3.0.1
+# 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
 
 # ===================================================================================
 # Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
@@ -33,9 +33,15 @@ COPY --from=builder /app/apps/frontend/public /app/public
 COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
-# [마스터피스 개선 1] 멱등성 보장: 'ln -sf'를 사용하여 심볼릭 링크를 안전하게 덮어씁니다.
-# [마스터피스 개선 2] 디버깅 편의성: 실패 시 'ls' 명령으로 현재 상태를 출력합니다.
+# [최종 안정화] 빌드 시점에 server.js의 위치를 확인하고,
+# /app/standalone/server.js 경로로 심볼릭 링크를 생성하여 실행 경로를 정규화합니다.
 RUN if [ -f /app/standalone/server.js ]; then \
       echo "server.js found at /app/standalone"; \
     elif [ -f /app/standalone/apps/frontend/server.js ]; then \
-      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && ech
+      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && echo "Symbolic link created: /app/standalone/server.js -> /app/standalone/apps/frontend/server.js"; \
+    else \
+      echo "ERROR: server.js not found in standalone output. Listing /app/standalone contents:" >&2; ls -la /app/standalone || true; exit 1; \
+    fi
+
+# [최종 안정화] 항상 정규화된 단일 경로를 사용하여 서버를 실행합니다.
+CMD ["node", "/app/standalone/server.js"]
