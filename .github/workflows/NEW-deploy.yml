@@ -111,17 +111,18 @@ jobs:
   deploy_blog_app:
     name: "Deploy Blog Application"
     needs: [detect_changes, deploy_cicd_infra]
-    # self-hosted runner에서만 빌드/이미지 푸시 수행
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
-    # blog 변경 없고 수동 실행도 아니면 이 Job 자체를 건너뜁니다.
     if: ${{ needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: "Checkout & Setup"
         uses: actions/checkout@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -137,6 +138,21 @@ jobs:
           pnpm --filter frontend run build
           pnpm --filter backend run build
 
+      - name: "Install Docker"
+        run: |
+          sudo yum update -y
+          sudo amazon-linux-extras enable docker
+          sudo yum install -y docker
+          sudo systemctl enable docker
+          sudo systemctl start docker
+          sudo usermod -aG docker ec2-user
+
+      - name: "Set up QEMU"
+        uses: docker/setup-qemu-action@v2
+
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v2
+
       - name: "Configure AWS Credentials (EC2 Role / Instance Profile)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -149,7 +165,6 @@ jobs:
       - name: "Define Image Tag"
         id: image-def
         run: |
-          # TAG 예: 20250812123045-abcdef1
           echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: "Build and push Docker image"
@@ -159,7 +174,7 @@ jobs:
           file: ./apps/frontend/Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/amd64
+          platforms: linux/arm64
           provenance: false
 
       - name: "Deploy Blog Infrastructure (CDK)"
@@ -169,16 +184,14 @@ jobs:
             --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      - name: "Sync Static Assets to S3 (using node to avoid jq dependency)"
+      - name: "Sync Static Assets to S3"
         run: |
           set -euo pipefail
           ASSET_BUCKET_NAME=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.FrontendAssetsBucketName)")
-          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
-      - name: "Invalidate CloudFront Cache (using node)"
+      - name: "Invalidate CloudFront Cache"
         run: |
           set -euo pipefail
           DISTRIBUTION_ID=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.CloudFrontDistributionId)")
-          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"

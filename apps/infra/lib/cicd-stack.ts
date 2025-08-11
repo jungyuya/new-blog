@@ -84,21 +84,44 @@ export class CiCdStack extends Stack {
 
     // -- addCommands로 여러 문자열 인수를 전달하여 템플릿 인터폴레이션 충돌을 피합니다.
     userData.addCommands(
+      // package manager 결정
       'if command -v dnf >/dev/null 2>&1; then PM=dnf; else PM=yum; fi',
+      // 기본 업데이트 및 최소 필수 패키지 설치 (curl은 AMI에 기본으로 있는 경우가 많아 제외하여 충돌 회피)
       '$PM update -y',
-      '$PM install -y git docker jq tar gzip libicu curl unzip sudo',
-      'systemctl enable --now docker',
-      'usermod -aG docker ec2-user || true',
+      '$PM install -y git jq tar gzip libicu unzip sudo || true',
 
-      // AWS CLI 설치 (이미 고치셨다고 하셨으므로 수정된 명령 유지)
-      'if ! command -v aws >/dev/null 2>&1; then',
-      '  curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"',
-      '  unzip -q awscliv2.zip',
-      '  sudo ./aws/install || echo "aws install failed" >&2',
-      '  rm -rf aws awscliv2.zip',
+      // ---------- Docker 설치 (충돌 회피용: get.docker.com 사용) ----------
+      // 이미 docker가 있으면 설치 스킵
+      'if ! command -v docker >/dev/null 2>&1; then',
+      '  echo "--- Installing Docker via get.docker.com ---"',
+      '  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh || { echo "curl failed; aborting docker install" >&2; exit 1; }',
+      '  sudo sh /tmp/get-docker.sh || { echo "get-docker.sh failed"; exit 1; }',
       'fi',
 
-      // heredoc으로 setup_runner.sh를 생성
+      // Docker 서비스 활성화 및 readiness 체크
+      'sudo systemctl enable --now docker || echo "systemctl enable/start docker returned non-zero"',
+      'for i in {1..30}; do',
+      '  if sudo docker info >/dev/null 2>&1; then',
+      '    echo "docker ready"',
+      '    break',
+      '  fi',
+      '  echo "waiting for docker... ($i)"',
+      '  sleep 2',
+      'done',
+
+      // docker 그룹에 ec2-user 추가 (있어도 무시)
+      'sudo usermod -aG docker ec2-user || true',
+
+      // ---------- AWS CLI 설치 (aarch64 zip 방식) ----------
+      'if ! command -v aws >/dev/null 2>&1; then',
+      '  echo "--- Installing AWS CLI v2 ---"',
+      '  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip" || { echo "awscli download failed" >&2; }',
+      '  unzip -q /tmp/awscliv2.zip -d /tmp || true',
+      '  sudo /tmp/aws/install || echo "aws install failed" >&2',
+      '  rm -rf /tmp/aws /tmp/awscliv2.zip || true',
+      'fi',
+
+      // ---------- heredoc으로 setup_runner.sh 생성 (기존 스크립트 유지) ----------
       "cat <<'EOF' > /home/ec2-user/setup_runner.sh",
       '#!/bin/bash -xe',
       'exec > /home/ec2-user/runner_setup.log 2>&1',
@@ -250,11 +273,13 @@ export class CiCdStack extends Stack {
       // heredoc 이후 원본대로 소유권/권한/실행
       'chown ec2-user:ec2-user /home/ec2-user/setup_runner.sh',
       'chmod +x /home/ec2-user/setup_runner.sh',
+      // setup_runner.sh 내부가 docker 의존 작업(예: runner config/install/start) 수행하므로
+      // docker 준비(install + readiness) -> usermod -> 파일 소유권 적용 -> 스크립트 실행 순서를 지켰습니다.
       'su - ec2-user -c "/home/ec2-user/setup_runner.sh"'
     );
 
     runnerInstance.addUserData(userData.render());
-
+   
     // ===================================================================================
     // SECTION 4: 네트워크 주소 설정
     // ===================================================================================
