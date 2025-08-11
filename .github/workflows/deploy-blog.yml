@@ -49,12 +49,9 @@ jobs:
           pnpm --filter frontend run build
           pnpm --filter backend run build
 
-      - name: "Configure AWS Credentials"
+      - name: "Configure AWS Credentials from EC2 Role"
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # [핵심] Runner의 EC2 인스턴스 역할이 모든 권한을 가지므로,
-          # OIDC 역할 전환 없이, 현재 환경의 자격 증명을 그대로 사용합니다.
-          # role-to-assume을 생략하면, 이 Action은 EC2 인스턴스 프로파일을 자동으로 사용합니다.
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "Login to ECR"

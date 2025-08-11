@@ -39,8 +39,17 @@ export class CiCdStack extends Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM Role for the self-hosted runner EC2 instance',
     });
+
+    // [핵심 1] SSM 접속 권한을 추가합니다.
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
 
+    // [핵심 2] CDK 배포, ECR 푸시, S3 동기화 등 모든 작업을 수행할 수 있도록
+    // AdministratorAccess 권한을 부여합니다.
+    // 이것은 우리가 OIDC 역할에 부여했던 것과 동일한 권한 수준입니다.
+    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'));
+
+    // Secrets Manager 읽기 권한은 AdministratorAccess에 이미 포함되어 있으므로,
+    // 별도로 추가할 필요가 없습니다. 하지만 명시성을 위해 남겨두는 것도 좋습니다.
     const githubPatSecret = secretsmanager.Secret.fromSecretNameV2(this, 'GitHubPatSecret', 'cicd/github-runner-pat');
     githubPatSecret.grantRead(runnerRole);
 
