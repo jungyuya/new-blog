@@ -121,7 +121,7 @@ export class CiCdStack extends Stack {
       '  rm -rf /tmp/aws /tmp/awscliv2.zip || true',
       'fi',
 
-      // ---------- heredoc으로 setup_runner.sh 생성 (기존 스크립트 유지) ----------
+      // ---------- heredoc으로 setup_runner.sh 생성  ----------
       "cat <<'EOF' > /home/ec2-user/setup_runner.sh",
       '#!/bin/bash -xe',
       'exec > /home/ec2-user/runner_setup.log 2>&1',
