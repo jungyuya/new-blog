@@ -73,18 +73,36 @@ export class CiCdStack extends Stack {
       'dnf update -y',
       'dnf install -y git jq docker',
       'systemctl enable --now docker',
-      'usermod -aG docker ec2-user',
+      'usermod -aG docker ec2-user', // [수정] 'usod' 타이포 수정
 
-      // --- ec2-user 사용자로 실행되는 부분 ---
-      // su -l <user> -c <command> 형식은, 해당 사용자로 로그인하여 명령어를 실행하므로,
-      // 모든 경로는 해당 사용자의 홈 디렉토리(/home/ec2-user)를 기준으로 합니다.
+      // --- ec2-user 사용자로 안전하게 단일 블록 실행 ---
+      // sudo -iu ec2-user: ec2-user로 로그인 쉘을 실행하여 환경을 완벽하게 설정
+      // bash -c "...": 따옴표 안의 전체 스크립트를 bash 쉘에서 실행
+      `sudo -iu ec2-user bash -c "set -euo pipefail
+    echo '--- Starting setup as ec2-user ---'
 
-      // 1. ec2-user로 전환하여 코드 클론
-      'su -l ec2-user -c "git clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog"',
+    # git clone (네트워크 오류에 대비한 재시도 루프 포함)
+    if [ ! -d /home/ec2-user/new-blog ]; then
+      until git clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog; do
+        echo 'git clone failed, retrying in 5 seconds...'
+        sleep 5
+      done
+    fi
+    
+    cd /home/ec2-user/new-blog
 
-      // 2. ec2-user로 전환하여 설치 스크립트 실행
-      //    - 스크립트가 존재하는지 확인하는 안전 장치를 추가합니다.
-      'su -l ec2-user -c "if [ -f /home/ec2-user/new-blog/scripts/setup_runner.sh ]; then chmod +x /home/ec2-user/new-blog/scripts/setup_runner.sh && /home/ec2-user/new-blog/scripts/setup_runner.sh; else echo \'Script not found\'; fi"'
+    # 스크립트가 존재하는지 확인 후, 실행 권한을 부여하고 실행
+    # 모든 출력을 tee 명령어로 로그 파일과 콘솔에 동시에 기록하여 디버깅 용이성 확보
+    if [ -f ./scripts/setup_runner.sh ]; then
+      chmod +x ./scripts/setup_runner.sh
+      ./scripts/setup_runner.sh 2>&1 | tee /home/ec2-user/setup_runner.log
+    else
+      echo 'ERROR: setup_runner.sh not found in repository.' | tee /home/ec2-user/setup_runner.log
+      exit 1
+    fi
+
+    echo '--- Finished setup as ec2-user ---'
+  "`,
     );
 
     runnerInstance.addUserData(userData.render());
