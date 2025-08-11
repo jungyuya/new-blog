@@ -1,0 +1,93 @@
+# 파일 위치: .github/workflows/deploy-blog.yml
+# 최종 버전: v2025.08.08-Republic-of-Blog
+# 역할: 블로그 애플리케이션(BlogInfraStack)을 Self-Hosted Runner 위에서 빌드하고 배포한다.
+
+name: "Deploy Blog Application"
+
+on:
+  push:
+    branches: [main]
+    # [핵심] 블로그 관련 코드 또는 인프라가 변경되었을 때만 실행됩니다.
+    # CiCdStack.ts의 변경은 이 워크플로우를 트리거하지 않습니다.
+    paths:
+      - 'apps/frontend/**'
+      - 'apps/backend/**'
+      - 'apps/infra/lib/blog-stack.ts'
+      - 'apps/infra/bin/infra.ts'
+      - '.github/workflows/deploy-blog.yml'
+      - 'pnpm-lock.yaml' # 의존성 변경 시에도 실행
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: new-blog-frontend
+
+jobs:
+  deploy:
+    # [핵심] 이제 모든 작업은 우리의 전용 작업장(Self-Hosted Runner)에서 실행됩니다.
+    runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+
+    steps:
+      - name: "Checkout & Setup"
+        uses: actions/checkout@v4
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: pnpm/action-setup@v4
+      - name: "Install dependencies (from runner cache)"
+        run: pnpm install --frozen-lockfile
+
+      - name: "Build Applications with Turborepo (from runner cache)"
+        run: |
+          pnpm --filter frontend run build
+          pnpm --filter backend run build
+
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # [핵심] Runner의 EC2 인스턴스 역할이 모든 권한을 가지므로,
+          # OIDC 역할 전환 없이, 현재 환경의 자격 증명을 그대로 사용합니다.
+          # role-to-assume을 생략하면, 이 Action은 EC2 인스턴스 프로파일을 자동으로 사용합니다.
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "Login to ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: "Define Image Tag"
+        id: image-def
+        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+      
+      - name: "Build and push Docker image"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          platforms: linux/amd64
+          provenance: false
+
+      - name: "Deploy Blog Infrastructure (CDK)"
+        run: |
+          pnpm --filter infra exec cdk deploy BlogInfraStack \
+            --require-approval never \
+            --outputs-file ./apps/infra/outputs.json \
+            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+
+      - name: "Sync Static Assets to S3"
+        run: |
+          ASSET_BUCKET_NAME=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.FrontendAssetsBucketName')
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+
+      - name: "Invalidate CloudFront Cache"
+        run: |
+          DISTRIBUTION_ID=$(cat ./apps/infra/outputs.json | jq -r '.BlogInfraStack.CloudFrontDistributionId')
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
