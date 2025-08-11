@@ -85,22 +85,22 @@ jobs:
           echo "detect_changes.cicd=${{ needs.detect_changes.outputs.cicd }}"
           if [ "${{ needs.detect_changes.outputs.cicd }}" != "true" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
             echo "No changes detected for CiCd and not manually triggered — skipping CiCd deploy."
-            exit 0
+            echo "run=false" >> $GITHUB_OUTPUT
+          else
+            echo "Proceeding with CiCd deploy."
+            echo "run=true" >> $GITHUB_OUTPUT
           fi
-          echo "Proceeding with CiCd deploy."
 
       - name: "Configure AWS Credentials for CDK Deploy"
-        if: always()
+        if: ${{ steps.decide_cicd.outputs.run == 'true' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: "Deploy CiCdStack via CDK"
-        if: always()
+        if: ${{ steps.decide_cicd.outputs.run == 'true' }}
         run: |
-          # If we reached here but there were no CiCd changes and not workflow_dispatch,
-          # the previous step would have exited early. So this runs only when needed.
           pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
 
   # ---------------------------------------------------------------------------
@@ -111,18 +111,17 @@ jobs:
   deploy_blog_app:
     name: "Deploy Blog Application"
     needs: [detect_changes, deploy_cicd_infra]
+    # self-hosted runner에서만 빌드/이미지 푸시 수행
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
+    # blog 변경 없고 수동 실행도 아니면 이 Job 자체를 건너뜁니다.
     if: ${{ needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: "Checkout & Setup"
         uses: actions/checkout@v4
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v4
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -138,21 +137,6 @@ jobs:
           pnpm --filter frontend run build
           pnpm --filter backend run build
 
-      - name: "Install Docker"
-        run: |
-          sudo yum update -y
-          sudo amazon-linux-extras enable docker
-          sudo yum install -y docker
-          sudo systemctl enable docker
-          sudo systemctl start docker
-          sudo usermod -aG docker ec2-user
-
-      - name: "Set up QEMU"
-        uses: docker/setup-qemu-action@v2
-
-      - name: "Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v2
-
       - name: "Configure AWS Credentials (EC2 Role / Instance Profile)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -165,6 +149,7 @@ jobs:
       - name: "Define Image Tag"
         id: image-def
         run: |
+          # TAG 예: 20250812123045-abcdef1
           echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: "Build and push Docker image"
@@ -184,14 +169,16 @@ jobs:
             --outputs-file ./apps/infra/outputs.json \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      - name: "Sync Static Assets to S3"
+      - name: "Sync Static Assets to S3 (using node to avoid jq dependency)"
         run: |
           set -euo pipefail
           ASSET_BUCKET_NAME=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.FrontendAssetsBucketName)")
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
-      - name: "Invalidate CloudFront Cache"
+      - name: "Invalidate CloudFront Cache (using node)"
         run: |
           set -euo pipefail
           DISTRIBUTION_ID=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.CloudFrontDistributionId)")
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
