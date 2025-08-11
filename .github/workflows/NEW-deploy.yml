@@ -1,0 +1,184 @@
+# 파일 위치: .github/workflows/deploy.yml
+# 통합 마스터: v2025.08.12-Unified-Deploy
+name: "Unified Deploy: CiCd + Blog (Safe, Ordered)"
+
+on:
+  push:
+    branches: [main]
+    # 워크플로우가 트리거되는 파일 경로(기존 둘의 paths 합집합)
+    paths:
+      - 'apps/frontend/**'
+      - 'apps/backend/**'
+      - 'apps/infra/lib/blog-stack.ts'
+      - 'apps/infra/lib/cicd-stack.ts'
+      - 'apps/infra/bin/infra.ts'
+      - '.github/workflows/deploy-blog.yml'
+      - '.github/workflows/deploy-cicd-infra.yml'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: new-blog-frontend
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 변경 감지: 블로그 관련 / CI/CD 관련 변경 여부 판별 (빠르게)
+  # ---------------------------------------------------------------------------
+  detect_changes:
+    name: "Detect changed paths (blog / cicd)"
+    runs-on: ubuntu-latest
+    outputs:
+      blog: ${{ steps.paths.outputs.blog }}
+      cicd: ${{ steps.paths.outputs.cicd }}
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Detect changes (paths-filter)"
+        id: paths
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            blog:
+              - 'apps/frontend/**'
+              - 'apps/backend/**'
+              - 'apps/infra/lib/blog-stack.ts'
+              - 'apps/infra/bin/infra.ts'
+              - '.github/workflows/deploy-blog.yml'
+              - 'pnpm-lock.yaml'
+            cicd:
+              - 'apps/infra/lib/cicd-stack.ts'
+              - 'apps/infra/bin/infra.ts'
+              - '.github/workflows/deploy-cicd-infra.yml'
+
+  # ---------------------------------------------------------------------------
+  # 2) CI/CD 인프라 배포 (항상 먼저 실행 — 변경 없으면 빠르게 no-op로 종료)
+  # ---------------------------------------------------------------------------
+  deploy_cicd_infra:
+    name: "Deploy CI/CD Infrastructure (CiCdStack)"
+    needs: detect_changes
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+      - name: "Install dependencies"
+        run: pnpm install --frozen-lockfile
+
+      - name: "Decide whether to run CiCd deploy"
+        id: decide_cicd
+        run: |
+          set -euo pipefail
+          echo "detect_changes.cicd=${{ needs.detect_changes.outputs.cicd }}"
+          if [ "${{ needs.detect_changes.outputs.cicd }}" != "true" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "No changes detected for CiCd and not manually triggered — skipping CiCd deploy."
+            exit 0
+          fi
+          echo "Proceeding with CiCd deploy."
+
+      - name: "Configure AWS Credentials for CDK Deploy"
+        if: always()
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "Deploy CiCdStack via CDK"
+        if: always()
+        run: |
+          # If we reached here but there were no CiCd changes and not workflow_dispatch,
+          # the previous step would have exited early. So this runs only when needed.
+          pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+
+  # ---------------------------------------------------------------------------
+  # 3) Blog 애플리케이션 빌드 및 배포 (Self-Hosted Runner에서 실행)
+  #    - 항상 deploy_cicd_infra가 '끝난 뒤' 실행되도록 needs를 걸었습니다.
+  #    - 실제 빌드/배포는 blog 변경이 감지되었거나 수동 실행일 때만 실행됩니다.
+  # ---------------------------------------------------------------------------
+  deploy_blog_app:
+    name: "Deploy Blog Application"
+    needs: [detect_changes, deploy_cicd_infra]
+    # self-hosted runner에서만 빌드/이미지 푸시 수행
+    runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    # blog 변경 없고 수동 실행도 아니면 이 Job 자체를 건너뜁니다.
+    if: ${{ needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: "Checkout & Setup"
+        uses: actions/checkout@v4
+
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+
+      - name: "Install dependencies (from runner cache)"
+        run: pnpm install --frozen-lockfile
+
+      - name: "Build Applications with Turborepo (from runner cache)"
+        run: |
+          pnpm --filter frontend run build
+          pnpm --filter backend run build
+
+      - name: "Configure AWS Credentials (EC2 Role / Instance Profile)"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "Login to ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "Define Image Tag"
+        id: image-def
+        run: |
+          # TAG 예: 20250812123045-abcdef1
+          echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: "Build and push Docker image"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          platforms: linux/amd64
+          provenance: false
+
+      - name: "Deploy Blog Infrastructure (CDK)"
+        run: |
+          pnpm --filter infra exec cdk deploy BlogInfraStack \
+            --require-approval never \
+            --outputs-file ./apps/infra/outputs.json \
+            --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+
+      - name: "Sync Static Assets to S3 (using node to avoid jq dependency)"
+        run: |
+          set -euo pipefail
+          ASSET_BUCKET_NAME=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.FrontendAssetsBucketName)")
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+
+      - name: "Invalidate CloudFront Cache (using node)"
+        run: |
+          set -euo pipefail
+          DISTRIBUTION_ID=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.CloudFrontDistributionId)")
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
