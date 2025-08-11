@@ -80,13 +80,12 @@ export class CiCdStack extends Stack {
       // ec2-user로 전환하여 코드 클론 및 스크립트 실행
       'su - ec2-user <<\'EOF\'',
       '  # GitHub 리포지토리를 클론합니다.',
-      '  git clone https://github.com/jungyuya/new-blog.git',
-      '  cd new-blog',
-      '  ',
-      '  # 설치 스크립트에 실행 권한을 부여하고 실행합니다.',
-      '  chmod +x ./scripts/setup_runner.sh',
-      '  ./scripts/setup_runner.sh',
-      'EOF'
+      'git clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog',
+      'chown -R ec2-user:ec2-user /home/ec2-user/new-blog',
+      'chmod +x /home/ec2-user/new-blog/scripts/setup_runner.sh',
+
+      // ec2-user로 전환하여 스크립트 실행만 수행
+      'su - ec2-user -c "/home/ec2-user/new-blog/scripts/setup_runner.sh"'
     );
 
     runnerInstance.addUserData(userData.render());

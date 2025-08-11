@@ -227,7 +227,7 @@
      }
     ],
     "UserData": {
-     "Fn::Base64": "#!/bin/bash\n#!/bin/bash\ndnf update -y\ndnf install -y git jq docker\nsystemctl enable --now docker\nusermod -aG docker ec2-user\nsu - ec2-user <<'EOF'\n  # GitHub 리포지토리를 클론합니다.\n  git clone https://github.com/jungyuya/new-blog.git\n  cd new-blog\n  \n  # 설치 스크립트에 실행 권한을 부여하고 실행합니다.\n  chmod +x ./scripts/setup_runner.sh\n  ./scripts/setup_runner.sh\nEOF"
+     "Fn::Base64": "#!/bin/bash\n#!/bin/bash\ndnf update -y\ndnf install -y git jq docker\nsystemctl enable --now docker\nusermod -aG docker ec2-user\nsu - ec2-user <<'EOF'\n  # GitHub 리포지토리를 클론합니다.\ngit clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog\nchown -R ec2-user:ec2-user /home/ec2-user/new-blog\nchmod +x /home/ec2-user/new-blog/scripts/setup_runner.sh\nsu - ec2-user -c \"/home/ec2-user/new-blog/scripts/setup_runner.sh\""
     }
    },
    "DependsOn": [
