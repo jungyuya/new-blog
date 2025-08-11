@@ -25,7 +25,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 
-export class InfraStack extends Stack {
+export class BlogStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 

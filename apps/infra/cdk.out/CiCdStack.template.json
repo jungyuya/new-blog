@@ -1,0 +1,301 @@
+{
+ "Description": "Stack for the CI/CD support infrastructure (EC2 Self-Hosted Runner)",
+ "Resources": {
+  "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "172.31.0.0/16",
+      "Description": "from 172.31.0.0/16:443",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "VpcId": "vpc-09064aa8dcdebfc42"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/Resource"
+   }
+  },
+  "DefaultVpcSecretsManagerEndpointSecurityGroupfromCiCdStackRunnerSecurityGroupE251960344300198DA7": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "from CiCdStackRunnerSecurityGroupE2519603:443",
+    "FromPort": 443,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "RunnerSecurityGroupDE989EBE",
+      "GroupId"
+     ]
+    },
+    "ToPort": 443
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/from CiCdStackRunnerSecurityGroupE2519603:443"
+   }
+  },
+  "DefaultVpcSecretsManagerEndpoint13E23E82": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.ap-northeast-2.secretsmanager",
+    "SubnetIds": [
+     "subnet-0ccc097504af25410",
+     "subnet-0096ce9f9bb4494d5",
+     "subnet-0080dfc4df4676ff0",
+     "subnet-0682caf8cc8bb77d3"
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": "vpc-09064aa8dcdebfc42"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/Resource"
+   }
+  },
+  "RunnerSecurityGroupDE989EBE": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for the EC2 self-hosted runner",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": "vpc-09064aa8dcdebfc42"
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/RunnerSecurityGroup/Resource"
+   }
+  },
+  "RunnerRoleBA0605C0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM Role for the self-hosted runner EC2 instance",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/RunnerRole/Resource"
+   }
+  },
+  "RunnerRoleDefaultPolicyF88A4DBD": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":secretsmanager:ap-northeast-2:786382940028:secret:cicd/github-runner-pat-??????"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "RunnerRoleDefaultPolicyF88A4DBD",
+    "Roles": [
+     {
+      "Ref": "RunnerRoleBA0605C0"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/RunnerRole/DefaultPolicy/Resource"
+   }
+  },
+  "GitHubRunnerInstanceInstanceProfileF9DDF1ED": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "RunnerRoleBA0605C0"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/GitHubRunnerInstance/InstanceProfile"
+   }
+  },
+  "GitHubRunnerInstance6965C09B": {
+   "Type": "AWS::EC2::Instance",
+   "Properties": {
+    "AvailabilityZone": "ap-northeast-2a",
+    "BlockDeviceMappings": [
+     {
+      "DeviceName": "/dev/xvda",
+      "Ebs": {
+       "DeleteOnTermination": true,
+       "VolumeSize": 30,
+       "VolumeType": "gp3"
+      }
+     }
+    ],
+    "IamInstanceProfile": {
+     "Ref": "GitHubRunnerInstanceInstanceProfileF9DDF1ED"
+    },
+    "ImageId": "ami-0897f20d7e803af8f",
+    "InstanceType": "t2.micro",
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "RunnerSecurityGroupDE989EBE",
+       "GroupId"
+      ]
+     }
+    ],
+    "SubnetId": "subnet-0ccc097504af25410",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "CiCdStack/GitHubRunnerInstance"
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": "#!/bin/bash\n#!/bin/bash\nif command -v dnf >/dev/null 2>&1; then PM=dnf; else PM=yum; fi\n$PM update -y\n$PM install -y git docker jq tar gzip libicu curl unzip sudo\nsystemctl enable --now docker\nusermod -aG docker ec2-user || true\nif ! command -v aws >/dev/null 2>&1; then\n  curl \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o \"awscliv2.zip\"\n  unzip -q awscliv2.zip\n  sudo ./aws/install || echo \"aws install failed\" >&2\n  rm -rf aws awscliv2.zip\nfi\ncat <<'EOF' > /home/ec2-user/setup_runner.sh\n#!/bin/bash -xe\nexec > /home/ec2-user/runner_setup.log 2>&1\necho \"=== Runner setup started: $(date -u) ===\"\n\n# 환경\nexport HOME=/home/ec2-user\nexport NVM_DIR=\"$HOME/.nvm\"\nexport RUNNER_DIR=\"$HOME/actions-runner\"\nREPO_WEB_URL=\"https://github.com/jungyuya/new-blog\"\nREPO_API_URL=\"https://api.github.com/repos/jungyuya/new-blog\"\nSECRET_NAME=\"cicd/github-runner-pat\"\nAWS_REGION=\"ap-northeast-2\"\n\n# 안전: 작업 디렉토리 보장\nmkdir -p \"$RUNNER_DIR\"\nchown ec2-user:ec2-user \"$RUNNER_DIR\"\n\n# 1) nvm, node, pnpm 설치 (이미 설치돼 있으면 건너뜀)\nif [ ! -d \"$NVM_DIR\" ]; then\n  echo \"--- Installing nvm ---\"\n  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\nfi\n# load nvm for current script\nif [ -s \"$NVM_DIR/nvm.sh\" ]; then\n  . \"$NVM_DIR/nvm.sh\"\nfi\nnvm install --lts || nvm install 22 || true\nnpm install -g pnpm || true\n\n# 2) 다운로드 및 압축 해제\ncd \"$RUNNER_DIR\"\nLATEST_TAG=$(curl -sS --fail \"https://api.github.com/repos/actions/runner/releases/latest\" | jq -r .tag_name | sed 's/^v//')\nif [ -z \"${LATEST_TAG}\" ]; then\n  echo \"ERROR: cannot determine latest runner version\" >&2\n  exit 1\nfi\nTARBALL=\"actions-runner-linux-x64-${LATEST_TAG}.tar.gz\"\nif [ ! -f \"${TARBALL}\" ]; then\n  curl --fail --silent --show-error --retry 5 -L -o \"${TARBALL}\" \"https://github.com/actions/runner/releases/download/v${LATEST_TAG}/${TARBALL}\"\nfi\ntar -xzf \"${TARBALL}\"\n\n# 3) 설치 스크립트(의존성 설치) 실행: bin/installdependencies.sh 시도 후 실패시 수동 패키지 설치\nif [ -f \"./bin/installdependencies.sh\" ]; then\n  echo \"--- Running provided installdependencies.sh ---\"\n  sudo ./bin/installdependencies.sh || echo \"installdependencies.sh failed or not fully supported\"\nfi\n\n# 폴백: libicu 등 흔한 의존성 설치 (Amazon Linux 2023 등에서 필요)\nif ! ldconfig -p | grep -i libicu >/dev/null 2>&1; then\n  echo \"--- Installing fallback distro packages for libicu etc. ---\"\n  if command -v dnf >/dev/null 2>&1; then\n    sudo dnf install -y libicu icu libicu-devel libunwind || true\n  elif command -v apt-get >/dev/null 2>&1; then\n    sudo DEBIAN_FRONTEND=noninteractive apt-get update -y\n    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libicu-dev libunwind8 || true\n  fi\nfi\n\n# 4) Secrets Manager에서 PAT 가져오기 (리전 명시)\necho \"--- Retrieving GitHub PAT from Secrets Manager (region: ap-northeast-2) ---\"\nGITHUB_PAT=$(aws secretsmanager get-secret-value --secret-id \"${SECRET_NAME}\" --region ${AWS_REGION} --query SecretString --output text 2>/dev/null || true)\nif [ -z \"${GITHUB_PAT}\" ]; then\n  echo \"ERROR: Could not fetch GitHub PAT from Secrets Manager\" >&2\n  exit 1\nfi\necho \"PAT prefix: ${GITHUB_PAT:0:15} (hidden)\"\n\n# 5) registration token 요청 (API 경로 사용) - 재시도 로직 포함\necho \"--- Requesting registration token from GitHub API ---\"\nRAW_REG_RESP=$(curl --silent --show-error --fail --retry 5 -X POST \\\n  -H \"Accept: application/vnd.github+json\" \\\n  -H \"Authorization: Bearer ${GITHUB_PAT}\" \\\n  \"${REPO_API_URL}/actions/runners/registration-token\" 2>&1) || {\n    echo \"ERROR: registration-token request failed. Raw response: ${RAW_REG_RESP}\" >&2\n    echo \"${RAW_REG_RESP}\" >> /home/ec2-user/runner_setup.log\n    exit 1\n  }\n\nREG_TOKEN=$(echo \"${RAW_REG_RESP}\" | jq -r '.token' 2>/dev/null || true)\nif [ -z \"${REG_TOKEN}\" ] || [ \"${REG_TOKEN}\" = \"null\" ]; then\n  echo \"ERROR: registration token empty. Dumping raw response for debugging\" >&2\n  echo \"${RAW_REG_RESP}\" >> /home/ec2-user/runner_setup.log\n  exit 1\nfi\necho \"Got registration token prefix: ${REG_TOKEN:0:20}...\"\n\n# 6) Runner 구성 (ec2-user 권한으로 실행 - sudo 사용 금지)\necho \"--- Configuring runner ---\"\n# ensure config.sh is executable\nchmod +x ./config.sh || true\n# run as ec2-user (this script runs as ec2-user because of how UserData `su - ec2-user -c` is invoked)\n./config.sh --url \"${REPO_WEB_URL}\" --token \"${REG_TOKEN}\" --name \"$(hostname)\" --labels \"self-hosted,linux,x86-64\" --unattended --replace\n\n# 7) 서비스 등록 / 시작: prefer svc.sh if present, else create systemd service\nif [ -f \"./svc.sh\" ]; then\n  echo \"--- Installing svc.sh service ---\"\n  sudo ./svc.sh install || true\n  sudo ./svc.sh start || true\nelse\n  echo \"--- Creating systemd service github-runner.service ---\"\n  sudo tee /etc/systemd/system/github-runner.service > /dev/null <<SYSTEMD_EOF\n[Unit]\nDescription=GitHub Actions Runner\nAfter=network.target\n\n[Service]\nUser=ec2-user\nWorkingDirectory=${RUNNER_DIR}\nExecStart=${RUNNER_DIR}/run.sh\nRestart=always\nRestartSec=5\nEnvironment=HOME=/home/ec2-user\n\n[Install]\nWantedBy=multi-user.target\nSYSTEMD_EOF\n\n  sudo systemctl daemon-reload\n  sudo systemctl enable --now github-runner.service || true\nfi\n\necho \"=== Runner setup finished: $(date -u) ===\"\nEOF\nchown ec2-user:ec2-user /home/ec2-user/setup_runner.sh\nchmod +x /home/ec2-user/setup_runner.sh\nsu - ec2-user -c \"/home/ec2-user/setup_runner.sh\""
+    }
+   },
+   "DependsOn": [
+    "RunnerRoleDefaultPolicyF88A4DBD",
+    "RunnerRoleBA0605C0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/GitHubRunnerInstance/Resource"
+   }
+  },
+  "RunnerEIP": {
+   "Type": "AWS::EC2::EIP",
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/RunnerEIP"
+   }
+  },
+  "RunnerEIPAssociation": {
+   "Type": "AWS::EC2::EIPAssociation",
+   "Properties": {
+    "EIP": {
+     "Ref": "RunnerEIP"
+    },
+    "InstanceId": {
+     "Ref": "GitHubRunnerInstance6965C09B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/RunnerEIPAssociation"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/32MTW/CQAxEfwv3jUn3Uq4IoSonoiBxRVvHqQzBG629RSjKf69CP+DU05t5Go0HX75CuQhXLbA9Fz2/w7i3gGfXkMackFy46nEk9DBWYpS6gHQYcCvtEFnM7QlzYru9pZgHt+nkf1HJRyLV2R/qzd9LJWpBkGb/nLdV/YO1akQOxlEmx+ECYxP7++bOOvaMt7k+0u9RnWLHPU3TLHfZhmyTk9gSnHT56T28rKBcnJS5SFmMLwTNN78Am8I5JCABAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "CiCdStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "RunnerPublicIP": {
+   "Description": "Public IP address of the self-hosted runner EC2 instance.",
+   "Value": {
+    "Ref": "RunnerEIP"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

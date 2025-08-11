@@ -31,31 +31,16 @@
         }
       }
     },
-    "a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf": {
-      "displayName": "CacheGatewayLambda/Code",
-      "source": {
-        "path": "asset.a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf",
-        "packaging": "zip"
-      },
-      "destinations": {
-        "786382940028-ap-northeast-2-323763ad": {
-          "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-          "objectKey": "a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf.zip",
-          "region": "ap-northeast-2",
-          "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
-        }
-      }
-    },
-    "9435af66d1a6d5050b1ea6f1f0e68946631cb960c806db68368a0fe7d1159a87": {
+    "27572d33220b3e7143ced87dc62d919cc9a51e5ab029707d37900111971b32b9": {
       "displayName": "BlogInfraStack Template",
       "source": {
         "path": "BlogInfraStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "786382940028-ap-northeast-2-3ed6b6c6": {
+        "786382940028-ap-northeast-2-3a73d6f9": {
           "bucketName": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-          "objectKey": "9435af66d1a6d5050b1ea6f1f0e68946631cb960c806db68368a0fe7d1159a87.json",
+          "objectKey": "27572d33220b3e7143ced87dc62d919cc9a51e5ab029707d37900111971b32b9.json",
           "region": "ap-northeast-2",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-file-publishing-role-786382940028-ap-northeast-2"
         }

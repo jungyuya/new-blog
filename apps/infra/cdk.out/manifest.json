@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/9435af66d1a6d5050b1ea6f1f0e68946631cb960c806db68368a0fe7d1159a87.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/27572d33220b3e7143ced87dc62d919cc9a51e5ab029707d37900111971b32b9.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -114,22 +114,22 @@
             "data": "BlogHttpApiGatewayANYproxyF2BA0DA1"
           }
         ],
-        "/BlogInfraStack/CacheBucket/Resource": [
+        "/BlogInfraStack/FrontendAssetsBucket/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "CacheBucket41D9D0B0"
+            "data": "FrontendAssetsBucket52F4AD30"
           }
         ],
-        "/BlogInfraStack/CacheBucket/Policy/Resource": [
+        "/BlogInfraStack/FrontendAssetsBucket/Policy/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "CacheBucketPolicyE2F00ED4"
+            "data": "FrontendAssetsBucketPolicyC3DA97EC"
           }
         ],
-        "/BlogInfraStack/CacheBucket/AutoDeleteObjectsCustomResource/Default": [
+        "/BlogInfraStack/FrontendAssetsBucket/AutoDeleteObjectsCustomResource/Default": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "CacheBucketAutoDeleteObjectsCustomResource12E72BBC"
+            "data": "FrontendAssetsBucketAutoDeleteObjectsCustomResource81511928"
           }
         ],
         "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
@@ -148,84 +148,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
-          }
-        ],
-        "/BlogInfraStack/CacheGatewayLambda/ServiceRole/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheGatewayLambdaServiceRole59AFFB4D"
-          }
-        ],
-        "/BlogInfraStack/CacheGatewayLambda/ServiceRole/DefaultPolicy/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C"
-          }
-        ],
-        "/BlogInfraStack/CacheGatewayLambda/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheGatewayLambdaBAF0D5E4"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayDCDB4C40"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/DefaultStage/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayDefaultStageA2763150"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationPermission4C3055F8"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayGETv8artifactsproxyF74CEC1E"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayPUTv8artifactsproxyCacheLambdaIntegrationPermissionC1C8B7DC"
-          }
-        ],
-        "/BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheHttpApiGatewayPUTv8artifactsproxy06A19174"
-          }
-        ],
-        "/BlogInfraStack/FrontendAssetsBucket/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FrontendAssetsBucket52F4AD30"
-          }
-        ],
-        "/BlogInfraStack/FrontendAssetsBucket/Policy/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FrontendAssetsBucketPolicyC3DA97EC"
-          }
-        ],
-        "/BlogInfraStack/FrontendAssetsBucket/AutoDeleteObjectsCustomResource/Default": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FrontendAssetsBucketAutoDeleteObjectsCustomResource81511928"
           }
         ],
         "/BlogInfraStack/FrontendServerLambda/ServiceRole/Resource": [
@@ -324,12 +246,6 @@
             "data": "CloudFrontDistributionId"
           }
         ],
-        "/BlogInfraStack/CacheApiGatewayEndpoint": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CacheApiGatewayEndpoint"
-          }
-        ],
         "/BlogInfraStack/BackendApiLambdaErrorsAlarm/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -362,6 +278,126 @@
         ]
       },
       "displayName": "BlogInfraStack"
+    },
+    "CiCdStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "CiCdStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "CiCdStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://786382940028/ap-northeast-2",
+      "properties": {
+        "templateFile": "CiCdStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/cab466c411f8be798f4a99578b025927371d75b20e44a4eb86318b0482d66378.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "CiCdStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-lookup-role-786382940028-ap-northeast-2",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "CiCdStack.assets"
+      ],
+      "metadata": {
+        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E"
+          }
+        ],
+        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/from CiCdStackRunnerSecurityGroupE2519603:443": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DefaultVpcSecretsManagerEndpointSecurityGroupfromCiCdStackRunnerSecurityGroupE251960344300198DA7"
+          }
+        ],
+        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DefaultVpcSecretsManagerEndpoint13E23E82"
+          }
+        ],
+        "/CiCdStack/RunnerSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerSecurityGroupDE989EBE"
+          }
+        ],
+        "/CiCdStack/RunnerRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerRoleBA0605C0"
+          }
+        ],
+        "/CiCdStack/RunnerRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerRoleDefaultPolicyF88A4DBD"
+          }
+        ],
+        "/CiCdStack/GitHubRunnerInstance/InstanceProfile": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubRunnerInstanceInstanceProfileF9DDF1ED"
+          }
+        ],
+        "/CiCdStack/GitHubRunnerInstance/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "GitHubRunnerInstance6965C09B"
+          }
+        ],
+        "/CiCdStack/RunnerEIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerEIP"
+          }
+        ],
+        "/CiCdStack/RunnerEIPAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerEIPAssociation"
+          }
+        ],
+        "/CiCdStack/RunnerPublicIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RunnerPublicIP"
+          }
+        ],
+        "/CiCdStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/CiCdStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/CiCdStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "CiCdStack"
     },
     "Tree": {
       "type": "cdk:tree",

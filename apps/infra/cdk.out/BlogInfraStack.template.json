@@ -1,4 +1,5 @@
 {
+ "Description": "Stack for the main blog application infrastructure (Frontend, Backend, DB, etc.)",
  "Parameters": {
   "ImageTag": {
    "Type": "String",
@@ -451,546 +452,6 @@
     "aws:cdk:path": "BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/Resource"
    }
   },
-  "CacheBucket41D9D0B0": {
-   "Type": "AWS::S3::Bucket",
-   "Properties": {
-    "BucketEncryption": {
-     "ServerSideEncryptionConfiguration": [
-      {
-       "ServerSideEncryptionByDefault": {
-        "SSEAlgorithm": "AES256"
-       }
-      }
-     ]
-    },
-    "BucketName": "new-blog-remote-cache-786382940028-ap-northeast-2",
-    "LifecycleConfiguration": {
-     "Rules": [
-      {
-       "ExpirationInDays": 30,
-       "Id": "ExpireOldCache",
-       "Status": "Enabled"
-      },
-      {
-       "AbortIncompleteMultipartUpload": {
-        "DaysAfterInitiation": 1
-       },
-       "Id": "AbortIncompleteMultipartUploads",
-       "Status": "Enabled"
-      }
-     ]
-    },
-    "PublicAccessBlockConfiguration": {
-     "BlockPublicAcls": true,
-     "BlockPublicPolicy": true,
-     "IgnorePublicAcls": true,
-     "RestrictPublicBuckets": true
-    },
-    "Tags": [
-     {
-      "Key": "aws-cdk:auto-delete-objects",
-      "Value": "true"
-     }
-    ]
-   },
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheBucket/Resource"
-   }
-  },
-  "CacheBucketPolicyE2F00ED4": {
-   "Type": "AWS::S3::BucketPolicy",
-   "Properties": {
-    "Bucket": {
-     "Ref": "CacheBucket41D9D0B0"
-    },
-    "PolicyDocument": {
-     "Statement": [
-      {
-       "Action": "s3:*",
-       "Condition": {
-        "Bool": {
-         "aws:SecureTransport": "false"
-        }
-       },
-       "Effect": "Deny",
-       "Principal": {
-        "AWS": "*"
-       },
-       "Resource": [
-        {
-         "Fn::GetAtt": [
-          "CacheBucket41D9D0B0",
-          "Arn"
-         ]
-        },
-        {
-         "Fn::Join": [
-          "",
-          [
-           {
-            "Fn::GetAtt": [
-             "CacheBucket41D9D0B0",
-             "Arn"
-            ]
-           },
-           "/*"
-          ]
-         ]
-        }
-       ]
-      },
-      {
-       "Action": [
-        "s3:PutBucketPolicy",
-        "s3:GetBucket*",
-        "s3:List*",
-        "s3:DeleteObject*"
-       ],
-       "Effect": "Allow",
-       "Principal": {
-        "AWS": {
-         "Fn::GetAtt": [
-          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
-          "Arn"
-         ]
-        }
-       },
-       "Resource": [
-        {
-         "Fn::GetAtt": [
-          "CacheBucket41D9D0B0",
-          "Arn"
-         ]
-        },
-        {
-         "Fn::Join": [
-          "",
-          [
-           {
-            "Fn::GetAtt": [
-             "CacheBucket41D9D0B0",
-             "Arn"
-            ]
-           },
-           "/*"
-          ]
-         ]
-        }
-       ]
-      }
-     ],
-     "Version": "2012-10-17"
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheBucket/Policy/Resource"
-   }
-  },
-  "CacheBucketAutoDeleteObjectsCustomResource12E72BBC": {
-   "Type": "Custom::S3AutoDeleteObjects",
-   "Properties": {
-    "ServiceToken": {
-     "Fn::GetAtt": [
-      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
-      "Arn"
-     ]
-    },
-    "BucketName": {
-     "Ref": "CacheBucket41D9D0B0"
-    }
-   },
-   "DependsOn": [
-    "CacheBucketPolicyE2F00ED4"
-   ],
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheBucket/AutoDeleteObjectsCustomResource/Default"
-   }
-  },
-  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
-   "Type": "AWS::IAM::Role",
-   "Properties": {
-    "AssumeRolePolicyDocument": {
-     "Version": "2012-10-17",
-     "Statement": [
-      {
-       "Action": "sts:AssumeRole",
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "lambda.amazonaws.com"
-       }
-      }
-     ]
-    },
-    "ManagedPolicyArns": [
-     {
-      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
-   }
-  },
-  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
-   "Type": "AWS::Lambda::Function",
-   "Properties": {
-    "Code": {
-     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
-    },
-    "Timeout": 900,
-    "MemorySize": 128,
-    "Handler": "index.handler",
-    "Role": {
-     "Fn::GetAtt": [
-      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
-      "Arn"
-     ]
-    },
-    "Runtime": "nodejs22.x",
-    "Description": {
-     "Fn::Join": [
-      "",
-      [
-       "Lambda function for auto-deleting objects in ",
-       {
-        "Ref": "CacheBucket41D9D0B0"
-       },
-       " S3 bucket."
-      ]
-     ]
-    }
-   },
-   "DependsOn": [
-    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
-   ],
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
-    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
-    "aws:asset:property": "Code"
-   }
-  },
-  "CacheGatewayLambdaServiceRole59AFFB4D": {
-   "Type": "AWS::IAM::Role",
-   "Properties": {
-    "AssumeRolePolicyDocument": {
-     "Statement": [
-      {
-       "Action": "sts:AssumeRole",
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "lambda.amazonaws.com"
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "ManagedPolicyArns": [
-     {
-      "Fn::Join": [
-       "",
-       [
-        "arn:",
-        {
-         "Ref": "AWS::Partition"
-        },
-        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-       ]
-      ]
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/ServiceRole/Resource"
-   }
-  },
-  "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C": {
-   "Type": "AWS::IAM::Policy",
-   "Properties": {
-    "PolicyDocument": {
-     "Statement": [
-      {
-       "Action": [
-        "s3:GetObject*",
-        "s3:GetBucket*",
-        "s3:List*",
-        "s3:DeleteObject*",
-        "s3:PutObject",
-        "s3:PutObjectLegalHold",
-        "s3:PutObjectRetention",
-        "s3:PutObjectTagging",
-        "s3:PutObjectVersionTagging",
-        "s3:Abort*"
-       ],
-       "Effect": "Allow",
-       "Resource": [
-        {
-         "Fn::GetAtt": [
-          "CacheBucket41D9D0B0",
-          "Arn"
-         ]
-        },
-        {
-         "Fn::Join": [
-          "",
-          [
-           {
-            "Fn::GetAtt": [
-             "CacheBucket41D9D0B0",
-             "Arn"
-            ]
-           },
-           "/*"
-          ]
-         ]
-        }
-       ]
-      },
-      {
-       "Action": [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret"
-       ],
-       "Effect": "Allow",
-       "Resource": {
-        "Fn::Join": [
-         "",
-         [
-          "arn:",
-          {
-           "Ref": "AWS::Partition"
-          },
-          ":secretsmanager:ap-northeast-2:786382940028:secret:new-blog/turbo-token-??????"
-         ]
-        ]
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "PolicyName": "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C",
-    "Roles": [
-     {
-      "Ref": "CacheGatewayLambdaServiceRole59AFFB4D"
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/ServiceRole/DefaultPolicy/Resource"
-   }
-  },
-  "CacheGatewayLambdaBAF0D5E4": {
-   "Type": "AWS::Lambda::Function",
-   "Properties": {
-    "Code": {
-     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-     "S3Key": "a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf.zip"
-    },
-    "Description": "Handles Turborepo remote cache requests and generates S3 presigned URLs.",
-    "Environment": {
-     "Variables": {
-      "NODE_ENV": "production",
-      "CACHE_BUCKET_NAME": {
-       "Ref": "CacheBucket41D9D0B0"
-      },
-      "TURBO_TOKEN_SECRET_ARN": "arn:aws:secretsmanager:ap-northeast-2:786382940028:secret:new-blog/turbo-token"
-     }
-    },
-    "FunctionName": "blog-cache-gateway-BlogInfraStack",
-    "Handler": "index.handler",
-    "MemorySize": 128,
-    "Role": {
-     "Fn::GetAtt": [
-      "CacheGatewayLambdaServiceRole59AFFB4D",
-      "Arn"
-     ]
-    },
-    "Runtime": "nodejs22.x",
-    "Timeout": 10
-   },
-   "DependsOn": [
-    "CacheGatewayLambdaServiceRoleDefaultPolicy0D1AE85C",
-    "CacheGatewayLambdaServiceRole59AFFB4D"
-   ],
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheGatewayLambda/Resource",
-    "aws:asset:path": "asset.a66469d77b9aac0338d8ce2ca9012984cfa61f6174aa54fa60a4a8348098ffbf",
-    "aws:asset:is-bundled": true,
-    "aws:asset:property": "Code"
-   }
-  },
-  "CacheHttpApiGatewayDCDB4C40": {
-   "Type": "AWS::ApiGatewayV2::Api",
-   "Properties": {
-    "CorsConfiguration": {
-     "AllowHeaders": [
-      "Authorization",
-      "Content-Type"
-     ],
-     "AllowMethods": [
-      "GET",
-      "PUT"
-     ],
-     "AllowOrigins": [
-      "*"
-     ]
-    },
-    "Description": "API Gateway for Turborepo remote cache",
-    "Name": "CacheHttpApi-BlogInfraStack",
-    "ProtocolType": "HTTP"
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/Resource"
-   }
-  },
-  "CacheHttpApiGatewayDefaultStageA2763150": {
-   "Type": "AWS::ApiGatewayV2::Stage",
-   "Properties": {
-    "ApiId": {
-     "Ref": "CacheHttpApiGatewayDCDB4C40"
-    },
-    "AutoDeploy": true,
-    "StageName": "$default"
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/DefaultStage/Resource"
-   }
-  },
-  "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC": {
-   "Type": "AWS::ApiGatewayV2::Integration",
-   "Properties": {
-    "ApiId": {
-     "Ref": "CacheHttpApiGatewayDCDB4C40"
-    },
-    "IntegrationType": "AWS_PROXY",
-    "IntegrationUri": {
-     "Fn::GetAtt": [
-      "CacheGatewayLambdaBAF0D5E4",
-      "Arn"
-     ]
-    },
-    "PayloadFormatVersion": "2.0"
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration/Resource"
-   }
-  },
-  "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationPermission4C3055F8": {
-   "Type": "AWS::Lambda::Permission",
-   "Properties": {
-    "Action": "lambda:InvokeFunction",
-    "FunctionName": {
-     "Fn::GetAtt": [
-      "CacheGatewayLambdaBAF0D5E4",
-      "Arn"
-     ]
-    },
-    "Principal": "apigateway.amazonaws.com",
-    "SourceArn": {
-     "Fn::Join": [
-      "",
-      [
-       "arn:",
-       {
-        "Ref": "AWS::Partition"
-       },
-       ":execute-api:ap-northeast-2:786382940028:",
-       {
-        "Ref": "CacheHttpApiGatewayDCDB4C40"
-       },
-       "/*/*/v8/artifacts/{proxy+}"
-      ]
-     ]
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission"
-   }
-  },
-  "CacheHttpApiGatewayGETv8artifactsproxyF74CEC1E": {
-   "Type": "AWS::ApiGatewayV2::Route",
-   "Properties": {
-    "ApiId": {
-     "Ref": "CacheHttpApiGatewayDCDB4C40"
-    },
-    "AuthorizationType": "NONE",
-    "RouteKey": "GET /v8/artifacts/{proxy+}",
-    "Target": {
-     "Fn::Join": [
-      "",
-      [
-       "integrations/",
-       {
-        "Ref": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC"
-       }
-      ]
-     ]
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/GET--v8--artifacts--{proxy+}/Resource"
-   }
-  },
-  "CacheHttpApiGatewayPUTv8artifactsproxyCacheLambdaIntegrationPermissionC1C8B7DC": {
-   "Type": "AWS::Lambda::Permission",
-   "Properties": {
-    "Action": "lambda:InvokeFunction",
-    "FunctionName": {
-     "Fn::GetAtt": [
-      "CacheGatewayLambdaBAF0D5E4",
-      "Arn"
-     ]
-    },
-    "Principal": "apigateway.amazonaws.com",
-    "SourceArn": {
-     "Fn::Join": [
-      "",
-      [
-       "arn:",
-       {
-        "Ref": "AWS::Partition"
-       },
-       ":execute-api:ap-northeast-2:786382940028:",
-       {
-        "Ref": "CacheHttpApiGatewayDCDB4C40"
-       },
-       "/*/*/v8/artifacts/{proxy+}"
-      ]
-     ]
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/CacheLambdaIntegration-Permission"
-   }
-  },
-  "CacheHttpApiGatewayPUTv8artifactsproxy06A19174": {
-   "Type": "AWS::ApiGatewayV2::Route",
-   "Properties": {
-    "ApiId": {
-     "Ref": "CacheHttpApiGatewayDCDB4C40"
-    },
-    "AuthorizationType": "NONE",
-    "RouteKey": "PUT /v8/artifacts/{proxy+}",
-    "Target": {
-     "Fn::Join": [
-      "",
-      [
-       "integrations/",
-       {
-        "Ref": "CacheHttpApiGatewayGETv8artifactsproxyCacheLambdaIntegrationD2294AFC"
-       }
-      ]
-     ]
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "BlogInfraStack/CacheHttpApiGateway/PUT--v8--artifacts--{proxy+}/Resource"
-   }
-  },
   "FrontendAssetsBucket52F4AD30": {
    "Type": "AWS::S3::Bucket",
    "Properties": {
@@ -1132,6 +593,70 @@
    "DeletionPolicy": "Delete",
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/FrontendAssetsBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
+     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "FrontendAssetsBucket52F4AD30"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:property": "Code"
    }
   },
   "FrontendServerLambdaServiceRole1087CF04": {
@@ -1662,25 +1187,6 @@
    "Description": "ID of the CloudFront distribution",
    "Value": {
     "Ref": "NewFrontendDistribution"
-   }
-  },
-  "CacheApiGatewayEndpoint": {
-   "Description": "HTTP API Gateway endpoint URL for Turborepo remote cache",
-   "Value": {
-    "Fn::Join": [
-     "",
-     [
-      "https://",
-      {
-       "Ref": "CacheHttpApiGatewayDCDB4C40"
-      },
-      ".execute-api.ap-northeast-2.",
-      {
-       "Ref": "AWS::URLSuffix"
-      },
-      "/"
-     ]
-    ]
    }
   }
  },

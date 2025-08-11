@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { InfraStack } from '../lib/InfraStack';
+import { BlogStack } from '../lib/blog-stack';
+import { CiCdStack } from '../lib/cicd-stack';
 
 const app = new cdk.App();
 
-// [핵심 최종 수정]
-// 스택에 배포 대상 계정(account)과 지역(region)을 명시적으로 전달합니다.
-// process.env.CDK_DEFAULT_ACCOUNT와 process.env.CDK_DEFAULT_REGION는
-// CDK 실행 환경(로컬 CLI, GitHub Actions)에서 자동으로 주입되는 환경 변수입니다.
-// 이 설정을 통해 CDK는 리전 간 리소스(예: us-east-1의 ACM 인증서) 조회를
-// 안정적으로 수행할 수 있게 됩니다.
-new InfraStack(app, 'BlogInfraStack', {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+// 환경 변수를 통해 배포 대상 계정과 리전을 명확히 합니다.
+// 이는 리전 간 리소스(예: us-east-1의 ACM 인증서) 조회를 위해 필수적입니다.
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: process.env.CDK_DEFAULT_REGION,
+};
+
+// 블로그 애플리케이션 인프라를 정의하는 스택
+new BlogStack(app, 'BlogInfraStack', {
+  env: env,
+  description: 'Stack for the main blog application infrastructure (Frontend, Backend, DB, etc.)',
+});
+
+// CI/CD 지원 인프라를 정의하는 스택
+new CiCdStack(app, 'CiCdStack', {
+  env: env,
+  description: 'Stack for the CI/CD support infrastructure (EC2 Self-Hosted Runner)',
 });

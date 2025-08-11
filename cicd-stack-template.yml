@@ -1,0 +1,182 @@
+Description: Stack for the CI/CD support infrastructure (EC2 Self-Hosted Runner)
+Resources:
+  RunnerSecurityGroupDE989EBE:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the EC2 self-hosted runner
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      VpcId: vpc-09064aa8dcdebfc42
+    Metadata:
+      aws:cdk:path: CiCdStack/RunnerSecurityGroup/Resource
+  RunnerRoleBA0605C0:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      Description: IAM Role for the self-hosted runner EC2 instance
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AmazonSSMManagedInstanceCore
+    Metadata:
+      aws:cdk:path: CiCdStack/RunnerRole/Resource
+  RunnerRoleDefaultPolicyF88A4DBD:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:"
+                  - Ref: AWS::Partition
+                  - :secretsmanager:ap-northeast-2:786382940028:secret:cicd/github-runner-pat-??????
+        Version: "2012-10-17"
+      PolicyName: RunnerRoleDefaultPolicyF88A4DBD
+      Roles:
+        - Ref: RunnerRoleBA0605C0
+    Metadata:
+      aws:cdk:path: CiCdStack/RunnerRole/DefaultPolicy/Resource
+  GitHubRunnerInstanceInstanceProfileF9DDF1ED:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: RunnerRoleBA0605C0
+    Metadata:
+      aws:cdk:path: CiCdStack/GitHubRunnerInstance/InstanceProfile
+  GitHubRunnerInstance6965C09B:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: ap-northeast-2a
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: 30
+            VolumeType: gp3
+      IamInstanceProfile:
+        Ref: GitHubRunnerInstanceInstanceProfileF9DDF1ED
+      ImageId: ami-0897f20d7e803af8f
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - RunnerSecurityGroupDE989EBE
+            - GroupId
+      SubnetId: subnet-0ccc097504af25410
+      Tags:
+        - Key: Name
+          Value: CiCdStack/GitHubRunnerInstance
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          #!/bin/bash -xe
+          # [핵심 디버깅] 이 스크립트가 실행되었다는 가장 원시적인 증거를 남깁니다.
+          echo "Hello from UserData! The script has started." > /home/ec2-user/userdata_proof.txt
+
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+          RUNNER_USER="ec2-user"
+          RUNNER_DIR="/home/${RUNNER_USER}/actions-runner"
+          REPO_URL="https://github.com/jungyuya/new-blog"
+          SECRET_NAME="cicd/github-runner-pat"
+          AWS_CLI_REGION="ap-northeast-2"
+
+          echo "--- Updating packages and installing dependencies ---"
+          dnf update -y
+          dnf install -y git docker jq tar gzip
+
+          echo "--- Starting Docker service ---"
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ${RUNNER_USER}
+
+          echo "--- Installing Node.js and pnpm ---"
+          su - ${RUNNER_USER} -c "
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+            export NVM_DIR=\"/home/${RUNNER_USER}/.nvm\"
+            [ -s \"$NVM_DIR/nvm.sh\" ] && \. \"$NVM_DIR/nvm.sh\"
+            nvm install 22
+            npm install -g pnpm
+          "
+
+          echo "--- Downloading and installing GitHub Actions Runner ---"
+          LATEST_VERSION=$(curl -s -X GET https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          RUNNER_TARBALL="actions-runner-linux-x64-${LATEST_VERSION}.tar.gz"
+          su - ${RUNNER_USER} -c "
+            mkdir -p ${RUNNER_DIR} && cd ${RUNNER_DIR}
+            curl -o ${RUNNER_TARBALL} -L https://github.com/actions/runner/releases/download/v${LATEST_VERSION}/${RUNNER_TARBALL}
+            tar xzf ./${RUNNER_TARBALL}
+          "
+
+          echo "--- Retrieving GitHub PAT from Secrets Manager ---"
+          GITHUB_PAT=$(aws secretsmanager get-secret-value --secret-id "${SECRET_NAME}" --query SecretString --output text --region ${AWS_CLI_REGION})
+          if [ -z "${GITHUB_PAT}" ]; then
+            echo "::error::Failed to retrieve GitHub PAT from Secrets Manager."
+            exit 1
+          fi
+
+          echo "--- Configuring, installing, and starting the runner service ---"
+          chown -R ec2-user:ec2-user /home/ec2-user/actions-runner
+          su - ec2-user -c "
+            cd /home/ec2-user/actions-runner
+            
+            echo 'Configuring the runner...'
+            ./config.sh --url https://github.com/jungyuya/new-blog --token ${GITHUB_PAT} --name $(hostname) --labels self-hosted,linux,x86-64 --unattended --replace
+            
+            echo 'Installing the runner service...'
+            sudo ./svc.sh install
+            
+            echo 'Starting the runner service...'
+            sudo ./svc.sh start
+          "
+
+          echo "--- UserData script finished successfully ---"
+    DependsOn:
+      - RunnerRoleDefaultPolicyF88A4DBD
+      - RunnerRoleBA0605C0
+    Metadata:
+      aws:cdk:path: CiCdStack/GitHubRunnerInstance/Resource
+  RunnerEIP:
+    Type: AWS::EC2::EIP
+    Metadata:
+      aws:cdk:path: CiCdStack/RunnerEIP
+  RunnerEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      EIP:
+        Ref: RunnerEIP
+      InstanceId:
+        Ref: GitHubRunnerInstance6965C09B
+    Metadata:
+      aws:cdk:path: CiCdStack/RunnerEIPAssociation
+  CDKMetadata:
+    Type: AWS::CDK::Metadata
+    Properties:
+      Analytics: v2:deflate64:H4sIAAAAAAAA/1WMyw6CMBBFv8V9GbEb3RpjDCsJfICppSQDpUP6kJCm/25Ajbo695XLged7yDdicpls+kzjHWLthexZpRwFKxUTk7tFJTnEWslg0c8XS2Fkp9b8B4VxXhipluZXn4vyjaNzJFF4JJMYigFiRXrdrCxJo5wX+1Wfo9JSi1qltITX4MfgEzPUKOjc9sE57A6QbzqHmNlgPA4KqhefUXQlwOQAAAA=
+    Metadata:
+      aws:cdk:path: CiCdStack/CDKMetadata/Default
+Outputs:
+  RunnerPublicIP:
+    Description: Public IP address of the self-hosted runner EC2 instance.
+    Value:
+      Ref: RunnerEIP
+Parameters:
+  BootstrapVersion:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /cdk-bootstrap/hnb659fds/version
+    Description: Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]
+
