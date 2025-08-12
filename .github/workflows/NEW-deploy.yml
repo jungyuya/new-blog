@@ -139,7 +139,6 @@ jobs:
             ~/.pnpm-store
             node_modules
             .turbo
-          # 안전한 키: lockfile 기반 (runner 컨텍스트 제거)
           key: pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             pnpm-
@@ -152,7 +151,6 @@ jobs:
 
       - name: "Install dependencies (pnpm with persistent store)"
         run: |
-          # 안전한 기본 경로: HOME 아래의 .pnpm-store
           PNPM_STORE_DIR="${PNPM_STORE_DIR:-$HOME/.pnpm-store}"
           mkdir -p "${PNPM_STORE_DIR}"
           echo "Using PNPM store at $PNPM_STORE_DIR"
@@ -162,20 +160,44 @@ jobs:
         run: |
           pnpm --filter frontend --filter backend run build
 
+      # ----------------------------
+      # Configure AWS + ECR login (빌드 캐시 접근 위해 로그인 필요)
+      # ----------------------------
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: "Login to Amazon ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      # ----------------------------
+      # Buildx: QEMU + docker-container driver (필수: registry cache export 지원)
+      # ----------------------------
+      - name: "Setup QEMU (for cross-platform builds)"
+        uses: docker/setup-qemu-action@v2
+
+      - name: "Set up Docker Buildx (use docker-container driver for cache export support)"
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver: docker-container
+
+      - name: "Debug: show buildx builders (optional)"
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          docker buildx ls
+          docker buildx inspect --bootstrap
 
       - name: "Define Image Tag"
         id: image-def
         run: |
           echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
+      # ----------------------------
+      # Docker build & push with registry cache
+      # ----------------------------
       - name: "Build and push Docker image (with registry cache)"
         uses: docker/build-push-action@v5
         with:
@@ -188,6 +210,9 @@ jobs:
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
+      # ----------------------------
+      # Deploy infra + sync + invalidate
+      # ----------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
@@ -204,7 +229,6 @@ jobs:
             exit 1
           fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
-          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
       - name: "Invalidate CloudFront Cache"
