@@ -67,47 +67,66 @@ export class CiCdStack extends Stack {
       ],
     });
 
+    // (cicd-stack.ts 의 userData 부분)
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
-      // --- 1. 필수 패키지 설치 (root 권한) ---
+      // root 권한으로 필요한 패키지 설치
       'dnf update -y',
-      'dnf install -y git jq docker aws-cli',
+      'dnf install -y git jq docker aws-cli -y',
       'systemctl enable --now docker',
-      'usermod -aG docker ec2-user',
+      'usermod -aG docker ec2-user || true',
 
-      // --- 2. ec2-user로 전환하여, Git 리포지토리에서 설치 스크립트를 가져와 실행 ---
-      // sudo -iu ec2-user: ec2-user로 로그인 쉘을 실행하여 환경을 완벽하게 설정합니다.
-      // bash -c "...": 따옴표 안의 전체 스크립트를 단일 명령으로 실행하여 순서를 보장합니다.
-      `sudo -iu ec2-user bash -c "set -euo pipefail
-    echo '[INFO] Starting setup as ec2-user...'
+      // per-boot wrapper 스크립트를 안전하게 생성 (heredoc: single-quoted BOOT 사용으로 변수 확장 방지)
+      `cat > /var/lib/cloud/scripts/per-boot/setup_runner_wrapper.sh <<'BOOT'
+#!/bin/bash
+set -euo pipefail
 
-    # Git Clone (재시도 로직 포함)
-    if [ ! -d /home/ec2-user/new-blog ]; then
-      until git clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog; do
-        echo 'git clone failed, retrying in 5 seconds...'
-        sleep 5
-      done
-    fi
-    
-    cd /home/ec2-user/new-blog
+# 안전한 로그 파일: /home/ec2-user/runner_setup.log (append)
+LOGFILE="/home/ec2-user/runner_setup.log"
+mkdir -p /home/ec2-user
+touch "$LOGFILE"
+chown ec2-user:ec2-user "$LOGFILE" || true
 
-    # 스크립트 실행
-    if [ -f ./scripts/setup_runner.sh ]; then
-      echo '[INFO] Found setup_runner.sh, executing...'
-      chmod +x ./scripts/setup_runner.sh
-      # [최종 수정] tee를 제거하고, 스크립트가 자신의 로그를 책임지도록 합니다.
-      ./scripts/setup_runner.sh
-    else
-      echo '[ERROR] setup_runner.sh not found in repository.'
-      exit 1
-    fi
+# 모든 출력을 로그 파일 및 syslog로 보냄 (절대 /dev/console에 직접 쓰지 않습니다)
+exec > >(tee -a "$LOGFILE" | logger -t runner-setup) 2>&1
 
-    echo '[INFO] Finished setup as ec2-user.'
-  "`,
+echo "[WRAPPER] $(date -u) - start"
 
+# 안전하게 ec2-user 권한으로 repo clone/pull 수행
+sudo -u ec2-user bash -lc '
+  set -euo pipefail
+  cd /home/ec2-user || exit 1
+  if [ ! -d new-blog ]; then
+    echo "[WRAPPER] cloning repository..."
+    git clone --depth 1 https://github.com/jungyuya/new-blog.git new-blog
+  else
+    echo "[WRAPPER] repository exists, attempting git pull..."
+    cd new-blog || exit 1
+    git pull || echo "[WRAPPER] git pull failed, continuing"
+  fi
+'
+
+# 소유권 보장
+chown -R ec2-user:ec2-user /home/ec2-user/new-blog || true
+
+# repo 내 스크립트가 존재하면 ec2-user로 실행 (스크립트가 직접 로그를 담당)
+if [ -f /home/ec2-user/new-blog/scripts/setup_runner.sh ]; then
+  echo "[WRAPPER] executing setup_runner.sh as ec2-user..."
+  sudo -u ec2-user bash -lc '/home/ec2-user/new-blog/scripts/setup_runner.sh'
+else
+  echo "[WRAPPER][ERROR] setup_runner.sh not found in /home/ec2-user/new-blog/scripts"
+  exit 1
+fi
+
+echo "[WRAPPER] $(date -u) - end"
+BOOT`,
+
+      // 안전: 실행권한 보장 (cloud-init는 per-boot 스크립트를 자동 실행하지만 권한 확인)
+      'chmod +x /var/lib/cloud/scripts/per-boot/setup_runner_wrapper.sh || true'
     );
 
     runnerInstance.addUserData(userData.render());
+
 
     // ===================================================================================
     // SECTION 4: 네트워크 주소 설정
