@@ -69,19 +69,19 @@ export class CiCdStack extends Stack {
 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
-      // --- root 사용자로 실행되는 부분 ---
+      // --- 1. 필수 패키지 설치 (root 권한) ---
       'dnf update -y',
-      'dnf install -y git jq docker',
+      'dnf install -y git jq docker aws-cli',
       'systemctl enable --now docker',
-      'usermod -aG docker ec2-user', // [수정] 'usod' 타이포 수정
+      'usermod -aG docker ec2-user',
 
-      // --- ec2-user 사용자로 안전하게 단일 블록 실행 ---
-      // sudo -iu ec2-user: ec2-user로 로그인 쉘을 실행하여 환경을 완벽하게 설정
-      // bash -c "...": 따옴표 안의 전체 스크립트를 bash 쉘에서 실행
+      // --- 2. ec2-user로 전환하여, Git 리포지토리에서 설치 스크립트를 가져와 실행 ---
+      // sudo -iu ec2-user: ec2-user로 로그인 쉘을 실행하여 환경을 완벽하게 설정합니다.
+      // bash -c "...": 따옴표 안의 전체 스크립트를 단일 명령으로 실행하여 순서를 보장합니다.
       `sudo -iu ec2-user bash -c "set -euo pipefail
-    echo '--- Starting setup as ec2-user ---'
+    echo '[INFO] Starting setup as ec2-user...'
 
-    # git clone (네트워크 오류에 대비한 재시도 루프 포함)
+    # Git Clone (재시도 로직 포함)
     if [ ! -d /home/ec2-user/new-blog ]; then
       until git clone https://github.com/jungyuya/new-blog.git /home/ec2-user/new-blog; do
         echo 'git clone failed, retrying in 5 seconds...'
@@ -91,18 +91,20 @@ export class CiCdStack extends Stack {
     
     cd /home/ec2-user/new-blog
 
-    # 스크립트가 존재하는지 확인 후, 실행 권한을 부여하고 실행
-    # 모든 출력을 tee 명령어로 로그 파일과 콘솔에 동시에 기록하여 디버깅 용이성 확보
+    # 스크립트 실행
     if [ -f ./scripts/setup_runner.sh ]; then
+      echo '[INFO] Found setup_runner.sh, executing...'
       chmod +x ./scripts/setup_runner.sh
-      ./scripts/setup_runner.sh 2>&1 | tee /home/ec2-user/setup_runner.log
+      # [최종 수정] tee를 제거하고, 스크립트가 자신의 로그를 책임지도록 합니다.
+      ./scripts/setup_runner.sh
     else
-      echo 'ERROR: setup_runner.sh not found in repository.' | tee /home/ec2-user/setup_runner.log
+      echo '[ERROR] setup_runner.sh not found in repository.'
       exit 1
     fi
 
-    echo '--- Finished setup as ec2-user ---'
+    echo '[INFO] Finished setup as ec2-user.'
   "`,
+
     );
 
     runnerInstance.addUserData(userData.render());
