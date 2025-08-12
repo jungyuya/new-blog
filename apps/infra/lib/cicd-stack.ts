@@ -1,5 +1,5 @@
 // 파일 위치: apps/infra/lib/cicd-stack.ts
-// 최종 버전: v2025.08.12-Patched-RunnerDockerReady
+// 최종 버전: v2025.08.12-Patched-Runner Docker Ready
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
