@@ -153,6 +153,51 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
+      - name: "Debug: env, pnpm and workspace .pnpm-store"
+        run: |
+          echo "---- ENV ----"
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          echo "RUNNER_OS=${RUNNER_OS:-$RUNNER_OS}"
+          echo "HOME=$HOME"
+          echo "pwd: $(pwd)"
+          echo "ls workspace root:"
+          ls -la "${GITHUB_WORKSPACE}" | sed -n '1,200p'
+
+          echo "---- Check pnpm version (if installed) ----"
+          pnpm -v || echo "pnpm not found yet"
+
+          echo "---- Check lockfile and package files ----"
+          if [ -f "${GITHUB_WORKSPACE}/pnpm-lock.yaml" ]; then echo "Found root pnpm-lock.yaml"; else echo "No root pnpm-lock.yaml"; fi
+          ls -la "${GITHUB_WORKSPACE}" | grep -E "pnpm-lock.yaml|package.json" || true
+
+          echo "---- Check cached .pnpm-store dir if present ----"
+          if [ -d "${GITHUB_WORKSPACE}/.pnpm-store" ]; then
+            echo ">>> .pnpm-store exists"
+            du -sh "${GITHUB_WORKSPACE}/.pnpm-store" || true
+            ls -la "${GITHUB_WORKSPACE}/.pnpm-store" | sed -n '1,200p'
+            echo "List top items in store:"
+            find "${GITHUB_WORKSPACE}/.pnpm-store" -maxdepth 2 -type d -printf '%p %s\n' | sed -n '1,50p' || true
+          else
+            echo ">>> .pnpm-store does NOT exist in workspace"
+          fi
+
+          echo "---- Check home .pnpm-store (in case pnpm uses home) ----"
+          if [ -d "${HOME}/.pnpm-store" ]; then
+            echo ">>> HOME .pnpm-store exists"
+            du -sh "${HOME}/.pnpm-store" || true
+            ls -la "${HOME}/.pnpm-store" | sed -n '1,50p'
+          else
+            echo ">>> HOME .pnpm-store does NOT exist"
+          fi
+
+          echo "---- Check actions/cache UI hint ----"
+          echo "After run, open Actions -> this run -> Caches (right side) and tell me whether cache was restored and the key shown."
+
+          echo "---- End of debug ----"
+
+
+
+
       - name: Install dependencies (pnpm with workspace store)
         run: |
           export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
