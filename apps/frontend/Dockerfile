@@ -8,33 +8,28 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# --- 1. 의존성 설치 레이어 ---
-# 자주 바뀌지 않는 의존성 관련 파일들만 먼저 복사합니다.
+# --- Layer 1: 의존성 설치 (가장 변하지 않는 부분) ---
 RUN npm install -g pnpm@10.14.0
-
-# 루트 레벨의 의존성 파일들을 복사합니다.
+# 의존성 관련 파일만 먼저 복사합니다.
 COPY pnpm-lock.yaml ./
 COPY package.json ./
 COPY pnpm-workspace.yaml ./
 COPY tsconfig.base.json ./
 COPY turbo.json ./
-
-# 각 워크스페이스의 package.json만 먼저 복사합니다.
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/infra/package.json ./apps/infra/
-
-# 이제 pnpm install을 실행합니다.
-# pnpm-lock.yaml이 변경되지 않는 한, 이 레이어는 캐시되어 재사용됩니다.
+# pnpm install을 실행합니다. 이 레이어는 pnpm-lock.yaml이 바뀔 때만 재실행됩니다.
 RUN pnpm install --frozen-lockfile
 
-# --- 2. 소스 코드 복사 및 빌드 레이어 ---
-# 자주 바뀌는 나머지 모든 소스 코드를 복사합니다.
-# .dockerignore 파일에 의해 불필요한 파일(node_modules 등)은 제외됩니다.
-COPY . .
+# --- Layer 2: Turborepo 캐시 복사 ---
+# 워크플로우에서 미리 빌드하여 생성된 .turbo 캐시를 복사합니다.
+COPY ./.turbo ./.turbo
 
-# 소스 코드가 변경되면 이 레이어부터 다시 실행됩니다.
-# 하지만 위의 pnpm install 레이어는 캐시된 상태로 남아있습니다.
+# --- Layer 3: 소스 코드 복사 및 빌드 (가장 자주 변하는 부분) ---
+# 나머지 모든 소스 코드를 복사합니다.
+COPY . .
+# 빌드를 실행합니다. Layer 2에서 복사한 캐시 덕분에, 변경이 없다면 이 단계는 매우 빠르게 완료됩니다.
 RUN pnpm --filter frontend run build
 
 # ===================================================================================
