@@ -113,35 +113,39 @@ jobs:
   # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
+    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
+    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
+    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
-
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
-      # ----------------------------
-      # Cache: pnpm store, node_modules, .turbo
-      # ----------------------------
-      - name: "Restore pnpm / node_modules / turbo cache"
+      - name: Prepare workspace pnpm store dir (ensure perms)
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo (workspace-based)
         uses: actions/cache@v4
         with:
           path: |
-            ~/.pnpm-store
-            node_modules
-            .turbo
-          key: pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            pnpm-
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -149,56 +153,29 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-      - name: "Install dependencies (pnpm with persistent store)"
+      - name: Install dependencies (pnpm with workspace store)
         run: |
-          PNPM_STORE_DIR="${PNPM_STORE_DIR:-$HOME/.pnpm-store}"
-          mkdir -p "${PNPM_STORE_DIR}"
-          echo "Using PNPM store at $PNPM_STORE_DIR"
-          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR}"
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
       - name: "Build Applications with Turborepo"
-        run: |
-          pnpm --filter frontend --filter backend run build
+        run: pnpm --filter frontend --filter backend run build
 
-      # ----------------------------
-      # Configure AWS + ECR login (빌드 캐시 접근 위해 로그인 필요)
-      # ----------------------------
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: "Login to Amazon ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ----------------------------
-      # Buildx: QEMU + docker-container driver (필수: registry cache export 지원)
-      # ----------------------------
-      - name: "Setup QEMU (for cross-platform builds)"
-        uses: docker/setup-qemu-action@v2
-
-      - name: "Set up Docker Buildx (use docker-container driver for cache export support)"
-        uses: docker/setup-buildx-action@v2
-        with:
-          driver: docker-container
-
-      - name: "Debug: show buildx builders (optional)"
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          docker buildx ls
-          docker buildx inspect --bootstrap
-
       - name: "Define Image Tag"
         id: image-def
-        run: |
-          echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
-      # ----------------------------
-      # Docker build & push with registry cache
-      # ----------------------------
-      - name: "Build and push Docker image (with registry cache)"
+      - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -207,12 +184,7 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
-      # ----------------------------
-      # Deploy infra + sync + invalidate
-      # ----------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
@@ -229,11 +201,17 @@ jobs:
             exit 1
           fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
       - name: "Invalidate CloudFront Cache"
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          if [ ! -f "$ASSET_JSON_PATH" ]; then
+            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
+            exit 1
+          fi
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
