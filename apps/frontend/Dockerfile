@@ -1,31 +1,26 @@
-# apps/frontend/Dockerfile (optimized for layer cache)
+# 파일 위치: apps/frontend/Dockerfile
+# 최종 안정화 버전: v3.0.1
+# 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
+
+# ===================================================================================
+# Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
+# ===================================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
-
-# Install pnpm (single layer)
 RUN npm install -g pnpm@10.14.0
-
-# 1) Copy only files needed for dependency resolution (minimize churn)
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-# Copy frontend package manifest specifically (monorepo)
-COPY apps/frontend/package.json ./apps/frontend/package.json
-
-# Ensure corepack/pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# 2) Install dependencies for frontend only; use an internal store dir so layer caches
-#    This layer will be cached (by docker layer/cache or registry cache)
-RUN pnpm install --frozen-lockfile --store-dir /pnpm-store --filter=frontend...
-
-# 3) Now copy the rest of the repository (source files) and build
-COPY . .
-WORKDIR /app/apps/frontend
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json tsconfig.json turbo.json ./
+COPY --link apps ./apps
+RUN if [ -d "packages" ]; then cp -a packages . ; fi
+RUN pnpm install --frozen-lockfile --filter=frontend...
 RUN pnpm --filter frontend run build
 
-# =========================
-# Runtime image
-# =========================
+
+# ===================================================================================
+# Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
+# ===================================================================================
 FROM node:22-alpine AS runner
+
 WORKDIR /app
 
 ENV NODE_ENV=production \
@@ -33,20 +28,20 @@ ENV NODE_ENV=production \
     PORT=3000 \
     AWS_LAMBDA_EXEC_WRAPPER=/opt/extensions/lambda-adapter
 
-# copy standalone build output
 COPY --from=builder /app/apps/frontend/.next/standalone /app/standalone
 COPY --from=builder /app/apps/frontend/public /app/public
 COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
-# lambda adapter
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
-# normalize server.js location
+# [최종 안정화] 빌드 시점에 server.js의 위치를 확인하고,
+# /app/standalone/server.js 경로로 심볼릭 링크를 생성하여 실행 경로를 정규화합니다.
 RUN if [ -f /app/standalone/server.js ]; then \
       echo "server.js found at /app/standalone"; \
     elif [ -f /app/standalone/apps/frontend/server.js ]; then \
-      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && echo "Linked server.js"; \
+      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && echo "Symbolic link created: /app/standalone/server.js -> /app/standalone/apps/frontend/server.js"; \
     else \
-      echo "ERROR: server.js not found" >&2; ls -la /app/standalone || true; exit 1; \
+      echo "ERROR: server.js not found in standalone output. Listing /app/standalone contents:" >&2; ls -la /app/standalone || true; exit 1; \
     fi
 
+# [최종 안정화] 항상 정규화된 단일 경로를 사용하여 서버를 실행합니다.
 CMD ["node", "/app/standalone/server.js"]
