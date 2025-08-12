@@ -216,6 +216,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: "Build and push Docker image (with registry cache)"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          platforms: linux/arm64
+          # registry 캐시: 읽기(from) / 쓰기(to)
+          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+          provenance: false        
+
       - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
