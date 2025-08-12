@@ -1,5 +1,5 @@
 # .github/workflows/deploy.yml
-# 버전: v2025.08.12-Patched-SpeedSafe
+# 버전: v2025.08.12-Patched-SpeedSafe-Verified
 name: "Unified Deploy: CiCd + Blog (Intelligent & Ordered)"
 
 on:
@@ -133,8 +133,13 @@ jobs:
           mkdir -p "${PNPM_STORE_PATH}"
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
-      - name: "Build Frontend only (faster: page.tsx 변경용)"
-        # 안전성: frontend 빌드만 수행 — backend 빌드는 detect_changes가 별도일 때만 수행하도록 설계 가능
+      - name: Show pnpm store size (for cache verification)
+        run: |
+          echo "Checking pnpm store sizes (workspace and home)"
+          du -sh "${GITHUB_WORKSPACE}/.pnpm-store" 2>/dev/null || true
+          du -sh "${HOME}/.pnpm-store" 2>/dev/null || true
+
+      - name: "Build Frontend only (faster: for page.tsx changes)"
         run: pnpm --filter frontend run build
 
       - name: "Configure AWS Credentials (from EC2 Role)"
@@ -154,6 +159,7 @@ jobs:
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: "Build and push Docker image (with registry cache)"
+        id: build-push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -164,6 +170,14 @@ jobs:
           provenance: false
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
+
+      - name: "Verify ECR buildcache existence (simple check)"
+        run: |
+          echo "AWS CLI version:"; aws --version || true
+          echo "Listing ECR image tags (looking for 'buildcache')"
+          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" --output text --query 'imageDetails[*].imageTags' || true
+          # simple grep check to show if a 'buildcache' tag exists (exit 0 even if not found)
+          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" --output text --query 'imageDetails[*].imageTags' | tr '\t' '\n' | grep -E '^buildcache$' || echo "No buildcache tag found (first run or cache cleaned)";
 
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
@@ -199,7 +213,7 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           CHANGED_COUNT=$(grep -E "upload:|copy:|delete" /tmp/s3sync_dry.txt | wc -l || true)
           if [ "${CHANGED_COUNT}" -gt 0 ]; then
-            echo "Changes detected -> creating targeted invalidation for '/', '/index.html' (hashed assets usually don't require invalidation)"
+            echo "Changes detected -> creating targeted invalidation for '/', '/index.html' (hashed assets usually don't require broad invalidation)"
             aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/" "/index.html"
           else
             echo "No static asset changes detected -> skipping broad invalidation (performance optimization)"
