@@ -70,59 +70,64 @@ export class CiCdStack extends Stack {
     // (cicd-stack.ts 의 userData 부분)
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
-      // root 권한으로 필요한 패키지 설치
+      // --- 1. 필수 패키지 설치 (root 권한) ---
       'dnf update -y',
-      'dnf install -y git jq docker aws-cli -y',
+      'dnf install -y git jq docker aws-cli',
       'systemctl enable --now docker',
       'usermod -aG docker ec2-user || true',
 
-      // per-boot wrapper 스크립트를 안전하게 생성 (heredoc: single-quoted BOOT 사용으로 변수 확장 방지)
-      `cat > /var/lib/cloud/scripts/per-boot/setup_runner_wrapper.sh <<'BOOT'
+      // --- 2. Wrapper 스크립트 생성 (heredoc 사용) ---
+      // per-instance 디렉토리를 사용하여, 인스턴스 생성 시 '단 한 번만' 실행되도록 보장합니다.
+      `cat > /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh <<'BOOT_WRAPPER_EOF'
 #!/bin/bash
 set -euo pipefail
 
-# 안전한 로그 파일: /home/ec2-user/runner_setup.log (append)
+# 안전한 로그 파일 설정
 LOGFILE="/home/ec2-user/runner_setup.log"
 mkdir -p /home/ec2-user
 touch "$LOGFILE"
 chown ec2-user:ec2-user "$LOGFILE" || true
 
-# 모든 출력을 로그 파일 및 syslog로 보냄 (절대 /dev/console에 직접 쓰지 않습니다)
-exec > >(tee -a "$LOGFILE" | logger -t runner-setup) 2>&1
+# 모든 출력을 로그 파일 및 syslog로 보냅니다.
+exec > >(tee -a "$LOGFILE" | logger -t runner-wrapper) 2>&1
 
-echo "[WRAPPER] $(date -u) - start"
+echo "[WRAPPER] $(date -u) - Wrapper script started."
 
-# 안전하게 ec2-user 권한으로 repo clone/pull 수행
+# ec2-user 권한으로 repo clone/pull 수행
 sudo -u ec2-user bash -lc '
   set -euo pipefail
   cd /home/ec2-user || exit 1
   if [ ! -d new-blog ]; then
-    echo "[WRAPPER] cloning repository..."
+    echo "[WRAPPER] Cloning repository..."
     git clone --depth 1 https://github.com/jungyuya/new-blog.git new-blog
   else
-    echo "[WRAPPER] repository exists, attempting git pull..."
+    echo "[WRAPPER] Repository exists, attempting git pull..."
     cd new-blog || exit 1
-    git pull || echo "[WRAPPER] git pull failed, continuing"
+    git pull || echo "[WRAPPER] git pull failed, continuing."
   fi
 '
 
-# 소유권 보장
+# 소유권 재확인
 chown -R ec2-user:ec2-user /home/ec2-user/new-blog || true
 
-# repo 내 스크립트가 존재하면 ec2-user로 실행 (스크립트가 직접 로그를 담당)
+# repo 내부의 setup_runner.sh를 ec2-user 권한으로 실행
 if [ -f /home/ec2-user/new-blog/scripts/setup_runner.sh ]; then
-  echo "[WRAPPER] executing setup_runner.sh as ec2-user..."
+  echo "[WRAPPER] Executing setup_runner.sh as ec2-user..."
   sudo -u ec2-user bash -lc '/home/ec2-user/new-blog/scripts/setup_runner.sh'
 else
-  echo "[WRAPPER][ERROR] setup_runner.sh not found in /home/ec2-user/new-blog/scripts"
+  echo "[WRAPPER][ERROR] setup_runner.sh not found in repository."
   exit 1
 fi
 
-echo "[WRAPPER] $(date -u) - end"
-BOOT`,
+echo "[WRAPPER] $(date -u) - Wrapper script finished."
+BOOT_WRAPPER_EOF`,
 
-      // 안전: 실행권한 보장 (cloud-init는 per-boot 스크립트를 자동 실행하지만 권한 확인)
-      'chmod +x /var/lib/cloud/scripts/per-boot/setup_runner_wrapper.sh || true'
+      // --- 3. 생성된 Wrapper 스크립트에 실행 권한 부여 ---
+      'chmod +x /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh',
+
+      // --- 4. Wrapper 스크립트 즉시 실행 (가장 중요한 부분) ---
+      // 이 명령어가 타이밍 문제를 해결합니다.
+      'bash /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh || echo "[ERROR] Wrapper script execution failed. Check logs for details."'
     );
 
     runnerInstance.addUserData(userData.render());
