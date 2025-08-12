@@ -75,23 +75,35 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # -----------------------------
+      # Step1: pnpm store / node_modules / .turbo 캐시
+      # (checkout 직후에 추가)
+      # -----------------------------
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
 
-      - name: "Configure AWS Credentials"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "Deploy CiCdStack via CDK"
-        run: pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+      - name: Install dependencies (pnpm with store)
+        run: |
+          export PNPM_STORE_PATH="${HOME}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포
