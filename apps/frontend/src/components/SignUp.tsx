@@ -37,7 +37,7 @@ export default function SignUp() {
                 throw new Error(data.message || '회원가입에 실패했습니다.');
             }
 
-            setSuccess('회원가입에 성공했습니다! 이메일을 확인하여 계정을 활성화해주세요.');
+            setSuccess('회원가입에 성공했습니다! 이메일을 확인하여 계정을 활성화해주세요~');
 
         } catch (err) {
             if (err instanceof Error) {
