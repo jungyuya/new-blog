@@ -75,25 +75,35 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # -----------------------------
+      # Step1: pnpm store / node_modules / .turbo 캐시
+      # (checkout 직후에 추가)
+      # -----------------------------
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
-      
-      - name: "Install dependencies (from cache)"
-        # [수정] --store-dir 옵션을 사용하여, pnpm이 캐시된 저장소를 사용하도록 강제합니다.
-        run: pnpm install --frozen-lockfile --store-dir ~/.pnpm-store
 
-      - name: "Configure AWS Credentials"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "Deploy CiCdStack via CDK"
-        run: pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+      - name: Install dependencies (pnpm with store)
+        run: |
+          export PNPM_STORE_PATH="${HOME}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포
@@ -103,27 +113,39 @@ jobs:
   # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
+    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
+    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
+    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      # [최종 수정 1] pnpm 저장소를 캐싱하는 스텝을 추가합니다.
-      - name: "Cache pnpm store"
+      - name: Prepare workspace pnpm store dir (ensure perms)
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo (workspace-based)
         uses: actions/cache@v4
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          path: |
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -131,11 +153,12 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-      - name: "Install dependencies (from cache)"
-        # [최종 수정 2] pnpm이 캐시된 저장소를 사용하도록 --store-dir 옵션을 추가합니다.
-        run: pnpm install --frozen-lockfile --store-dir ~/.pnpm-store
+      - name: Install dependencies (pnpm with workspace store)
+        run: |
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
-      # ... 이하 모든 스텝은 기존과 동일합니다 ...
       - name: "Build Applications with Turborepo"
         run: pnpm --filter frontend --filter backend run build
 
@@ -146,7 +169,7 @@ jobs:
 
       - name: "Login to Amazon ECR"
         id: login-ecr
-        uses: actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: "Define Image Tag"
         id: image-def
