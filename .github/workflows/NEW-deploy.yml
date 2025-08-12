@@ -113,37 +113,37 @@ jobs:
   # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
-    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
-    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
-    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
+    env:
+      # 캐시/스토어 경로(런너마다 HOME 경로가 다를 수 있으므로 런타임에서 사용)
+      PNPM_STORE_DIR: ${{ runner.temp }}/pnpm-store
+      TURBO_CACHE_DIR: ${{ runner.temp }}/.turbo
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Prepare workspace pnpm store dir (ensure perms)
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
-          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
-
-      - name: Cache pnpm store and turborepo (workspace-based)
+      # ----------------------------
+      # Step1: Cache (pnpm store, node_modules, .turbo)
+      # ----------------------------
+      - name: "Restore pnpm / node_modules / turbo cache"
         uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/.pnpm-store
-            ${{ github.workspace }}/.turbo
-          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          # 키: OS + pnpm-lock + package.json 조합
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
@@ -153,15 +153,25 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-      - name: Install dependencies (pnpm with workspace store)
+      - name: "Install dependencies (pnpm with persistent store)"
         run: |
-          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
-          mkdir -p "${PNPM_STORE_PATH}"
-          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+          # PNPM store를 HOME이 아니라 영속 가능한 경로로 고정하여 캐시와 함께 사용
+          export PNPM_STORE_DIR="${PNPM_STORE_DIR:-$HOME/.pnpm-store}"
+          mkdir -p "${PNPM_STORE_DIR}"
+          echo "Using PNPM store at $PNPM_STORE_DIR"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR}"
 
+      # ----------------------------
+      # Build (터보 사용)
+      # ----------------------------
       - name: "Build Applications with Turborepo"
-        run: pnpm --filter frontend --filter backend run build
+        run: |
+          # 터보 캐시 디렉토리가 actions/cache로 복원되도록 했습니다.
+          pnpm --filter frontend --filter backend run build
 
+      # ----------------------------
+      # Configure AWS + ECR login (needed for docker push / cdk deploy)
+      # ----------------------------
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -173,9 +183,14 @@ jobs:
 
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
+        run: |
+          # TAG 예: 20250812123045-abcdef1
+          echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image"
+      # ----------------------------
+      # Step2: Docker build & push with build cache (registry-based)
+      # ----------------------------
+      - name: "Build and push Docker image (with registry cache)"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -184,7 +199,13 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
+          # registry cache 사용 (ECR에 :cache 태그로 읽고 쓰기)
+          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
+      # ----------------------------
+      # Deploy infra (BlogInfraStack) + sync static + invalidate CloudFront
+      # ----------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
@@ -208,10 +229,5 @@ jobs:
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
-          if [ ! -f "$ASSET_JSON_PATH" ]; then
-            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
-            exit 1
-          fi
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
-          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"

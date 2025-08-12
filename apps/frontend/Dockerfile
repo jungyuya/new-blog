@@ -1,47 +1,53 @@
-# 파일 위치: apps/frontend/Dockerfile
-# 최종 안정화 버전: v3.0.1
-# 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
+# ---- builder ----
+# Node 버전은 workflow에서 사용하는 Node.js 버전(22)과 맞추세요.
+FROM node:22-bullseye-slim AS builder
 
-# ===================================================================================
-# Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
-# ===================================================================================
-FROM node:22-alpine AS builder
+# 시스템 종속성(필요시)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ curl \
+  && rm -rf /var/lib/apt/lists/*
+
+# 작업 디렉토리
 WORKDIR /app
-RUN npm install -g pnpm@10.14.0
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY tsconfig.base.json tsconfig.json turbo.json ./
-COPY --link apps ./apps
-RUN if [ -d "packages" ]; then cp -a packages . ; fi
-RUN pnpm install --frozen-lockfile --filter=frontend...
+
+# 의존성 레이어 캐시를 위해 package 파일 먼저 복사
+# (패키지 파일이 바뀌지 않으면 이 레이어는 캐시됩니다)
+COPY package.json pnpm-lock.yaml ./
+
+# BuildKit 캐시 마운트를 사용하여 pnpm 스토어를 캐시
+# (docker/build-push-action를 사용할 때 cache-from/cache-to와 함께 동작)
+# 이 RUN 명령은 BuildKit 전용 문법으로, GitHub Actions의 buildx에서 지원됩니다.
+RUN npm i -g pnpm@8
+
+# --mount=type=cache 를 통해 node_modules 및 pnpm store 캐시 가능
+RUN --mount=type=cache,target=/root/.pnpm-store \
+    --mount=type=cache,target=/app/node_modules \
+    pnpm install --frozen-lockfile
+
+# 소스 전체 복사
+COPY . .
+
+# 빌드 (프레임워크에 맞게 변경)
 RUN pnpm --filter frontend run build
 
+# ---- production image ----
+FROM node:22-bullseye-slim AS runtime
 
-# ===================================================================================
-# Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
-# ===================================================================================
-FROM node:22-alpine AS runner
+# 최소 권한 사용자 생성(선택)
+RUN useradd --uid 1000 --create-home appuser
 
 WORKDIR /app
 
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000 \
-    AWS_LAMBDA_EXEC_WRAPPER=/opt/extensions/lambda-adapter
+# production 시 필요한 파일만 복사
+COPY --from=builder /app/apps/frontend/.next .next
+COPY --from=builder /app/apps/frontend/public public
+COPY --from=builder /app/apps/frontend/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-COPY --from=builder /app/apps/frontend/.next/standalone /app/standalone
-COPY --from=builder /app/apps/frontend/public /app/public
-COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+# 포트(Next.js default 3000 등)
+EXPOSE 3000
 
-# [최종 안정화] 빌드 시점에 server.js의 위치를 확인하고,
-# /app/standalone/server.js 경로로 심볼릭 링크를 생성하여 실행 경로를 정규화합니다.
-RUN if [ -f /app/standalone/server.js ]; then \
-      echo "server.js found at /app/standalone"; \
-    elif [ -f /app/standalone/apps/frontend/server.js ]; then \
-      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && echo "Symbolic link created: /app/standalone/server.js -> /app/standalone/apps/frontend/server.js"; \
-    else \
-      echo "ERROR: server.js not found in standalone output. Listing /app/standalone contents:" >&2; ls -la /app/standalone || true; exit 1; \
-    fi
+USER appuser
 
-# [최종 안정화] 항상 정규화된 단일 경로를 사용하여 서버를 실행합니다.
-CMD ["node", "/app/standalone/server.js"]
+# 프레임워크에 따라 서버 시작 명령을 맞추세요. 예: next start
+CMD ["pnpm", "start"]
