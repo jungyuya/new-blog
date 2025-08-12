@@ -50,7 +50,7 @@ jobs:
             cicd:
               - 'apps/infra/lib/cicd-stack.ts'
               - 'scripts/setup_runner.sh'
-              - '.github/workflows/deploy.yml'
+  #- '.github/workflows/deploy.yml' 제거 = Runner는 deploy.yml과 무관.
 
   # ===================================================================================
   # JOB 2: CI/CD 인프라 배포 (오직 CDK 배포만 수행)
@@ -73,16 +73,21 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
+      # [최종 수정] CDK가 모든 스택을 '합성'하려면 전체 의존성이 필요합니다.
+      # 따라서 전체 pnpm install을 다시 수행합니다.
+      - name: "Install all dependencies"
+        run: pnpm install --frozen-lockfile
+
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # [최종 수정] 'deploy' 명령어는 특정 스택만 배포하도록 명확히 지정합니다.
+      # CDK는 내부적으로 모든 스택을 합성하지만, CloudFormation에는 CiCdStack만 전달합니다.
       - name: "Deploy CiCdStack via CDK"
-        run: |
-          pnpm --filter infra install --frozen-lockfile
-          pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+        run: pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
 
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포 (Self-Hosted Runner에서 모든 작업을 수행)
