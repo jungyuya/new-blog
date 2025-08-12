@@ -128,6 +128,24 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prepare workspace pnpm store dir (ensure perms)
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo (workspace-based)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -135,9 +153,11 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies (pnpm with workspace store)
+        run: |
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
       - name: "Build Applications with Turborepo"
         run: pnpm --filter frontend --filter backend run build
