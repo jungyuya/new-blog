@@ -116,7 +116,6 @@ jobs:
       - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      # [핵심 수정 1] Turborepo 빌드를 먼저 실행하여, 로컬 디스크에 .turbo 캐시를 생성합니다.
       - name: "Build Applications with Turborepo to create cache"
         run: pnpm --filter frontend --filter backend run build
 
@@ -129,11 +128,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # [최종 수정] Docker 빌드 전에, 고급 캐싱 기능을 지원하는 드라이버를 설정합니다.
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      # [핵심 수정 2] Docker 빌드에 ECR 레지스트리 캐시를 활성화합니다.
       - name: "Build and push Docker image with cache"
         uses: docker/build-push-action@v5
         with:
@@ -143,7 +145,6 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          # ECR을 Docker 레이어 캐시 저장소로 사용합니다.
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 

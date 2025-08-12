@@ -11,8 +11,6 @@ export default function SignUp() {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        // [핵심 수정 1] console.log 디버깅 코드는 이제 제거합니다.
-        // console.log("--- DEBUG ---"); ...
 
         e.preventDefault();
         setIsLoading(true);
