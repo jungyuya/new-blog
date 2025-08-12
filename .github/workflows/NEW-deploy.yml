@@ -7,14 +7,14 @@ on:
     branches: [main]
     # 워크플로우가 트리거되는 파일 경로(기존 둘의 paths 합집합)
     paths:
-      - 'apps/frontend/**'
-      - 'apps/backend/**'
-      - 'apps/infra/lib/blog-stack.ts'
-      - 'apps/infra/lib/cicd-stack.ts'
-      - 'apps/infra/bin/infra.ts'
-      - '.github/workflows/deploy-blog.yml'
-      - '.github/workflows/deploy-cicd-infra.yml'
-      - 'pnpm-lock.yaml'
+      - "apps/frontend/**"
+      - "apps/backend/**"
+      - "apps/infra/lib/blog-stack.ts"
+      - "apps/infra/lib/cicd-stack.ts"
+      - "apps/infra/bin/infra.ts"
+      - ".github/workflows/deploy-blog.yml"
+      - ".github/workflows/deploy-cicd-infra.yml"
+      - "pnpm-lock.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -75,6 +75,13 @@ jobs:
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
+
+      - name: "Debug: List files at checkout"
+        run: |
+          echo "Current working directory: $(pwd)"
+          echo "Listing files in the repository root:"
+          ls -lR
+
       - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
@@ -164,21 +171,51 @@ jobs:
 
       - name: "Deploy Blog Infrastructure (CDK)"
         run: |
+          # [최종 수정] --outputs-file 경로를 $GITHUB_WORKSPACE를 사용한 절대 경로로 지정합니다.
+          # pnpm이 작업 디렉토리를 변경하더라도 항상 올바른 위치에 파일이 생성됩니다.
           pnpm --filter infra exec cdk deploy BlogInfraStack \
             --require-approval never \
-            --outputs-file ./apps/infra/outputs.json \
+            --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
+
+      - name: "Debug: Verify cdk outputs.json"
+        run: |
+          echo "Searching for outputs.json..."
+          find . -name "outputs.json" -print -exec ls -l {} \;
+          echo "---"
+          echo "Content of outputs.json (if found):"
+          cat ./apps/infra/outputs.json || echo "outputs.json not found at expected path."
 
       - name: "Sync Static Assets to S3 (using node to avoid jq dependency)"
         run: |
           set -euo pipefail
-          ASSET_BUCKET_NAME=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.FrontendAssetsBucketName)")
+          # [최종 수정] outputs.json 파일의 절대 경로를 변수로 지정합니다.
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+
+          # [안전 장치] 파일이 존재하는지 먼저 확인합니다.
+          if [ ! -f "$ASSET_JSON_PATH" ]; then
+            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
+            exit 1
+          fi
+
+          # [최종 수정] Node.js가 절대 경로를 사용하여 파일을 읽도록 합니다.
+          # -p 플래그는 console.log 없이 결과만 출력하는 더 깔끔한 방법입니다.
+          ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
+
           echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
-
+     
       - name: "Invalidate CloudFront Cache (using node)"
         run: |
           set -euo pipefail
-          DISTRIBUTION_ID=$(node -e "console.log(require('./apps/infra/outputs.json').BlogInfraStack.CloudFrontDistributionId)")
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+
+          if [ ! -f "$ASSET_JSON_PATH" ]; then
+            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
+            exit 1
+          fi
+
+          DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
+
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
