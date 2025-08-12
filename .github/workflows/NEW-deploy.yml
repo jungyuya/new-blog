@@ -1,17 +1,21 @@
-# .github/workflows/deploy.yml
-# 버전: v2025.08.12-Patched-SpeedSafe-Verified
+# 파일 위치: .github/workflows/deploy.yml
+# 버전: v2025.08.12-Intelligent-Pipeline
+# 역할: 코드 변경 사항을 감지하여, CI/CD 인프라와 블로그 애플리케이션의 배포를
+#       독립적이고, 올바른 순서로, 그리고 조건부로 실행하는 최종 통합 워크플로우
+
 name: "Unified Deploy: CiCd + Blog (Intelligent & Ordered)"
 
 on:
   push:
     branches: [main]
+    # 워크플로우가 트리거되는 파일 경로의 전체 집합
     paths:
       - "apps/frontend/**"
       - "apps/backend/**"
       - "apps/infra/lib/blog-stack.ts"
       - "apps/infra/lib/cicd-stack.ts"
       - "apps/infra/bin/infra.ts"
-      - ".github/workflows/deploy.yml"
+      - ".github/workflows/deploy.yml" # 자기 자신을 포함하여 워크플로우 변경 시에도 실행
       - "pnpm-lock.yaml"
       - "scripts/setup_runner.sh"
   workflow_dispatch:
@@ -25,6 +29,10 @@ env:
   ECR_REPOSITORY: new-blog-frontend
 
 jobs:
+  # ===================================================================================
+  # JOB 1: 변경 감지
+  # 역할: 어떤 코드가 변경되었는지 신속하게 판단하여, 후속 Job들의 실행 여부를 결정.
+  # ===================================================================================
   detect_changes:
     name: "Detect Changed Paths"
     runs-on: ubuntu-latest
@@ -34,12 +42,10 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: "Filter changed paths"
         id: paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v3 # 최신 버전 사용 권장
         with:
           filters: |
             blog:
@@ -52,9 +58,15 @@ jobs:
               - 'scripts/setup_runner.sh'
               - '.github/workflows/deploy.yml'
 
+  # ===================================================================================
+  # JOB 2: CI/CD 인프라 배포
+  # 역할: Self-Hosted Runner(EC2)와 관련된 인프라를 배포.
+  #       'cicd' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
+  # ===================================================================================
   deploy_cicd_infra:
     name: "Deploy CI/CD Infrastructure (CiCdStack)"
     needs: detect_changes
+    # [핵심 수정] Job 레벨에서 실행 여부를 결정하여, 불필요한 실행을 원천 차단.
     if: ${{ needs.detect_changes.outputs.cicd == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -64,8 +76,12 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 2
 
+      # -----------------------------
+      # Step1: pnpm store / node_modules / .turbo 캐시
+      # (checkout 직후에 추가)
+      # -----------------------------
       - name: Cache pnpm store and turborepo
         uses: actions/cache@v4
         with:
@@ -89,14 +105,23 @@ jobs:
           mkdir -p "${PNPM_STORE_PATH}"
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
+  # ===================================================================================
+  # JOB 3: 블로그 애플리케이션 배포
+  # 역할: 실제 블로그 애플리케이션을 빌드하고 배포. Self-Hosted Runner에서 실행.
+  #       'blog' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
+  #       항상 CI/CD 인프라 배포가 끝난 후에 실행되어 안정성을 보장.
+  # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
+    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
+    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
+    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
@@ -104,7 +129,7 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 2
 
       - name: Prepare workspace pnpm store dir (ensure perms)
         run: |
@@ -117,6 +142,7 @@ jobs:
           path: |
             ${{ github.workspace }}/.pnpm-store
             ${{ github.workspace }}/.turbo
+          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
@@ -133,14 +159,8 @@ jobs:
           mkdir -p "${PNPM_STORE_PATH}"
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
-      - name: Show pnpm store size (for cache verification)
-        run: |
-          echo "Checking pnpm store sizes (workspace and home)"
-          du -sh "${GITHUB_WORKSPACE}/.pnpm-store" 2>/dev/null || true
-          du -sh "${HOME}/.pnpm-store" 2>/dev/null || true
-
-      - name: "Build Frontend only (faster: for page.tsx changes)"
-        run: pnpm --filter frontend run build
+      - name: "Build Applications with Turborepo"
+        run: pnpm --filter frontend --filter backend run build
 
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
@@ -151,15 +171,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: "Set up QEMU and Docker buildx"
-        uses: docker/setup-buildx-action@v2
-
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image (with registry cache)"
-        id: build-push
+      - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -168,16 +184,6 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
-
-      - name: "Verify ECR buildcache existence (simple check)"
-        run: |
-          echo "AWS CLI version:"; aws --version || true
-          echo "Listing ECR image tags (looking for 'buildcache')"
-          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" --output text --query 'imageDetails[*].imageTags' || true
-          # simple grep check to show if a 'buildcache' tag exists (exit 0 even if not found)
-          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" --output text --query 'imageDetails[*].imageTags' | tr '\t' '\n' | grep -E '^buildcache$' || echo "No buildcache tag found (first run or cache cleaned)";
 
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
@@ -186,7 +192,7 @@ jobs:
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      - name: "Sync Static Assets to S3 (dry-run -> sync)"
+      - name: "Sync Static Assets to S3"
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
@@ -195,14 +201,10 @@ jobs:
             exit 1
           fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
-          echo "Performing dry-run to detect changed files for efficient invalidation..."
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete --dryrun > /tmp/s3sync_dry.txt || true
-          CHANGED_COUNT=$(grep -E "upload:|copy:|delete" /tmp/s3sync_dry.txt | wc -l || true)
-          echo "Detected dry-run changed items: $CHANGED_COUNT"
-          # Now perform actual sync
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
-      - name: "Invalidate CloudFront only if necessary (targeted, safe)"
+      - name: "Invalidate CloudFront Cache"
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
@@ -211,10 +213,5 @@ jobs:
             exit 1
           fi
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
-          CHANGED_COUNT=$(grep -E "upload:|copy:|delete" /tmp/s3sync_dry.txt | wc -l || true)
-          if [ "${CHANGED_COUNT}" -gt 0 ]; then
-            echo "Changes detected -> creating targeted invalidation for '/', '/index.html' (hashed assets usually don't require broad invalidation)"
-            aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/" "/index.html"
-          else
-            echo "No static asset changes detected -> skipping broad invalidation (performance optimization)"
-          fi
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
