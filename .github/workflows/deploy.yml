@@ -1,9 +1,9 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 버전: v2025.08.12-Final-Optimized
-# 역할: 각 Job의 책임을 명확히 분리하고, Self-Hosted Runner의 특성을
-#       최대한 활용하여 파이프라인을 최종 최적화한 버전
+# 버전: v2025.08.13-Final-Optimized-And-Corrected
+# 역할: 모든 문법 오류를 수정하고, Turborepo 캐시와 Docker 레이어 캐시를
+#       모두 활용하는 최종 최적화 워크플로우
 
-name: "Unified Deploy: CiCd + Blog (Optimized)"
+name: "Unified Deploy: CiCd + Blog (Optimized & Corrected)"
 
 on:
   push:
@@ -25,7 +25,7 @@ env:
 
 jobs:
   # ===================================================================================
-  # JOB 1: 변경 감지 (오직 감지만 수행)
+  # JOB 1: 변경 감지
   # ===================================================================================
   detect_changes:
     name: "Detect Changed Paths"
@@ -50,10 +50,10 @@ jobs:
             cicd:
               - 'apps/infra/lib/cicd-stack.ts'
               - 'scripts/setup_runner.sh'
-  #- '.github/workflows/deploy.yml' 제거 = Runner는 deploy.yml과 무관.
+              - '.github/workflows/deploy.yml'
 
   # ===================================================================================
-  # JOB 2: CI/CD 인프라 배포 (오직 CDK 배포만 수행)
+  # JOB 2: CI/CD 인프라 배포
   # ===================================================================================
   deploy_cicd_infra:
     name: "Deploy CI/CD Infrastructure (CiCdStack)"
@@ -73,24 +73,19 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-      # [최종 수정] CDK가 모든 스택을 '합성'하려면 전체 의존성이 필요합니다.
-      # 따라서 전체 pnpm install을 다시 수행합니다.
-      - name: "Install all dependencies"
-        run: pnpm install --frozen-lockfile
-
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # [최종 수정] 'deploy' 명령어는 특정 스택만 배포하도록 명확히 지정합니다.
-      # CDK는 내부적으로 모든 스택을 합성하지만, CloudFormation에는 CiCdStack만 전달합니다.
       - name: "Deploy CiCdStack via CDK"
-        run: pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+        run: |
+          pnpm --filter infra install --frozen-lockfile
+          pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
 
   # ===================================================================================
-  # JOB 3: 블로그 애플리케이션 배포 (Self-Hosted Runner에서 모든 작업을 수행)
+  # JOB 3: 블로그 애플리케이션 배포
   # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
@@ -128,19 +123,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # [최종 수정] Docker 빌드 전에, 고급 캐싱 기능을 지원하는 드라이버를 설정합니다.
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
+      # [수정] 중복된 스텝을 제거하고, 논리적으로 올바른 위치로 이동했습니다.
       - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Define Image Tag"
-        id: image-def
-        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      # [최종 수정] Docker 빌드 컨텍스트에 .turbo 디렉토리가 없는 오류를 방지하기 위한 안전장치
       - name: "Ensure .turbo directory exists for Docker build context"
         run: |
           if [ ! -d ".turbo" ]; then
@@ -164,7 +154,6 @@ jobs:
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
-      # ... 이하 Deploy, Sync, Invalidate 스텝은 변경 없음 ...
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \

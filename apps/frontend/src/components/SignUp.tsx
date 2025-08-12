@@ -17,7 +17,6 @@ export default function SignUp() {
         setError(null);
         setSuccess(null);
 
-
         // [핵심 수정 3] 이제부터는 항상 우리 사이트 내부의 상대 경로로 요청을 보냅니다.
         const apiUrl = '/api/auth/signup';
         console.log(`Requesting to: ${apiUrl}`);
