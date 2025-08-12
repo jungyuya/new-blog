@@ -136,6 +136,22 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
+      - name: "Define Image Tag"
+        id: image-def
+        run: echo "TAG=$(date +%Ym%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      # [최종 수정] Docker 빌드 컨텍스트에 .turbo 디렉토리가 없는 오류를 방지하기 위한 안전장치
+      - name: "Ensure .turbo directory exists for Docker build context"
+        run: |
+          if [ ! -d ".turbo" ]; then
+            echo "WARNING: .turbo directory not found. Creating an empty one to prevent Docker COPY failure."
+            mkdir -p .turbo
+          else
+            echo ".turbo directory found."
+          fi
+          echo "Listing .turbo directory contents:"
+          ls -la .turbo
+
       - name: "Build and push Docker image with cache"
         uses: docker/build-push-action@v5
         with:
