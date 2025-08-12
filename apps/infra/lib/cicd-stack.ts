@@ -6,6 +6,8 @@ import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export class CiCdStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -38,9 +40,19 @@ export class CiCdStack extends Stack {
     });
 
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
-    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess')); // 임시 허용 (첫배포)
 
-    const githubPatSecret = secretsmanager.Secret.fromSecretNameV2(this, 'GitHubPatSecret', 'cicd/github-runner-pat');
+    // [임시 권한] 첫 배포 성공을 위해 넓은 권한을 유지합니다.
+    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'));
+
+    // [최종 수정] Runner가 자신의 PAT를 Secrets Manager에서 읽을 수 있도록 권한을 부여합니다.
+    // fromSecretCompleteArn 메소드를 사용하여, 전체 ARN으로 시크릿을 정확하게 참조합니다.
+    const githubPatSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'GitHubPatSecretFromArn',
+      `arn:aws:secretsmanager:${this.region}:${this.account}:secret:cicd/github-runner-pat-vauS4i`
+    );
+
+    // grantRead 메소드를 사용하여 읽기 권한을 명시적으로 부여합니다.
     githubPatSecret.grantRead(runnerRole);
 
     // ===================================================================================
@@ -69,65 +81,28 @@ export class CiCdStack extends Stack {
 
     // (cicd-stack.ts 의 userData 부분)
     const userData = ec2.UserData.forLinux();
+
+    // 1. 필수 패키지 설치 (root 권한)
     userData.addCommands(
-      // --- 1. 필수 패키지 설치 (root 권한) ---
       'dnf update -y',
       'dnf install -y git jq docker aws-cli',
       'systemctl enable --now docker',
-      'usermod -aG docker ec2-user || true',
+      'usermod -aG docker ec2-user || true'
+    );
 
-      // --- 2. Wrapper 스크립트 생성 (heredoc 사용) ---
-      // per-instance 디렉토리를 사용하여, 인스턴스 생성 시 '단 한 번만' 실행되도록 보장합니다.
-      `cat > /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh <<'BOOT_WRAPPER_EOF'
-#!/bin/bash
-set -euo pipefail
+    // 2. 외부 스크립트 파일을 읽어옵니다.
+    const setupScriptPath = path.join(__dirname, '..', '..', '..', 'scripts', 'setup_runner.sh');
+    const setupScriptContent = fs.readFileSync(setupScriptPath, 'utf8');
 
-# 안전한 로그 파일 설정
-LOGFILE="/home/ec2-user/runner_setup.log"
-mkdir -p /home/ec2-user
-touch "$LOGFILE"
-chown ec2-user:ec2-user "$LOGFILE" || true
-
-# 모든 출력을 로그 파일 및 syslog로 보냅니다.
-exec > >(tee -a "$LOGFILE" | logger -t runner-wrapper) 2>&1
-
-echo "[WRAPPER] $(date -u) - Wrapper script started."
-
-# ec2-user 권한으로 repo clone/pull 수행
-sudo -u ec2-user bash -lc '
-  set -euo pipefail
-  cd /home/ec2-user || exit 1
-  if [ ! -d new-blog ]; then
-    echo "[WRAPPER] Cloning repository..."
-    git clone --depth 1 https://github.com/jungyuya/new-blog.git new-blog
-  else
-    echo "[WRAPPER] Repository exists, attempting git pull..."
-    cd new-blog || exit 1
-    git pull || echo "[WRAPPER] git pull failed, continuing."
-  fi
-'
-
-# 소유권 재확인
-chown -R ec2-user:ec2-user /home/ec2-user/new-blog || true
-
-# repo 내부의 setup_runner.sh를 ec2-user 권한으로 실행
-if [ -f /home/ec2-user/new-blog/scripts/setup_runner.sh ]; then
-  echo "[WRAPPER] Executing setup_runner.sh as ec2-user..."
-  sudo -u ec2-user bash -lc '/home/ec2-user/new-blog/scripts/setup_runner.sh'
-else
-  echo "[WRAPPER][ERROR] setup_runner.sh not found in repository."
-  exit 1
-fi
-
-echo "[WRAPPER] $(date -u) - Wrapper script finished."
-BOOT_WRAPPER_EOF`,
-
-      // --- 3. 생성된 Wrapper 스크립트에 실행 권한 부여 ---
-      'chmod +x /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh',
-
-      // --- 4. Wrapper 스크립트 즉시 실행 (가장 중요한 부분) ---
-      // 이 명령어가 타이밍 문제를 해결합니다.
-      'bash /var/lib/cloud/scripts/per-instance/setup_runner_wrapper.sh || echo "[ERROR] Wrapper script execution failed. Check logs for details."'
+    // 3. 스크립트 내용을 Base64로 인코딩하여 UserData에 추가하고, EC2에서 디코딩하여 실행합니다.
+    userData.addCommands(
+      // 스크립트 파일을 /home/ec2-user 디렉토리에 생성합니다.
+      `echo "${Buffer.from(setupScriptContent).toString('base64')}" | base64 -d > /home/ec2-user/setup_runner.sh`,
+      // 파일 소유자와 실행 권한을 설정합니다.
+      'chown ec2-user:ec2-user /home/ec2-user/setup_runner.sh',
+      'chmod +x /home/ec2-user/setup_runner.sh',
+      // ec2-user 권한으로 스크립트를 최종 실행합니다.
+      'sudo -u ec2-user /home/ec2-user/setup_runner.sh'
     );
 
     runnerInstance.addUserData(userData.render());
