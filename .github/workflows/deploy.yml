@@ -190,7 +190,7 @@ jobs:
           provenance: false
           # [최종 수정] 캐시 백엔드를 gha에서 registry로 전환합니다.
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=inline
 
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |

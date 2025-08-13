@@ -34,16 +34,30 @@ export class CiCdStack extends Stack {
 
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
 
-    // [임시 권한] 첫 배포 성공을 위해 넓은 권한을 유지합니다.
-    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'));
+    // [기존] 임시 AdministratorAccess 제거
+    // runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'));
 
-    // [최종 수정] Runner가 자신의 PAT를 Secrets Manager에서 읽을 수 있도록 권한을 부여합니다.
-    // fromSecretCompleteArn 메소드를 사용하여, 전체 ARN으로 시크릿을 정확하게 참조합니다.
-    const githubPatSecret = secretsmanager.Secret.fromSecretCompleteArn(
-      this,
-      'GitHubPatSecretFromArn',
-      `arn:aws:secretsmanager:${this.region}:${this.account}:secret:cicd/github-runner-pat-vauS4i`
-    );
+    // [최종 수정] ECR에 대한 충분한 권한을 부여하는 관리형 정책을 추가합니다.
+    // 이 정책은 이미지 푸시, 풀, 그리고 캐시 매니페스트 관리에 필요한 모든 권한을 포함합니다.
+    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryPowerUser'));
+
+    // [추가] CDK 배포를 위한 CloudFormation 권한
+    runnerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:GetParameters'], // 여러 파라미터를 한 번에 가져올 수 있는 GetParameters 권장
+      // 파라미터 경로의 시작 부분('/new-blog/cicd/')을 지정하여,
+      // 해당 경로 아래의 모든 파라미터에 대한 접근을 허용합니다.
+      resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/new-blog/cicd/*`],
+    }));
+
+    // [추가] S3 캐시 및 정적 에셋 동기화를 위한 권한
+    // (이 부분은 BlogInfraStack에서 생성된 버킷 ARN을 참조해야 할 수 있습니다.
+    //  우선은 간단하게 모든 S3에 대한 권한을 부여하고, 나중에 최소 권한으로 수정합니다.)
+    runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'));
+
+
+    const githubPatSecret = secretsmanager.Secret.fromSecretNameV2(this, 'GitHubPatSecret', 'cicd/github-runner-pat');
+    githubPatSecret.grantRead(runnerRole);
 
     // grantRead 메소드를 사용하여 읽기 권한을 명시적으로 부여합니다.
     githubPatSecret.grantRead(runnerRole);

@@ -55,7 +55,19 @@
         {
          "Ref": "AWS::Partition"
         },
-        ":iam::aws:policy/AdministratorAccess"
+        ":iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonS3FullAccess"
        ]
       ]
      }
@@ -72,11 +84,31 @@
      "Statement": [
       {
        "Action": [
+        "cloudformation:*",
+        "iam:PassRole",
+        "sts:AssumeRole"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret"
        ],
        "Effect": "Allow",
-       "Resource": "arn:aws:secretsmanager:ap-northeast-2:786382940028:secret:cicd/github-runner-pat-vauS4i"
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":secretsmanager:ap-northeast-2:786382940028:secret:cicd/github-runner-pat-??????"
+         ]
+        ]
+       }
       }
      ],
      "Version": "2012-10-17"
