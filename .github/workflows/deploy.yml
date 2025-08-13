@@ -129,9 +129,7 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-
-      # ... (이전 스텝들은 변경 없이 동일합니다) ...
+          fetch-depth: 0
 
       - name: Cache pnpm store and turborepo (workspace-based)
         uses: actions/cache@v4
@@ -155,6 +153,13 @@ jobs:
           export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
           mkdir -p "${PNPM_STORE_PATH}"
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+
+      - name: "Generate Stable Next.js Build ID"
+        run: |
+          mkdir -p apps/frontend/.next
+          # git tree-hash를 사용하여 소스코드의 현재 상태를 나타내는 고유 ID를 생성합니다.
+          git rev-parse HEAD:apps > apps/frontend/.next/BUILD_ID
+          echo "Generated Build ID: $(cat apps/frontend/.next/BUILD_ID)"
 
       - name: "Build Applications with Turborepo"
         run: pnpm --filter frontend --filter backend run build
@@ -185,8 +190,14 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # 로컬 캐시 전략은 그대로 유지합니다.
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       # ... (이후 스텝들은 변경 없이 동일합니다) ...
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
