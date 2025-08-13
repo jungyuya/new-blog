@@ -28,13 +28,13 @@ importers:
   apps/backend:
     dependencies:
       '@aws-sdk/client-cognito-identity-provider':
-        specifier: ^3.848.0
+        specifier: ^3.859.0
         version: 3.859.0
       '@aws-sdk/client-dynamodb':
-        specifier: ^3.848.0
+        specifier: ^3.859.0
         version: 3.859.0
       '@aws-sdk/lib-dynamodb':
-        specifier: ^3.850.0
+        specifier: ^3.859.0
         version: 3.859.0(@aws-sdk/client-dynamodb@3.859.0)
       '@hono/zod-validator':
         specifier: ^0.7.2
@@ -43,7 +43,7 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0
       hono:
-        specifier: ^4.8.10
+        specifier: ^4.8.12
         version: 4.8.12
       uuid:
         specifier: ^11.1.0

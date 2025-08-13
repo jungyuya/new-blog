@@ -101,9 +101,6 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
 
-      # ------------------------
-      # Ensure AWS permissions available for ECR login (EC2 role assumed by runner)
-      # ------------------------
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -120,15 +117,11 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      # ------------------------
-      # Multi-stage Docker build: build (pnpm install & next build) happens INSIDE Docker builder stage
-      # This guarantees standalone/node_modules are produced inside the image.
-      # ------------------------
       - name: "Build and push Docker image (multi-stage build)"
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./apps/frontend/Dockerfile        # <<-- your multi-stage Dockerfile (builder + runner)
+          file: ./apps/frontend/Dockerfile
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
@@ -136,9 +129,6 @@ jobs:
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
-      # ------------------------
-      # Pull the image we just pushed so we can extract static assets from it (host needs those for S3 sync)
-      # ------------------------
       - name: "Pull image locally for asset extraction"
         run: |
           IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
@@ -155,28 +145,15 @@ jobs:
           rm -rf "$TMP_OUT"
           mkdir -p "$TMP_OUT"
 
-          # create a stopped container from the image
           CID=$(docker create --name "$EXTRACT_NAME" "$IMAGE")
           echo "Created container $CID for extraction"
 
-          # Try to copy the common paths we need to sync later
-          # container:/app/.next  -> ./_extracted_frontend/.next
-          # container:/app/public -> ./_extracted_frontend/public
-          # container:/app/standalone -> ./_extracted_frontend/standalone
-          echo "Copying /app/.next from container..."
           docker cp "${CID}:/app/.next" "$TMP_OUT/.next" || true
-
-          echo "Copying /app/public from container..."
           docker cp "${CID}:/app/public" "$TMP_OUT/public" || true
-
-          echo "Copying /app/standalone from container..."
           docker cp "${CID}:/app/standalone" "$TMP_OUT/standalone" || true
 
-          # cleanup container
           docker rm -f "$CID" >/dev/null || true
 
-          # move extracted artifacts into expected repository paths so later steps can use them
-          # ensure parent dir exists
           mkdir -p ./apps/frontend
           rm -rf ./apps/frontend/.next || true
           mv "$TMP_OUT/.next" ./apps/frontend/.next || true
@@ -184,7 +161,6 @@ jobs:
           rm -rf ./apps/frontend/public || true
           mv "$TMP_OUT/public" ./apps/frontend/public || true
 
-          # standalone is not strictly needed on host for S3 sync, but keep if desired
           rm -rf ./apps/frontend/.next/standalone || true
           mv "$TMP_OUT/standalone" ./apps/frontend/.next/standalone || true
 
@@ -193,13 +169,23 @@ jobs:
           du -sh ./apps/frontend/public || true
 
       # ------------------------
-      # Setup Node & pnpm to run CDK (we need pnpm for cdk deploy that follows)
+      # Setup Node & pnpm (필수)
       # ------------------------
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v4
+
+      # ------------------------
+      # NEW: Install repository dependencies BEFORE CDK deploy
+      # This ensures esbuild (CDK bundling) can resolve node_modules in the runner.
+      # ------------------------
+      - name: "Install repository dependencies (pnpm install)"
+        run: |
+          set -euo pipefail
+          echo "Running pnpm install --frozen-lockfile at repository root..."
+          pnpm install --frozen-lockfile
 
       # ------------------------
       # Deploy BlogInfraStack via CDK (pass ImageTag so infra can use pushed image)
@@ -213,9 +199,6 @@ jobs:
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
-      # ------------------------
-      # Sync static assets to S3 using CDK outputs
-      # ------------------------
       - name: "Sync Static Assets to S3"
         run: |
           set -euo pipefail
@@ -230,9 +213,6 @@ jobs:
           echo "Syncing ./apps/frontend/public -> s3://${ASSET_BUCKET_NAME}/public"
           aws s3 sync ./apps/frontend/public "s3://${ASSET_BUCKET_NAME}/public" --delete
 
-      # ------------------------
-      # Invalidate CloudFront cache
-      # ------------------------
       - name: "Invalidate CloudFront Cache"
         run: |
           set -euo pipefail
@@ -244,3 +224,4 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
+    
