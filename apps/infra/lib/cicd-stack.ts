@@ -1,11 +1,16 @@
 // 파일 위치: apps/infra/lib/cicd-stack.ts
-// 최종 버전: v2025.08.12-Patched-Runner Docker Ready
+// 최종 버전: v2025.08.13-ParameterStore-Integration
+// 역할: Jun-gyu님의 안정적인 UserData 방식을 유지하면서,
+//       모든 비밀 정보 관리를 Parameter Store 기반으로 전환하고,
+//       필요한 모든 IAM 권한을 명시적으로 부여한 최종 완성본
+
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+// [수정] secretsmanager는 더 이상 필요 없으므로 주석 처리 또는 삭제
+// import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'; 
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -14,7 +19,7 @@ export class CiCdStack extends Stack {
     super(scope, id, props);
 
     // ===================================================================================
-    // SECTION 1: 네트워크 및 보안 그룹
+    // SECTION 1: 네트워크 및 보안 그룹 (변경 없음)
     // ===================================================================================
     const vpc = ec2.Vpc.fromLookup(this, 'DefaultVpc', { isDefault: true });
 
@@ -23,47 +28,54 @@ export class CiCdStack extends Stack {
       description: 'Security group for the EC2 self-hosted runner',
       allowAllOutbound: true,
     });
+    // [참고] Ingress Rule은 보안 강화를 위해 CDK 코드에서 직접 관리하는 것이 좋습니다.
+    // runnerSg.addIngressRule(ec2.Peer.ip('YOUR_IP/32'), ec2.Port.tcp(22), 'Allow SSH from my IP');
+
 
     // ===================================================================================
-    // SECTION 2: IAM 역할 및 권한
+    // SECTION 2: IAM 역할 및 권한 (최종 수정)
     // ===================================================================================
     const runnerRole = new iam.Role(this, 'RunnerRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM Role for the self-hosted runner EC2 instance',
     });
 
+    // --- 기본 관리형 정책 ---
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
-
-    // [기존] 임시 AdministratorAccess 제거
-    // runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'));
-
-    // [최종 수정] ECR에 대한 충분한 권한을 부여하는 관리형 정책을 추가합니다.
-    // 이 정책은 이미지 푸시, 풀, 그리고 캐시 매니페스트 관리에 필요한 모든 권한을 포함합니다.
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryPowerUser'));
 
-    // [추가] CDK 배포를 위한 CloudFormation 권한
+    // --- [최종 수정] Parameter Store 접근 권한 ---
+    // Runner가 /new-blog/cicd/ 경로 아래의 모든 파라미터를 읽을 수 있도록 허용합니다.
+    const parameterStoreArn = `arn:aws:ssm:${this.region}:${this.account}:parameter/new-blog/cicd/*`;
     runnerRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['ssm:GetParameters'], // 여러 파라미터를 한 번에 가져올 수 있는 GetParameters 권장
-      // 파라미터 경로의 시작 부분('/new-blog/cicd/')을 지정하여,
-      // 해당 경로 아래의 모든 파라미터에 대한 접근을 허용합니다.
-      resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/new-blog/cicd/*`],
+      actions: ['ssm:GetParametersByPath', 'ssm:GetParameter'],
+      resources: [parameterStoreArn],
     }));
 
-    // [추가] S3 캐시 및 정적 에셋 동기화를 위한 권한
-    // (이 부분은 BlogInfraStack에서 생성된 버킷 ARN을 참조해야 할 수 있습니다.
-    //  우선은 간단하게 모든 S3에 대한 권한을 부여하고, 나중에 최소 권한으로 수정합니다.)
+    // --- [최종 수정] CloudFront 캐시 무효화 권한 ---
+    runnerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cloudfront:CreateInvalidation'],
+      resources: ['*'], // 모든 CloudFront 배포에 대한 권한
+    }));
+
+    // --- [최종 수정] S3 및 CDK 배포를 위한 권한 ---
+    // 기존의 넓은 권한을 유지하되, 나중에 최소 권한으로 수정할 것을 권장합니다.
     runnerRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'));
+    runnerRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cloudformation:*', 'iam:PassRole', 'sts:AssumeRole'],
+      resources: ['*'],
+    }));
 
+    // [수정] Secrets Manager 관련 코드는 모두 삭제합니다.
+    // const githubPatSecret = secretsmanager.Secret.fromSecretNameV2(...);
+    // githubPatSecret.grantRead(runnerRole);
 
-    const githubPatSecret = secretsmanager.Secret.fromSecretNameV2(this, 'GitHubPatSecret', 'cicd/github-runner-pat');
-    githubPatSecret.grantRead(runnerRole);
-
-    // grantRead 메소드를 사용하여 읽기 권한을 명시적으로 부여합니다.
-    githubPatSecret.grantRead(runnerRole);
 
     // ===================================================================================
-    // SECTION 3: EC2 인스턴스 및 UserData 정의
+    // SECTION 3: EC2 인스턴스 및 UserData 정의 (변경 없음 - Jun-gyu님 방식 유지)
     // ===================================================================================
     const runnerInstance = new ec2.Instance(this, 'GitHubRunnerInstance', {
       vpc,
@@ -86,13 +98,12 @@ export class CiCdStack extends Stack {
       ],
     });
 
-    // (cicd-stack.ts 의 userData 부분)
     const userData = ec2.UserData.forLinux();
 
     // 1. 필수 패키지 설치 (root 권한)
     userData.addCommands(
       'dnf update -y',
-      'dnf install -y git jq docker aws-cli',
+      'dnf install -y git jq docker', // aws-cli는 Amazon Linux 2023에 기본 포함
       'systemctl enable --now docker',
       'usermod -aG docker ec2-user || true'
     );
@@ -103,12 +114,9 @@ export class CiCdStack extends Stack {
 
     // 3. 스크립트 내용을 Base64로 인코딩하여 UserData에 추가하고, EC2에서 디코딩하여 실행합니다.
     userData.addCommands(
-      // 스크립트 파일을 /home/ec2-user 디렉토리에 생성합니다.
       `echo "${Buffer.from(setupScriptContent).toString('base64')}" | base64 -d > /home/ec2-user/setup_runner.sh`,
-      // 파일 소유자와 실행 권한을 설정합니다.
       'chown ec2-user:ec2-user /home/ec2-user/setup_runner.sh',
       'chmod +x /home/ec2-user/setup_runner.sh',
-      // ec2-user 권한으로 스크립트를 최종 실행합니다.
       'sudo -u ec2-user /home/ec2-user/setup_runner.sh'
     );
 
@@ -116,7 +124,7 @@ export class CiCdStack extends Stack {
 
 
     // ===================================================================================
-    // SECTION 4: 네트워크 주소 설정
+    // SECTION 4: 네트워크 주소 설정 (변경 없음)
     // ===================================================================================
     const runnerEip = new ec2.CfnEIP(this, 'RunnerEIP');
 
@@ -126,7 +134,7 @@ export class CiCdStack extends Stack {
     });
 
     // ===================================================================================
-    // SECTION 5: 스택 출력
+    // SECTION 5: 스택 출력 (변경 없음)
     // ===================================================================================
     new cdk.CfnOutput(this, 'RunnerPublicIP', {
       value: runnerEip.ref,
