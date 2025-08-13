@@ -1,8 +1,3 @@
-# 파일 위치: .github/workflows/deploy.yml
-# 버전: v2025.08.13-Final-Optimized-And-Corrected / 이정표 검증
-# 역할: 모든 문법 오류를 수정하고, Turborepo 캐시와 Docker 레이어 캐시를
-#       모두 활용하는 최종 최적화 워크플로우
-
 name: "Unified Deploy: CiCd + Blog (Optimized & Corrected)"
 
 on:
@@ -84,10 +79,13 @@ jobs:
           pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
 
   # ===================================================================================
-  # JOB 3: 블로그 애플리케이션 배포
+  # JOB 3: 블로그 애플리케이션 배포 (Host-build 안전 모드 포함)
+  # - 기본 동작: 안전하게 '호스트에서 빌드' 후 Dockerfile.prod로 패키징
+  # - 안전장치: 호스트 빌드가 불가능/원치 않을 경우 기존 multi-stage Docker 빌드(기존 방식)로 자동 폴백
+  # - 제어 플래그: USE_HOST_BUILD (기본 true). false로 설정하면 항상 기존 방식으로 동작합니다.
   # ===================================================================================
   deploy_blog_app:
-    name: "Build and Deploy Blog Application (Multi-stage Docker build - ultimate)"
+    name: "Build and Deploy Blog Application (Multi-mode, safe)"
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
@@ -97,6 +95,9 @@ jobs:
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
+    env:
+      # 기본값: 'true' 로 호스트 빌드를 사용합니다. 문제가 있으면 'false'로 설정하여 기존 방식으로 되돌릴 수 있습니다.
+      USE_HOST_BUILD: 'true'
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
@@ -117,7 +118,75 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image (multi-stage build)"
+      # ------------------------
+      # Node / pnpm 설치는 호스트 빌드를 위해 필요합니다.
+      # ------------------------
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+
+      - name: "Install repository dependencies (pnpm install)"
+        run: |
+          set -euo pipefail
+          echo "Running pnpm install --frozen-lockfile at repository root..."
+          pnpm install --frozen-lockfile
+
+      # ------------------------
+      # (선택) 호스트에서 frontend 빌드 — 안전 모드: 기본 true
+      # - 성공적으로 빌드 산출물이 생성되면 Dockerfile.prod 경로로 이미지 빌드
+      # - 산출물이 없으면 폴백으로 기존 Dockerfile 방식 사용
+      # ------------------------
+      - name: "Build frontend artifacts on runner (host-build)"
+        if: env.USE_HOST_BUILD == 'true'
+        run: |
+          set -euo pipefail
+          echo "호스트에서 frontend 빌드를 시도합니다..."
+          # workspace 가 모노레포일 수 있으므로 frontend만 필터로 빌드
+          pnpm --filter frontend run build
+          echo "빌드 완료. 아래는 산출물 목록입니다(간단 확인)"
+          ls -la apps/frontend/.next || true
+          ls -la apps/frontend/standalone || true
+          ls -la apps/frontend/public || true
+
+      - name: "Check built artifacts presence"
+        id: check_artifacts
+        run: |
+          set -euo pipefail
+          # 호스트 빌드 또는 다른 방법으로 산출물이 있는지 확인
+          if [ -d ./apps/frontend/standalone ] || [ -d ./apps/frontend/.next ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ------------------------
+      # 경로 A: 호스트 빌드 성공 시 (권장)
+      # ------------------------
+      - name: "Build & push image from pre-built artifacts (Dockerfile.prod)"
+        if: steps.check_artifacts.outputs.exists == 'true' && env.USE_HOST_BUILD == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/frontend
+          file: ./apps/frontend/Dockerfile.prod
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
+          platforms: linux/arm64
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max,compression=zstd
+          build-args: |
+            STANDALONE_DIR=standalone
+            PUBLIC_DIR=public
+            STATIC_DIR=.next/static
+
+      # ------------------------
+      # 경로 B: 호스트 빌드를 사용하지 않거나(또는 산출물이 없을 때)
+      # 기존 방식(원본 Dockerfile multi-stage)으로 빌드 — 안전한 폴백
+      # ------------------------
+      - name: "Build and push Docker image (multi-stage fallback)"
+        if: steps.check_artifacts.outputs.exists != 'true' || env.USE_HOST_BUILD == 'false'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -127,19 +196,20 @@ jobs:
           platforms: linux/arm64
           provenance: false
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max,compression=zstd
 
-      - name: "Pull image locally for asset extraction"
-        run: |
-          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
-          echo "Pulling image $IMAGE"
-          docker pull "$IMAGE"
-          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-
-      - name: "Extract frontend assets from image (standalone, .next/static, public)"
+      # ------------------------
+      # 만약 폴백(기존 Docker 내부 빌드)이 사용되었다면, S3 싱크를 위해 이미지에서 산출물을 추출
+      # (호스트 빌드 경로를 사용하면 이 단계는 스킵됨)
+      # ------------------------
+      - name: "Extract frontend assets from image (fallback extraction)"
+        if: steps.check_artifacts.outputs.exists != 'true' || env.USE_HOST_BUILD == 'false'
         run: |
           set -euo pipefail
           IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
+          echo "Fallback extraction: pulling image $IMAGE"
+          docker pull "$IMAGE"
+
           EXTRACT_NAME="extract-frontend-${{ steps.image-def.outputs.TAG }}"
           TMP_OUT="./_extracted_frontend"
           rm -rf "$TMP_OUT"
@@ -164,31 +234,12 @@ jobs:
           rm -rf ./apps/frontend/.next/standalone || true
           mv "$TMP_OUT/standalone" ./apps/frontend/.next/standalone || true
 
-          echo "Extraction complete. Sizes:"
+          echo "Extraction complete. Sizes:" 
           du -sh ./apps/frontend/.next || true
           du -sh ./apps/frontend/public || true
 
       # ------------------------
-      # Setup Node & pnpm (필수)
-      # ------------------------
-      - name: "Setup Node.js & pnpm"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v4
-
-      # ------------------------
-      # NEW: Install repository dependencies BEFORE CDK deploy
-      # This ensures esbuild (CDK bundling) can resolve node_modules in the runner.
-      # ------------------------
-      - name: "Install repository dependencies (pnpm install)"
-        run: |
-          set -euo pipefail
-          echo "Running pnpm install --frozen-lockfile at repository root..."
-          pnpm install --frozen-lockfile
-
-      # ------------------------
-      # Deploy BlogInfraStack via CDK (pass ImageTag so infra can use pushed image)
+      # Deploy infra (CDK) — 기존과 동일 (ImageTag 파라미터 전달)
       # ------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
@@ -224,4 +275,3 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
-    
