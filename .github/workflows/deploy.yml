@@ -105,23 +105,20 @@ jobs:
           mkdir -p "${PNPM_STORE_PATH}"
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
-  # ===================================================================================
-  # JOB 3: 블로그 애플리케이션 배포
-  # 역할: 실제 블로그 애플리케이션을 빌드하고 배포. Self-Hosted Runner에서 실행.
-  #       'blog' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
-  #       항상 CI/CD 인프라 배포가 끝난 후에 실행되어 안정성을 보장.
-  # ===================================================================================
+# ===================================================================================
+# JOB 3: 블로그 애플리케이션 배포
+# 역할: 실제 블로그 애플리케이션을 빌드하고 배포. Self-Hosted Runner에서 실행.
+#       'blog' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
+#       항상 CI/CD 인프라 배포가 끝난 후에 실행되어 안정성을 보장.
+# ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
-    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
-    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
-    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
@@ -142,7 +139,6 @@ jobs:
           path: |
             ${{ github.workspace }}/.pnpm-store
             ${{ github.workspace }}/.turbo
-          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
@@ -175,6 +171,7 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
+      # [변경 후] Docker 레이어 캐시를 사용하도록 아래 옵션을 추가합니다.
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
@@ -184,6 +181,9 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
+          # --- [핵심 추가] GitHub Actions 캐시 연동 설정 ---
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
