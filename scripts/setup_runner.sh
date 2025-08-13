@@ -1,5 +1,5 @@
 #!/bin/bash
-# 파일 위치: scripts/setup_runner.sh (v6 - Docker Config Integrated)
+# 파일 위치: scripts/setup_runner.sh (v7 Final - NVM Initialization Fix)
 set -euo pipefail
 
 LOGFILE="/home/ec2-user/runner_setup.log"
@@ -7,10 +7,12 @@ exec > >(tee -a "$LOGFILE" | logger -t runner-setup) 2>&1
 echo "[INFO] Runner setup script started at $(date -u)"
 export HOME="/home/ec2-user"
 export RUNNER_DIR="$HOME/actions-runner"
+# [핵심 수정] NVM_DIR 변수를 스크립트 최상단에 명시적으로 export 합니다.
+export NVM_DIR="$HOME/.nvm"
+
 if [ -f "${RUNNER_DIR}/.runner" ]; then
   echo "[INFO] Runner already configured. Ensuring service is installed and started."
   cd "${RUNNER_DIR}"
-  # [추가] Docker 설정이 누락되었을 수 있으므로, 재실행 시에도 설정을 확인하고 적용합니다.
   DOCKER_CONFIG_DIR="$HOME/.docker"
   ECR_URL="786382940028.dkr.ecr.${AWS_REGION:-ap-northeast-2}.amazonaws.com"
   mkdir -p "$DOCKER_CONFIG_DIR"
@@ -31,7 +33,7 @@ EOF
   exit 0
 fi
 get_imds() {
-  token=$(curl -s -X PUT "http://169.254.169.24/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+  token=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
   if [ -n "$token" ]; then
     curl -s -H "X-aws-ec2-metadata-token: $token" "$@"
   else
@@ -57,9 +59,12 @@ if [ ! -d "$NVM_DIR" ]; then
   echo "--- Installing nvm ---"
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 fi
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-  . "$NVM_DIR/nvm.sh"
-fi
+
+# [핵심 수정] 기존의 if 문을 제거하고, nvm을 사용하기 직전에 항상 초기화 스크립트를 source 합니다.
+# 이렇게 하면 non-interactive 셸에서도 nvm 명령어가 확실하게 작동합니다.
+. "$NVM_DIR/nvm.sh"
+
+# [핵심 수정] 이제 nvm 명령어가 완벽하게 작동하는 것이 보장됩니다.
 nvm install 22
 npm install -g pnpm
 
@@ -126,8 +131,6 @@ echo "[INFO] Configuring runner..."
 REPO_WEB_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
 ./config.sh --url "${REPO_WEB_URL}" --token "${REG_TOKEN}" --name "$(hostname)" --labels "self-hosted,linux,arm64" --unattended --replace
 
-# --- [최종 수정] Docker가 ECR 인증 헬퍼를 사용하도록 설정 ---
-# ec2-user의 Docker 설정 파일에, 우리 ECR 리포지토리에 대한 인증 헬퍼를 지정합니다.
 DOCKER_CONFIG_DIR="$HOME/.docker"
 mkdir -p "$DOCKER_CONFIG_DIR"
 ECR_URL="786382940028.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -142,7 +145,6 @@ cat > "${DOCKER_CONFIG_DIR}/config.json" <<EOF
 EOF
 chown -R ec2-user:ec2-user "$DOCKER_CONFIG_DIR"
 
-# --- 7. Runner를 systemd 서비스로 등록 및 시작 ---
 echo "[INFO] Installing and starting runner service..."
 sudo ./svc.sh install
 sudo ./svc.sh start
