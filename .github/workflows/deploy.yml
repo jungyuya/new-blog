@@ -162,6 +162,41 @@ jobs:
           fi
 
       # ------------------------
+      # Prepare artifacts: Docker 컨텍스트가 기대하는 경로(standalone 등)로 산출물 준비
+      # ------------------------
+      - name: "Prepare artifacts for Docker context (ensure standalone present)"
+        if: steps.check_artifacts.outputs.exists == 'true' && env.USE_HOST_BUILD == 'true'
+        run: |
+          set -euo pipefail
+          echo "Preparing frontend artifacts inside apps/frontend for Docker context..."
+          cd apps/frontend
+
+          # If Next.js outputs .next/standalone, copy it to ./standalone so Dockerfile.prod COPY works.
+          if [ -d ".next/standalone" ]; then
+            echo "Found .next/standalone — copying to ./standalone (overwriting if exists)..."
+            rm -rf ./standalone || true
+            cp -a .next/standalone ./standalone
+          fi
+
+          # If .next/static exists, ensure it's present (we keep it under .next/static)
+          if [ -d ".next/static" ]; then
+            echo ".next/static exists (ok)."
+          else
+            echo "::warning:: .next/static not found — check build outputs."
+          fi
+
+          # public should be present already; warn if missing
+          if [ -d "public" ]; then
+            echo "public exists."
+          else
+            echo "::warning:: public directory not found."
+          fi
+
+          # list to help debugging
+          echo "Prepared contents:"
+          ls -la || true
+
+      # ------------------------
       # 경로 A: 호스트 빌드 성공 시 (권장)
       # ------------------------
       - name: "Build & push image from pre-built artifacts (Dockerfile.prod)"
