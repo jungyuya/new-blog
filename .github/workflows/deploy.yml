@@ -87,7 +87,7 @@ jobs:
   # JOB 3: 블로그 애플리케이션 배포
   # ===================================================================================
   deploy_blog_app:
-    name: "Build and Deploy Blog Application"
+    name: "Build and Deploy Blog Application (Multi-stage Docker build - ultimate)"
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
@@ -101,27 +101,9 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
 
-      - name: "Setup Node.js & pnpm"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v4
-
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
-
-      # [핵심 수정 1] 워크플로우에서 직접 빌드를 실행합니다.
-      # Self-Hosted Runner의 디스크 캐시 덕분에, 이 단계는 매우 빠를 것입니다.
-      - name: "Build Applications with Turborepo"
-        run: pnpm --filter frontend --filter backend run build
-
-      - name: "Debug: Verify build artifacts location"
-        run: |
-          echo "--- Searching for .next directories ---"
-          find . -type d -name ".next" -print
-          echo "--- Listing contents of frontend/.next ---"
-          ls -lR ./apps/frontend/.next || echo "frontend/.next not found"
-
+      # ------------------------
+      # Ensure AWS permissions available for ECR login (EC2 role assumed by runner)
+      # ------------------------
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -138,32 +120,102 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      # [핵심 수정 2] Docker 빌드는 이제 '빌드된 결과물'을 전달받는 역할만 합니다.
-      - name: "Build and push Docker image from build artifacts"
+      # ------------------------
+      # Multi-stage Docker build: build (pnpm install & next build) happens INSIDE Docker builder stage
+      # This guarantees standalone/node_modules are produced inside the image.
+      # ------------------------
+      - name: "Build and push Docker image (multi-stage build)"
         uses: docker/build-push-action@v5
         with:
           context: .
-          # [핵심] 빌드 결과물을 Docker 빌드에 인자로 전달합니다.
-          build-args: |
-            STANDALONE_DIR=./apps/frontend/.next/standalone
-            PUBLIC_DIR=./apps/frontend/public
-            STATIC_DIR=./apps/frontend/.next/static
-          file: ./apps/frontend/Dockerfile.prod # [핵심] 새로운 Dockerfile.prod를 사용합니다.
+          file: ./apps/frontend/Dockerfile        # <<-- your multi-stage Dockerfile (builder + runner)
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          # ECR 캐시는 Dockerfile의 내용이 거의 바뀌지 않으므로, 매우 효과적일 것입니다.
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
+      # ------------------------
+      # Pull the image we just pushed so we can extract static assets from it (host needs those for S3 sync)
+      # ------------------------
+      - name: "Pull image locally for asset extraction"
+        run: |
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
+          echo "Pulling image $IMAGE"
+          docker pull "$IMAGE"
+          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+      - name: "Extract frontend assets from image (standalone, .next/static, public)"
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
+          EXTRACT_NAME="extract-frontend-${{ steps.image-def.outputs.TAG }}"
+          TMP_OUT="./_extracted_frontend"
+          rm -rf "$TMP_OUT"
+          mkdir -p "$TMP_OUT"
+
+          # create a stopped container from the image
+          CID=$(docker create --name "$EXTRACT_NAME" "$IMAGE")
+          echo "Created container $CID for extraction"
+
+          # Try to copy the common paths we need to sync later
+          # container:/app/.next  -> ./_extracted_frontend/.next
+          # container:/app/public -> ./_extracted_frontend/public
+          # container:/app/standalone -> ./_extracted_frontend/standalone
+          echo "Copying /app/.next from container..."
+          docker cp "${CID}:/app/.next" "$TMP_OUT/.next" || true
+
+          echo "Copying /app/public from container..."
+          docker cp "${CID}:/app/public" "$TMP_OUT/public" || true
+
+          echo "Copying /app/standalone from container..."
+          docker cp "${CID}:/app/standalone" "$TMP_OUT/standalone" || true
+
+          # cleanup container
+          docker rm -f "$CID" >/dev/null || true
+
+          # move extracted artifacts into expected repository paths so later steps can use them
+          # ensure parent dir exists
+          mkdir -p ./apps/frontend
+          rm -rf ./apps/frontend/.next || true
+          mv "$TMP_OUT/.next" ./apps/frontend/.next || true
+
+          rm -rf ./apps/frontend/public || true
+          mv "$TMP_OUT/public" ./apps/frontend/public || true
+
+          # standalone is not strictly needed on host for S3 sync, but keep if desired
+          rm -rf ./apps/frontend/.next/standalone || true
+          mv "$TMP_OUT/standalone" ./apps/frontend/.next/standalone || true
+
+          echo "Extraction complete. Sizes:"
+          du -sh ./apps/frontend/.next || true
+          du -sh ./apps/frontend/public || true
+
+      # ------------------------
+      # Setup Node & pnpm to run CDK (we need pnpm for cdk deploy that follows)
+      # ------------------------
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+
+      # ------------------------
+      # Deploy BlogInfraStack via CDK (pass ImageTag so infra can use pushed image)
+      # ------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
+          set -euo pipefail
+          pnpm --filter infra install --frozen-lockfile
           pnpm --filter infra exec cdk deploy BlogInfraStack \
             --require-approval never \
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.image-def.outputs.TAG }}
 
+      # ------------------------
+      # Sync static assets to S3 using CDK outputs
+      # ------------------------
       - name: "Sync Static Assets to S3"
         run: |
           set -euo pipefail
@@ -174,8 +226,13 @@ jobs:
           fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
           echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
+          aws s3 sync ./apps/frontend/.next/static "s3://${ASSET_BUCKET_NAME}/_next/static" --delete
+          echo "Syncing ./apps/frontend/public -> s3://${ASSET_BUCKET_NAME}/public"
+          aws s3 sync ./apps/frontend/public "s3://${ASSET_BUCKET_NAME}/public" --delete
 
+      # ------------------------
+      # Invalidate CloudFront cache
+      # ------------------------
       - name: "Invalidate CloudFront Cache"
         run: |
           set -euo pipefail
