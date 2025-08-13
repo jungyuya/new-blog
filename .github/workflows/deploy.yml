@@ -87,7 +87,7 @@ jobs:
   # JOB 3: 블로그 애플리케이션 배포
   # ===================================================================================
   deploy_blog_app:
-    name: "Build and Deploy Blog Application (Multi-stage with deps-cache)"
+    name: "Build and Deploy Blog Application"
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
@@ -100,6 +100,19 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+
+      - name: "Install dependencies"
+        run: pnpm install --frozen-lockfile
+
+      # --- Step 1: 빌드 (Turborepo 캐시 활용) ---
+      - name: "Build Applications with Turborepo"
+        run: pnpm --filter frontend --filter backend run build
 
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
@@ -115,64 +128,27 @@ jobs:
 
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
-      # ----------------------------------------------------------------
-      # STEP 0: Compute lockfile hash (used to tag deps image deterministically)
-      # ----------------------------------------------------------------
-      - name: "Compute lockfile hash"
-        id: lock-hash
-        run: |
-          set -euo pipefail
-          # compute SHA1 of lockfile (deterministic tag)
-          if command -v sha1sum >/dev/null 2>&1; then
-            HASH=$(sha1sum pnpm-lock.yaml | cut -d' ' -f1)
-          else
-            HASH=$(shasum -a 1 pnpm-lock.yaml | cut -d' ' -f1)
-          fi
-          echo "LOCK_HASH=$HASH" >> $GITHUB_OUTPUT
-
-      # ----------------------------------------------------------------
-      # STEP 1: Build & push deps stage (tagged by lock hash)
-      # ----------------------------------------------------------------
-      - name: "Build & push deps stage (cache base, tagged by lock hash)"
-        id: deps-build
-        run: |
-          set -euo pipefail
-          REG="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
-          DEPS_TAG="deps-cache-${{ steps.lock-hash.outputs.LOCK_HASH }}"
-          echo "Building deps stage and pushing as ${REG}:${DEPS_TAG}"
-          docker buildx build \
-            --platform linux/arm64 \
-            --file ./apps/frontend/Dockerfile \
-            --target deps \
-            --tag "${REG}:${DEPS_TAG}" \
-            --push \
-            --cache-from "type=registry,ref=${REG}:cache" \
-            --cache-to "type=registry,ref=${REG}:cache,mode=max" \
-            .
-          echo "DEPS_TAG=${DEPS_TAG}" >> $GITHUB_OUTPUT
-
-      # ----------------------------------------------------------------
-      # STEP 2: Build and push final image, using deps-cache-<hash> and :cache
-      # ----------------------------------------------------------------
-      - name: "Build and push Docker image (final, using deps-cache)"
+      # --- Step 2: 패키징 (Docker 레이어 캐시 활용) ---
+      - name: "Build and push Docker image from artifacts"
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./apps/frontend/Dockerfile
+          # [핵심] 새로운 '조립 전용' Dockerfile.prod를 사용합니다.
+          file: ./apps/frontend/Dockerfile.prod
+          # [핵심] 빌드된 결과물의 경로를 build-args로 전달합니다.
+          build-args: |
+            STANDALONE_DIR=./apps/frontend/.next/standalone
+            PUBLIC_DIR=./apps/frontend/public
+            STATIC_DIR=./apps/frontend/.next/static
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
-          cache-from: |
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.deps-build.outputs.DEPS_TAG }}
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
           provenance: false
+          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
+          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 
-      # ----------------------------------------------------------------
-      # STEP 3: Pull image & extract frontend artifacts for S3 sync (unchanged)
-      # ----------------------------------------------------------------
       - name: "Pull image locally for asset extraction"
         run: |
           IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
@@ -213,7 +189,7 @@ jobs:
           du -sh ./apps/frontend/public || true
 
       # ------------------------
-      # Setup Node & pnpm
+      # Setup Node & pnpm (필수)
       # ------------------------
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -222,7 +198,8 @@ jobs:
       - uses: pnpm/action-setup@v4
 
       # ------------------------
-      # Install repo deps BEFORE CDK deploy (ensures esbuild finds modules)
+      # NEW: Install repository dependencies BEFORE CDK deploy
+      # This ensures esbuild (CDK bundling) can resolve node_modules in the runner.
       # ------------------------
       - name: "Install repository dependencies (pnpm install)"
         run: |
@@ -231,7 +208,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       # ------------------------
-      # Deploy infra & outputs
+      # Deploy BlogInfraStack via CDK (pass ImageTag so infra can use pushed image)
       # ------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
@@ -267,3 +244,4 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
+    
