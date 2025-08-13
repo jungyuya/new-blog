@@ -17,7 +17,6 @@ COPY tsconfig.base.json turbo.json ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/infra/package.json ./apps/infra/
-COPY apps/cache-gateway/package.json ./apps/cache-gateway/
 
 # --- [DLC 최적화 2] 의존성 설치 ---
 # 이 RUN 명령어는 이제 pnpm-lock.yaml이 변경될 때만 다시 실행됩니다.
