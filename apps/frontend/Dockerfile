@@ -3,12 +3,12 @@
 # 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
 
 # ===================================================================================
-# Stage 1: Builder - 의존성 설치와 소스 코드 빌드를 분리하여 레이어 캐시를 최적화
+# Stage 1: Builder - 오직 '빌드 환경'을 만드는 역할만 수행
 # ===================================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# --- Layer 1: 의존성 설치 ---
+# --- Layer 1: 의존성 설치 (가장 변하지 않는 부분) ---
 RUN npm install -g pnpm@10.14.0
 COPY pnpm-lock.yaml ./
 COPY package.json ./
@@ -21,13 +21,11 @@ COPY apps/infra/package.json ./apps/infra/
 RUN pnpm install --frozen-lockfile
 
 # --- Layer 2: 소스 코드 복사 ---
-COPY apps ./apps
-COPY scripts ./scripts
+# 나머지 모든 소스 코드를 복사합니다.
+COPY . .
 
-# --- Layer 3: Turborepo 캐시를 활용한 빌드 ---
-# [최종 수정] --mount를 사용하여 호스트의 .turbo 캐시를 컨테이너에 연결하고,
-# 불필요한 cp 명령어 없이 즉시 빌드를 실행합니다.
-RUN --mount=type=cache,target=/app/.turbo pnpm --filter frontend run build
+# [핵심 수정] Dockerfile 내부에서 빌드를 실행하지 않습니다.
+# RUN pnpm --filter frontend run build # 이 라인을 삭제 또는 주석 처리합니다.
 # ===================================================================================
 # Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
 # ===================================================================================

@@ -110,7 +110,9 @@ jobs:
       - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "Build Applications with Turborepo to create cache"
+      # [핵심 수정 1] 워크플로우에서 직접 빌드를 실행합니다.
+      # Self-Hosted Runner의 디스크 캐시 덕분에, 이 단계는 매우 빠를 것입니다.
+      - name: "Build Applications with Turborepo"
         run: pnpm --filter frontend --filter backend run build
 
       - name: "Configure AWS Credentials (from EC2 Role)"
@@ -125,31 +127,26 @@ jobs:
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
-      # [수정] 중복된 스텝을 제거하고, 논리적으로 올바른 위치로 이동했습니다.
       - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Ensure .turbo directory exists for Docker build context"
-        run: |
-          if [ ! -d ".turbo" ]; then
-            echo "WARNING: .turbo directory not found. Creating an empty one to prevent Docker COPY failure."
-            mkdir -p .turbo
-          else
-            echo ".turbo directory found."
-          fi
-          echo "Listing .turbo directory contents:"
-          ls -la .turbo
-
-      - name: "Build and push Docker image with cache"
+      # [핵심 수정 2] Docker 빌드는 이제 '빌드된 결과물'을 전달받는 역할만 합니다.
+      - name: "Build and push Docker image from build artifacts"
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./apps/frontend/Dockerfile
+          # [핵심] 빌드 결과물을 Docker 빌드에 인자로 전달합니다.
+          build-args: |
+            STANDALONE_DIR=./apps/frontend/.next/standalone
+            PUBLIC_DIR=./apps/frontend/public
+            STATIC_DIR=./apps/frontend/.next/static
+          file: ./apps/frontend/Dockerfile.prod # [핵심] 새로운 Dockerfile.prod를 사용합니다.
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
+          # ECR 캐시는 Dockerfile의 내용이 거의 바뀌지 않으므로, 매우 효과적일 것입니다.
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
 

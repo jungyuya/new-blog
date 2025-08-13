@@ -1,0 +1,26 @@
+# 파일 위치: apps/frontend/Dockerfile.prod
+# 역할: 워크플로우에서 빌드된 결과물만을 받아, 최종 서비스 이미지를 생성.
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    AWS_LAMBDA_EXEC_WRAPPER=/opt/extensions/lambda-adapter
+
+# [핵심] 워크플로우에서 전달받은 빌드 결과물 경로를 인자로 받습니다.
+ARG STANDALONE_DIR
+ARG PUBLIC_DIR
+ARG STATIC_DIR
+
+# 전달받은 결과물들을 이미지 안으로 복사합니다.
+COPY ${STANDALONE_DIR} /app/standalone
+COPY ${PUBLIC_DIR} /app/public
+COPY ${STATIC_DIR} /app/.next/static
+
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+# [핵심] server.js의 경로는 이제 항상 고정됩니다.
+CMD ["node", "/app/standalone/server.js"]
