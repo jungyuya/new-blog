@@ -50,7 +50,6 @@ jobs:
             cicd:
               - 'apps/infra/lib/cicd-stack.ts'
               - 'scripts/setup_runner.sh'
-              - '.github/workflows/deploy.yml'
 
   # ===================================================================================
   # JOB 2: CI/CD 인프라 배포

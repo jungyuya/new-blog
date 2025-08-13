@@ -8,9 +8,8 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# --- Layer 1: 의존성 설치 (가장 변하지 않는 부분) ---
+# --- Layer 1: 의존성 설치 ---
 RUN npm install -g pnpm@10.14.0
-# 의존성 관련 파일만 먼저 복사합니다.
 COPY pnpm-lock.yaml ./
 COPY package.json ./
 COPY pnpm-workspace.yaml ./
@@ -19,19 +18,25 @@ COPY turbo.json ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/infra/package.json ./apps/infra/
-# pnpm install을 실행합니다. 이 레이어는 pnpm-lock.yaml이 바뀔 때만 재실행됩니다.
 RUN pnpm install --frozen-lockfile
 
-# --- Layer 2: Turborepo 캐시 복사 ---
-# 워크플로우에서 미리 빌드하여 생성된 .turbo 캐시를 복사합니다.
-COPY ./.turbo ./.turbo
+# --- Layer 2: 소스 코드 복사 ---
+# .turbo 폴더를 제외한 나머지 소스 코드를 먼저 복사합니다.
+# 이렇게 하면, .turbo 폴더의 존재 여부가 다른 파일들의 캐시에 영향을 주지 않습니다.
+COPY apps ./apps
+COPY scripts ./scripts
 
-# --- Layer 3: 소스 코드 복사 및 빌드 (가장 자주 변하는 부분) ---
-# 나머지 모든 소스 코드를 복사합니다.
-COPY . .
-# 빌드를 실행합니다. Layer 2에서 복사한 캐시 덕분에, 변경이 없다면 이 단계는 매우 빠르게 완료됩니다.
-RUN pnpm --filter frontend run build
-
+# --- Layer 3: Turborepo 캐시 복사 및 빌드 ---
+# [최종 수정] RUN 명령어를 사용하여, .turbo 폴더가 존재할 경우에만 복사하도록 합니다.
+# 이렇게 하면 캐시가 없는 첫 빌드에서도 오류가 발생하지 않습니다.
+RUN --mount=type=cache,target=/app/.turbo \
+    if [ -d ".turbo" ]; then \
+      echo "Found .turbo cache, copying to build context..."; \
+      cp -R .turbo /app/.turbo; \
+    else \
+      echo "No .turbo cache found, proceeding without it."; \
+    fi && \
+    pnpm --filter frontend run build
 # ===================================================================================
 # Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
 # ===================================================================================
