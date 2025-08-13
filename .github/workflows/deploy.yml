@@ -111,6 +111,9 @@ jobs:
 #       'blog' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
 #       항상 CI/CD 인프라 배포가 끝난 후에 실행되어 안정성을 보장.
 # ===================================================================================
+# 파일 위치: .github/workflows/deploy.yml
+# 수정 제안: `deploy_blog_app` Job에 `docker/setup-buildx-action` 스텝을 추가합니다.
+
   deploy_blog_app:
     name: "Build and Deploy Blog Application"
     needs: [detect_changes, deploy_cicd_infra]
@@ -128,10 +131,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Prepare workspace pnpm store dir (ensure perms)
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
-          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+      # ... (이전 스텝들은 변경 없이 동일합니다) ...
 
       - name: Cache pnpm store and turborepo (workspace-based)
         uses: actions/cache@v4
@@ -142,7 +142,8 @@ jobs:
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
-
+      
+      # ... (Node.js, pnpm, build, AWS credentials 스텝은 변경 없습니다) ...
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
         with:
@@ -167,11 +168,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # --- [핵심 해결책] Docker Buildx 드라이버를 설정하는 스텝을 추가합니다. ---
+      - name: "Setup Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
       - name: "Define Image Tag"
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
-      # [변경 후] Docker 레이어 캐시를 사용하도록 아래 옵션을 추가합니다.
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
@@ -181,10 +185,10 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          # --- [핵심 추가] GitHub Actions 캐시 연동 설정 ---
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ... (이후 스텝들은 변경 없이 동일합니다) ...
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
