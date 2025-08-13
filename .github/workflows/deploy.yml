@@ -130,22 +130,75 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
+      - name: "Build Applications with Turborepo"
+        run: pnpm --filter frontend --filter backend run build
+
+      - name: "Debug: verify frontend build artifacts (size, listing, symlinks)"
+        run: |
+          set -euo pipefail
+          echo "WORKSPACE: $GITHUB_WORKSPACE"
+          echo "PWD: $(pwd)"
+          echo "--- sizes ---"
+          du -sh apps/frontend || true
+          du -sh apps/frontend/.next || true
+          du -sh apps/frontend/.next/standalone || true
+          echo "--- listing (top) ---"
+          ls -la apps/frontend || true
+          ls -la apps/frontend/.next || true
+          ls -la apps/frontend/.next/standalone || true
+          echo "--- show symlinks under standalone ---"
+          find apps/frontend/.next/standalone -maxdepth 4 -type l -exec ls -la {} \; || true
+          echo "--- tar estimate of context (apps/frontend) ---"
+          # create a tar stream and show byte count (cheap estimate)
+          tar -cf - apps/frontend 2>/dev/null | wc -c || true
+          echo "--- .dockerignore check (files excluded) ---"
+          if [ -f .dockerignore ]; then
+            echo ".dockerignore present"
+            git ls-files --others -i --exclude-from=.dockerignore || true
+          else
+            echo ".dockerignore not found"
+          fi
+          echo "DEBUG: Done. If sizes are tiny, .next artifacts are not present in workspace or are being ignored."
+
+      - name: "Optional: create dereferenced copy if symlinks present"
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          # Only create if standalone exists and symlinks found
+          if [ -d apps/frontend/.next/standalone ]; then
+            if find apps/frontend/.next/standalone -type l | read; then
+              echo "Symlinks detected — creating dereferenced copy at /tmp/frontend-artifact"
+              rm -rf /tmp/frontend-artifact
+              mkdir -p /tmp/frontend-artifact
+              cp -aL apps/frontend/.next/standalone /tmp/frontend-artifact/standalone
+              cp -aL apps/frontend/public /tmp/frontend-artifact/public || true
+              cp -aL apps/frontend/.next/static /tmp/frontend-artifact/static || true
+              echo "Dereferenced copy size:"
+              du -sh /tmp/frontend-artifact || true
+            else
+              echo "No symlinks detected under standalone (or find returned non-zero). Skipping deref copy."
+            fi
+          else
+            echo "No standalone directory found; skipping deref copy."
+          fi
+
       # --- [복원] Step 2: 패키징 (Docker 레이어 캐시 활용) ---
       - name: "Build and push Docker image from artifacts"
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./apps/frontend
           file: ./apps/frontend/Dockerfile.prod
           build-args: |
-            STANDALONE_DIR=./apps/frontend/.next/standalone
-            PUBLIC_DIR=./apps/frontend/public
-            STATIC_DIR=./apps/frontend/.next/static
+            STANDALONE_DIR=.next/standalone
+            PUBLIC_DIR=public
+            STATIC_DIR=.next/static
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+
 
       # --- Step 3: 배포 ---
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"

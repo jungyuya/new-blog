@@ -1,12 +1,9 @@
-# .dockerignore (recommended)
+# Root .dockerignore (placed at repo root)
 
 # ------------------------
 # 일반 무시 항목
 # ------------------------
-# OS-specific files
 .DS_Store
-
-# Log files
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -17,10 +14,9 @@ node_modules
 **/node_modules
 .pnpm-store
 
-# Build artifacts - 기본적으로 무시
+# Build artifacts & caches - keep generic ignores but be careful with negations
 dist
 build
-.next
 .open-next
 .turbo
 cdk.out
@@ -41,9 +37,13 @@ tmp
 **/cdk.context.json
 
 # ------------------------
-# 예외: frontend 빌드 아티팩트는 포함
-# (negation rules must come after ignore rules)
+# Allow frontend artifacts explicitly (re-include with parent dirs)
+# Important: ensure parent dirs are included when using negation
 # ------------------------
-!apps/frontend/.next/standalone
-!apps/frontend/.next/static
-!apps/frontend/public
+# Re-include the apps/frontend directory and its relevant outputs
+!apps/
+!apps/frontend/
+!apps/frontend/.next/
+!apps/frontend/.next/standalone/**
+!apps/frontend/.next/static/**
+!apps/frontend/public/**
