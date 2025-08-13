@@ -3,7 +3,7 @@
 # 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
 
 # ===================================================================================
-# Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
+# Stage 1: Builder - 의존성 설치와 소스 코드 빌드를 분리하여 레이어 캐시를 최적화
 # ===================================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -21,22 +21,13 @@ COPY apps/infra/package.json ./apps/infra/
 RUN pnpm install --frozen-lockfile
 
 # --- Layer 2: 소스 코드 복사 ---
-# .turbo 폴더를 제외한 나머지 소스 코드를 먼저 복사합니다.
-# 이렇게 하면, .turbo 폴더의 존재 여부가 다른 파일들의 캐시에 영향을 주지 않습니다.
 COPY apps ./apps
 COPY scripts ./scripts
 
-# --- Layer 3: Turborepo 캐시 복사 및 빌드 ---
-# [최종 수정] RUN 명령어를 사용하여, .turbo 폴더가 존재할 경우에만 복사하도록 합니다.
-# 이렇게 하면 캐시가 없는 첫 빌드에서도 오류가 발생하지 않습니다.
-RUN --mount=type=cache,target=/app/.turbo \
-    if [ -d ".turbo" ]; then \
-      echo "Found .turbo cache, copying to build context..."; \
-      cp -R .turbo /app/.turbo; \
-    else \
-      echo "No .turbo cache found, proceeding without it."; \
-    fi && \
-    pnpm --filter frontend run build
+# --- Layer 3: Turborepo 캐시를 활용한 빌드 ---
+# [최종 수정] --mount를 사용하여 호스트의 .turbo 캐시를 컨테이너에 연결하고,
+# 불필요한 cp 명령어 없이 즉시 빌드를 실행합니다.
+RUN --mount=type=cache,target=/app/.turbo pnpm --filter frontend run build
 # ===================================================================================
 # Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
 # ===================================================================================
