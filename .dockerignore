@@ -1,5 +1,8 @@
-# .dockerignore
+# .dockerignore (recommended)
 
+# ------------------------
+# 일반 무시 항목
+# ------------------------
 # OS-specific files
 .DS_Store
 
@@ -14,7 +17,7 @@ node_modules
 **/node_modules
 .pnpm-store
 
-# Build artifacts
+# Build artifacts - 기본적으로 무시
 dist
 build
 .next
@@ -36,3 +39,11 @@ tmp
 
 # AWS CDK context file - DO NOT COMMIT
 **/cdk.context.json
+
+# ------------------------
+# 예외: frontend 빌드 아티팩트는 포함
+# (negation rules must come after ignore rules)
+# ------------------------
+!apps/frontend/.next/standalone
+!apps/frontend/.next/static
+!apps/frontend/public

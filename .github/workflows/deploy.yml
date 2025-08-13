@@ -115,6 +115,13 @@ jobs:
       - name: "Build Applications with Turborepo"
         run: pnpm --filter frontend --filter backend run build
 
+      - name: "Debug: Verify build artifacts location"
+        run: |
+          echo "--- Searching for .next directories ---"
+          find . -type d -name ".next" -print
+          echo "--- Listing contents of frontend/.next ---"
+          ls -lR ./apps/frontend/.next || echo "frontend/.next not found"
+
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
         with:
