@@ -1,13 +1,23 @@
-name: "Unified Deploy: CiCd + Blog (Optimized & Corrected)"
+# 파일 위치: .github/workflows/deploy.yml
+# 버전: v2025.08.12-Intelligent-Pipeline
+# 역할: 코드 변경 사항을 감지하여, CI/CD 인프라와 블로그 애플리케이션의 배포를
+#       독립적이고, 올바른 순서로, 그리고 조건부로 실행하는 최종 통합 워크플로우
+
+name: "Unified Deploy: CiCd + Blog (Intelligent & Ordered)"
 
 on:
   push:
     branches: [main]
+    # 워크플로우가 트리거되는 파일 경로의 전체 집합
     paths:
-      - 'apps/**'
-      - 'scripts/**'
-      - '.github/workflows/deploy.yml'
-      - 'pnpm-lock.yaml'
+      - "apps/frontend/**"
+      - "apps/backend/**"
+      - "apps/infra/lib/blog-stack.ts"
+      - "apps/infra/lib/cicd-stack.ts"
+      - "apps/infra/bin/infra.ts"
+      - ".github/workflows/deploy.yml" # 자기 자신을 포함하여 워크플로우 변경 시에도 실행
+      - "pnpm-lock.yaml"
+      - "scripts/setup_runner.sh"
   workflow_dispatch:
 
 concurrency:
@@ -21,6 +31,7 @@ env:
 jobs:
   # ===================================================================================
   # JOB 1: 변경 감지
+  # 역할: 어떤 코드가 변경되었는지 신속하게 판단하여, 후속 Job들의 실행 여부를 결정.
   # ===================================================================================
   detect_changes:
     name: "Detect Changed Paths"
@@ -34,7 +45,7 @@ jobs:
 
       - name: "Filter changed paths"
         id: paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v3 # 최신 버전 사용 권장
         with:
           filters: |
             blog:
@@ -45,13 +56,17 @@ jobs:
             cicd:
               - 'apps/infra/lib/cicd-stack.ts'
               - 'scripts/setup_runner.sh'
+              - '.github/workflows/deploy.yml'
 
   # ===================================================================================
   # JOB 2: CI/CD 인프라 배포
+  # 역할: Self-Hosted Runner(EC2)와 관련된 인프라를 배포.
+  #       'cicd' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
   # ===================================================================================
   deploy_cicd_infra:
     name: "Deploy CI/CD Infrastructure (CiCdStack)"
     needs: detect_changes
+    # [핵심 수정] Job 레벨에서 실행 여부를 결정하여, 불필요한 실행을 원천 차단.
     if: ${{ needs.detect_changes.outputs.cicd == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -60,6 +75,23 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # -----------------------------
+      # Step1: pnpm store / node_modules / .turbo 캐시
+      # (checkout 직후에 추가)
+      # -----------------------------
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -67,40 +99,68 @@ jobs:
           node-version: "22"
       - uses: pnpm/action-setup@v4
 
-      - name: "Configure AWS Credentials"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "Deploy CiCdStack via CDK"
+      - name: Install dependencies (pnpm with store)
         run: |
-          pnpm --filter infra install --frozen-lockfile
-          pnpm --filter infra exec cdk deploy CiCdStack --require-approval never
+          export PNPM_STORE_PATH="${HOME}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
 
   # ===================================================================================
-  # JOB 3: 블로그 애플리케이션 배포 (Host-build 안전 모드 포함)
-  # - 기본 동작: 안전하게 '호스트에서 빌드' 후 Dockerfile.prod로 패키징
-  # - 안전장치: 호스트 빌드가 불가능/원치 않을 경우 기존 multi-stage Docker 빌드(기존 방식)로 자동 폴백
-  # - 제어 플래그: USE_HOST_BUILD (기본 true). false로 설정하면 항상 기존 방식으로 동작합니다.
+  # JOB 3: 블로그 애플리케이션 배포
+  # 역할: 실제 블로그 애플리케이션을 빌드하고 배포. Self-Hosted Runner에서 실행.
+  #       'blog' 경로에 변경이 있거나, 수동 실행 시에만 트리거됨.
+  #       항상 CI/CD 인프라 배포가 끝난 후에 실행되어 안정성을 보장.
   # ===================================================================================
   deploy_blog_app:
-    name: "Build and Deploy Blog Application (Multi-mode, safe)"
+    name: "Build and Deploy Blog Application"
+    # [수정] needs는 그대로 유지합니다. 순서는 중요하기 때문입니다.
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
       id-token: write
       contents: read
       packages: write
+    # [최종 수정] if 조건문에 always()를 추가하여, 선행 Job의 결과와 상관없이
+    # 이 Job의 실행 여부를 독립적으로 판단하도록 합니다.
     if: |
       always() &&
       (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
-    env:
-      # 기본값: 'true' 로 호스트 빌드를 사용합니다. 문제가 있으면 'false'로 설정하여 기존 방식으로 되돌릴 수 있습니다.
-      USE_HOST_BUILD: 'true'
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prepare workspace pnpm store dir (ensure perms)
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo (workspace-based)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          # Use top-level lockfile; if monorepo has pnpm-lock.yaml in root, use that exact path
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies (pnpm with workspace store)
+        run: |
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+
+      - name: "Build Applications with Turborepo"
+        run: pnpm --filter frontend --filter backend run build
 
       - name: "Configure AWS Credentials (from EC2 Role)"
         uses: aws-actions/configure-aws-credentials@v4
@@ -111,117 +171,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: "Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v3
-
       - name: "Define Image Tag"
         id: image-def
-        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
-      # ------------------------
-      # Node / pnpm 설치는 호스트 빌드를 위해 필요합니다.
-      # ------------------------
-      - name: "Setup Node.js & pnpm"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - uses: pnpm/action-setup@v4
-
-      - name: "Install repository dependencies (pnpm install)"
-        run: |
-          set -euo pipefail
-          echo "Running pnpm install --frozen-lockfile at repository root..."
-          pnpm install --frozen-lockfile
-
-      # ------------------------
-      # (선택) 호스트에서 frontend 빌드 — 안전 모드: 기본 true
-      # - 성공적으로 빌드 산출물이 생성되면 Dockerfile.prod 경로로 이미지 빌드
-      # - 산출물이 없으면 폴백으로 기존 Dockerfile 방식 사용
-      # ------------------------
-      - name: "Build frontend artifacts on runner (host-build)"
-        if: env.USE_HOST_BUILD == 'true'
-        run: |
-          set -euo pipefail
-          echo "호스트에서 frontend 빌드를 시도합니다..."
-          # workspace 가 모노레포일 수 있으므로 frontend만 필터로 빌드
-          pnpm --filter frontend run build
-          echo "빌드 완료. 아래는 산출물 목록입니다(간단 확인)"
-          ls -la apps/frontend/.next || true
-          ls -la apps/frontend/standalone || true
-          ls -la apps/frontend/public || true
-
-      - name: "Check built artifacts presence"
-        id: check_artifacts
-        run: |
-          set -euo pipefail
-          # 호스트 빌드 또는 다른 방법으로 산출물이 있는지 확인
-          if [ -d ./apps/frontend/standalone ] || [ -d ./apps/frontend/.next ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      # ------------------------
-      # Prepare artifacts: Docker 컨텍스트가 기대하는 경로(standalone 등)로 산출물 준비
-      # ------------------------
-      - name: "Prepare artifacts for Docker context (ensure standalone present)"
-        if: steps.check_artifacts.outputs.exists == 'true' && env.USE_HOST_BUILD == 'true'
-        run: |
-          set -euo pipefail
-          echo "Preparing frontend artifacts inside apps/frontend for Docker context..."
-          cd apps/frontend
-
-          # If Next.js outputs .next/standalone, copy it to ./standalone so Dockerfile.prod COPY works.
-          if [ -d ".next/standalone" ]; then
-            echo "Found .next/standalone — copying to ./standalone (overwriting if exists)..."
-            rm -rf ./standalone || true
-            cp -a .next/standalone ./standalone
-          fi
-
-          # If .next/static exists, ensure it's present (we keep it under .next/static)
-          if [ -d ".next/static" ]; then
-            echo ".next/static exists (ok)."
-          else
-            echo "::warning:: .next/static not found — check build outputs."
-          fi
-
-          # public should be present already; warn if missing
-          if [ -d "public" ]; then
-            echo "public exists."
-          else
-            echo "::warning:: public directory not found."
-          fi
-
-          # list to help debugging
-          echo "Prepared contents:"
-          ls -la || true
-
-      # ------------------------
-      # 경로 A: 호스트 빌드 성공 시 (권장)
-      # ------------------------
-      - name: "Build & push image from pre-built artifacts (Dockerfile.prod)"
-        if: steps.check_artifacts.outputs.exists == 'true' && env.USE_HOST_BUILD == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/frontend
-          file: ./apps/frontend/Dockerfile.prod
-          push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
-          platforms: linux/arm64
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max,compression=zstd
-          build-args: |
-            STANDALONE_DIR=standalone
-            PUBLIC_DIR=public
-            STATIC_DIR=.next/static
-
-      # ------------------------
-      # 경로 B: 호스트 빌드를 사용하지 않거나(또는 산출물이 없을 때)
-      # 기존 방식(원본 Dockerfile multi-stage)으로 빌드 — 안전한 폴백
-      # ------------------------
-      - name: "Build and push Docker image (multi-stage fallback)"
-        if: steps.check_artifacts.outputs.exists != 'true' || env.USE_HOST_BUILD == 'false'
+      - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -230,56 +184,9 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max,compression=zstd
 
-      # ------------------------
-      # 만약 폴백(기존 Docker 내부 빌드)이 사용되었다면, S3 싱크를 위해 이미지에서 산출물을 추출
-      # (호스트 빌드 경로를 사용하면 이 단계는 스킵됨)
-      # ------------------------
-      - name: "Extract frontend assets from image (fallback extraction)"
-        if: steps.check_artifacts.outputs.exists != 'true' || env.USE_HOST_BUILD == 'false'
-        run: |
-          set -euo pipefail
-          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
-          echo "Fallback extraction: pulling image $IMAGE"
-          docker pull "$IMAGE"
-
-          EXTRACT_NAME="extract-frontend-${{ steps.image-def.outputs.TAG }}"
-          TMP_OUT="./_extracted_frontend"
-          rm -rf "$TMP_OUT"
-          mkdir -p "$TMP_OUT"
-
-          CID=$(docker create --name "$EXTRACT_NAME" "$IMAGE")
-          echo "Created container $CID for extraction"
-
-          docker cp "${CID}:/app/.next" "$TMP_OUT/.next" || true
-          docker cp "${CID}:/app/public" "$TMP_OUT/public" || true
-          docker cp "${CID}:/app/standalone" "$TMP_OUT/standalone" || true
-
-          docker rm -f "$CID" >/dev/null || true
-
-          mkdir -p ./apps/frontend
-          rm -rf ./apps/frontend/.next || true
-          mv "$TMP_OUT/.next" ./apps/frontend/.next || true
-
-          rm -rf ./apps/frontend/public || true
-          mv "$TMP_OUT/public" ./apps/frontend/public || true
-
-          rm -rf ./apps/frontend/.next/standalone || true
-          mv "$TMP_OUT/standalone" ./apps/frontend/.next/standalone || true
-
-          echo "Extraction complete. Sizes:" 
-          du -sh ./apps/frontend/.next || true
-          du -sh ./apps/frontend/public || true
-
-      # ------------------------
-      # Deploy infra (CDK) — 기존과 동일 (ImageTag 파라미터 전달)
-      # ------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
-          set -euo pipefail
-          pnpm --filter infra install --frozen-lockfile
           pnpm --filter infra exec cdk deploy BlogInfraStack \
             --require-approval never \
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
@@ -295,9 +202,7 @@ jobs:
           fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
           echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/_next/static"
-          aws s3 sync ./apps/frontend/.next/static "s3://${ASSET_BUCKET_NAME}/_next/static" --delete
-          echo "Syncing ./apps/frontend/public -> s3://${ASSET_BUCKET_NAME}/public"
-          aws s3 sync ./apps/frontend/public "s3://${ASSET_BUCKET_NAME}/public" --delete
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/_next/static --delete
 
       - name: "Invalidate CloudFront Cache"
         run: |
