@@ -1,49 +1,26 @@
 # 파일 위치: apps/frontend/Dockerfile
-# 수정 버전: v4.0.0 (궁극의 멀티-스테이지 캐시 최적화)
+# 최종 안정화 버전: v3.0.1
+# 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
 
 # ===================================================================================
-# 1단계: 'deps' 스테이지 - 오직 의존성 설치만을 담당합니다.
-# 이 스테이지는 pnpm-lock.yaml이 변경되지 않는 한, 거의 항상 캐시됩니다.
-# ===================================================================================
-FROM node:22-alpine AS deps
-WORKDIR /app
-
-# 의존성 설치에 필요한 '설계도' 파일들만 먼저 복사합니다.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/frontend/package.json ./apps/frontend/package.json
-COPY apps/backend/package.json ./apps/backend/package.json
-
-# 소스코드 없이 오직 의존성만 설치합니다.
-RUN npm install -g pnpm@10.14.0
-RUN pnpm install --frozen-lockfile --filter=frontend...
-
-
-# ===================================================================================
-# 2단계: 'builder' 스테이지 - 애플리케이션 코드 빌드를 담당합니다.
-# 소스코드가 변경되면 이 스테이지부터 다시 시작됩니다.
+# Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
 # ===================================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
-
-# 1단계(deps)에서 이미 설치된 node_modules와 의존성 파일들을 그대로 가져옵니다.
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps ./apps
-COPY --from=deps /app/package.json ./package.json
-
-# 이제 나머지 소스코드를 복사합니다.
+RUN npm install -g pnpm@10.14.0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.base.json tsconfig.json turbo.json ./
 COPY --link apps ./apps
-
-# 애플리케이션을 빌드합니다. (의존성 설치를 다시 하지 않으므로 매우 빠릅니다)
-RUN npm install -g pnpm@10.14.0
+RUN if [ -d "packages" ]; then cp -a packages . ; fi
+RUN pnpm install --frozen-lockfile --filter=frontend...
 RUN pnpm --filter frontend run build
 
 
 # ===================================================================================
-# 3단계: 'runner' 스테이지 - 최종 실행 이미지를 만듭니다.
-# 가장 가볍고 깨끗한 상태를 유지합니다.
+# Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
 # ===================================================================================
 FROM node:22-alpine AS runner
+
 WORKDIR /app
 
 ENV NODE_ENV=production \
@@ -51,12 +28,20 @@ ENV NODE_ENV=production \
     PORT=3000 \
     AWS_LAMBDA_EXEC_WRAPPER=/opt/extensions/lambda-adapter
 
-# builder 스테이지에서 생성된 최종 결과물만 가져옵니다.
-COPY --from=builder /app/apps/frontend/.next/standalone ./
-COPY --from=builder /app/apps/frontend/public ./public
-COPY --from=builder /app/apps/frontend/.next/static ./.next/static
+COPY --from=builder /app/apps/frontend/.next/standalone /app/standalone
+COPY --from=builder /app/apps/frontend/public /app/public
+COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
-# Next.js standalone output은 server.js가 루트에 위치합니다.
-# 따라서 이전의 복잡한 심볼릭 링크 로직이 더 이상 필요 없습니다.
-CMD ["node", "server.js"]
+# [최종 안정화] 빌드 시점에 server.js의 위치를 확인하고,
+# /app/standalone/server.js 경로로 심볼릭 링크를 생성하여 실행 경로를 정규화합니다.
+RUN if [ -f /app/standalone/server.js ]; then \
+      echo "server.js found at /app/standalone"; \
+    elif [ -f /app/standalone/apps/frontend/server.js ]; then \
+      ln -sf /app/standalone/apps/frontend/server.js /app/standalone/server.js && echo "Symbolic link created: /app/standalone/server.js -> /app/standalone/apps/frontend/server.js"; \
+    else \
+      echo "ERROR: server.js not found in standalone output. Listing /app/standalone contents:" >&2; ls -la /app/standalone || true; exit 1; \
+    fi
+
+# [최종 안정화] 항상 정규화된 단일 경로를 사용하여 서버를 실행합니다.
+CMD ["node", "/app/standalone/server.js"]
