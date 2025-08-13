@@ -1,32 +1,20 @@
 # 파일 위치: apps/frontend/Dockerfile
-# 버전: v6.0.0 (ECR Cache Optimized)
+# 최종 안정화 버전: v3.0.1
+# 변경 사항: 1. RUN 명령어의 셸 스크립트 문법 오류를 완벽하게 수정합니다.
 
 # ===================================================================================
-# Stage 1: Builder
+# Stage 1: Builder - 의존성 설치 및 애플리케이션 빌드 단계
 # ===================================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm@10.14.0
-
-# pnpm store를 위한 캐시 마운트 설정
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm config set store-dir /root/.local/share/pnpm/store
-
-# 의존성 관련 파일들만 먼저 복사
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/frontend/package.json ./apps/frontend/
-COPY apps/backend/package.json ./apps/backend/
-COPY apps/infra/package.json ./apps/infra/
-
-# 캐시된 store를 사용하여 의존성 설치
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --filter=frontend...
-
-# 소스 코드 복사
-COPY . .
-
-# 애플리케이션 빌드
+COPY tsconfig.base.json tsconfig.json turbo.json ./
+COPY --link apps ./apps
+RUN if [ -d "packages" ]; then cp -a packages . ; fi
+RUN pnpm install --frozen-lockfile --filter=frontend...
 RUN pnpm --filter frontend run build
+
 
 # ===================================================================================
 # Stage 2: Runner - 실제 서비스 실행을 위한 최종 이미지 단계
