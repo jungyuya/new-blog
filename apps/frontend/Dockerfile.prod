@@ -10,7 +10,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     AWS_LAMBDA_EXEC_WRAPPER=/opt/extensions/lambda-adapter
 
-# 워크플로우에서 전달받은 빌드 결과물 경로를 인자로 받습니다.
+# [핵심] 워크플로우에서 전달받은 빌드 결과물 경로를 인자로 받습니다.
 ARG STANDALONE_DIR
 ARG PUBLIC_DIR
 ARG STATIC_DIR
@@ -22,4 +22,5 @@ COPY ${STATIC_DIR} /app/.next/static
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
+# [핵심] server.js의 경로는 이제 항상 고정됩니다.
 CMD ["node", "/app/standalone/server.js"]
