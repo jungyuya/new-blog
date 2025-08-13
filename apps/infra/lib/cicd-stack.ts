@@ -24,13 +24,6 @@ export class CiCdStack extends Stack {
       allowAllOutbound: true,
     });
 
-    const secretsManagerEndpoint = vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      privateDnsEnabled: true,
-    });
-
-    secretsManagerEndpoint.connections.allowDefaultPortFrom(runnerSg);
-
     // ===================================================================================
     // SECTION 2: IAM 역할 및 권한
     // ===================================================================================

@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/27572d33220b3e7143ced87dc62d919cc9a51e5ab029707d37900111971b32b9.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/635d775315b7f0b4542df520ab0a0a43dfb2352479bbbf67b872eae2a9c34c5f.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -296,7 +296,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/75807264e5689483f21b4683d87b43c55bf93305e40cc4304c225f1a13651c75.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/975d32a966833957a1436c146d9ccb1cce96ef58f98febea5ca91041451cce9c.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -312,24 +312,6 @@
         "CiCdStack.assets"
       ],
       "metadata": {
-        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E"
-          }
-        ],
-        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/from CiCdStackRunnerSecurityGroupE2519603:443": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "DefaultVpcSecretsManagerEndpointSecurityGroupfromCiCdStackRunnerSecurityGroupE251960344300198DA7"
-          }
-        ],
-        "/CiCdStack/DefaultVpc/SecretsManagerEndpoint/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "DefaultVpcSecretsManagerEndpoint13E23E82"
-          }
-        ],
         "/CiCdStack/RunnerSecurityGroup/Resource": [
           {
             "type": "aws:cdk:logicalId",

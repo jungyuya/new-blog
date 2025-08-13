@@ -1,82 +1,6 @@
 {
  "Description": "Stack for the CI/CD support infrastructure (EC2 Self-Hosted Runner)",
  "Resources": {
-  "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E": {
-   "Type": "AWS::EC2::SecurityGroup",
-   "Properties": {
-    "GroupDescription": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup",
-    "SecurityGroupEgress": [
-     {
-      "CidrIp": "0.0.0.0/0",
-      "Description": "Allow all outbound traffic by default",
-      "IpProtocol": "-1"
-     }
-    ],
-    "SecurityGroupIngress": [
-     {
-      "CidrIp": "172.31.0.0/16",
-      "Description": "from 172.31.0.0/16:443",
-      "FromPort": 443,
-      "IpProtocol": "tcp",
-      "ToPort": 443
-     }
-    ],
-    "VpcId": "vpc-09064aa8dcdebfc42"
-   },
-   "Metadata": {
-    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/Resource"
-   }
-  },
-  "DefaultVpcSecretsManagerEndpointSecurityGroupfromCiCdStackRunnerSecurityGroupE251960344300198DA7": {
-   "Type": "AWS::EC2::SecurityGroupIngress",
-   "Properties": {
-    "Description": "from CiCdStackRunnerSecurityGroupE2519603:443",
-    "FromPort": 443,
-    "GroupId": {
-     "Fn::GetAtt": [
-      "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E",
-      "GroupId"
-     ]
-    },
-    "IpProtocol": "tcp",
-    "SourceSecurityGroupId": {
-     "Fn::GetAtt": [
-      "RunnerSecurityGroupDE989EBE",
-      "GroupId"
-     ]
-    },
-    "ToPort": 443
-   },
-   "Metadata": {
-    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/SecurityGroup/from CiCdStackRunnerSecurityGroupE2519603:443"
-   }
-  },
-  "DefaultVpcSecretsManagerEndpoint13E23E82": {
-   "Type": "AWS::EC2::VPCEndpoint",
-   "Properties": {
-    "PrivateDnsEnabled": true,
-    "SecurityGroupIds": [
-     {
-      "Fn::GetAtt": [
-       "DefaultVpcSecretsManagerEndpointSecurityGroupE273AA4E",
-       "GroupId"
-      ]
-     }
-    ],
-    "ServiceName": "com.amazonaws.ap-northeast-2.secretsmanager",
-    "SubnetIds": [
-     "subnet-0ccc097504af25410",
-     "subnet-0096ce9f9bb4494d5",
-     "subnet-0080dfc4df4676ff0",
-     "subnet-0682caf8cc8bb77d3"
-    ],
-    "VpcEndpointType": "Interface",
-    "VpcId": "vpc-09064aa8dcdebfc42"
-   },
-   "Metadata": {
-    "aws:cdk:path": "CiCdStack/DefaultVpc/SecretsManagerEndpoint/Resource"
-   }
-  },
   "RunnerSecurityGroupDE989EBE": {
    "Type": "AWS::EC2::SecurityGroup",
    "Properties": {
@@ -250,7 +174,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/32MTW/CQAxEfwv3jUn3Uq4IoSonoiBxRVvHqQzBG629RSjKf69CP+DU05t5Go0HX75CuQhXLbA9Fz2/w7i3gGfXkMackFy46nEk9DBWYpS6gHQYcCvtEFnM7QlzYru9pZgHt+nkf1HJRyLV2R/qzd9LJWpBkGb/nLdV/YO1akQOxlEmx+ECYxP7++bOOvaMt7k+0u9RnWLHPU3TLHfZhmyTk9gSnHT56T28rKBcnJS5SFmMLwTNN78Am8I5JCABAAA="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1WMyw6CMBBFv8V9GbEb3RpjDCsJfICppSQDpUP6kJCm/25Ajbo695XLged7yDdicpls+kzjHWLthexZpRwFKxUTk7tFJTnEWslg0c8XS2Fkp9b8B4VxXhipluZXn4vyjaNzJFF4JJMYigFiRXrdrCxJo5wX+1Wfo9JSi1qltITX4MfgEzPUKOjc9sE57A6QbzqHmNlgPA4KqhefUXQlwOQAAAA="
    },
    "Metadata": {
     "aws:cdk:path": "CiCdStack/CDKMetadata/Default"
