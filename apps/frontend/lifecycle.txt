@@ -1,0 +1,5 @@
+# lifecycle 수정 후 적용 명령어. 루트 프로젝트에서 실행
+
+pnpm --filter frontend exec aws ecr put-lifecycle-policy \
+  --repository-name new-blog-frontend \
+  --lifecycle-policy-text file://lifecycle-policy.json

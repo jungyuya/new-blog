@@ -1,8 +1,3 @@
-# 파일 위치: .github/workflows/deploy.yml
-# 버전: v2025.08.13-Final-Optimized-And-Corrected
-# 역할: 모든 문법 오류를 수정하고, Turborepo 캐시와 Docker 레이어 캐시를
-#       모두 활용하는 최종 최적화 워크플로우
-
 name: "Unified Deploy: CiCd + Blog (Optimized & Corrected)"
 
 on:
@@ -117,7 +112,43 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image (multi-stage build)"
+      # ------------------------
+      # 추가: GitHub Actions 로컬 캐시 복원 (안전 루트)
+      # ------------------------
+      - name: "Cache pnpm store"
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            ~/.cache/pnpm
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: "Cache turbo"
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      # ------------------------
+      # cache-to 분기: main 브랜치일 때만 registry로 캐시를 push
+      # non-main에서는 registry로 캐시 푸시를 하지 않음 (중복 생성 방지 목적)
+      # ------------------------
+      - name: "Prepare cache-to variable"
+        id: cachevar
+        run: |
+          echo "GITHUB_REF=${GITHUB_REF}"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "CACHE_TO=type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max" >> $GITHUB_OUTPUT
+          else
+            # inline 방식으로 하면 buildx는 레지스트리 export 대신 빌더 내부 캐시(임시)만 사용합니다.
+            echo "CACHE_TO=type=inline" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Build and push Docker image (multi-stage build) (uses buildx)"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -127,7 +158,7 @@ jobs:
           platforms: linux/arm64
           provenance: false
           cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
-          cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+          cache-to: ${{ steps.cachevar.outputs.CACHE_TO }}
 
       - name: "Pull image locally for asset extraction"
         run: |
@@ -224,4 +255,3 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
-    
