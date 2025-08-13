@@ -85,9 +85,9 @@ jobs:
 
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포
-  # ===================================================================================
+    # ===================================================================================
   deploy_blog_app:
-    name: "Build and Deploy Blog Application (Multi-stage Docker build - ultimate)"
+    name: "Build and Deploy Blog Application (Multi-stage with deps-cache)"
     needs: [detect_changes, deploy_cicd_infra]
     runs-on: self-hosted
     permissions:
@@ -117,7 +117,28 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: "Build and push Docker image (multi-stage build)"
+      # ----------------------------------------------------------------
+      # STEP 1: Build & push deps stage (creates stable deps-cache tag)
+      # ----------------------------------------------------------------
+      - name: "Build & push deps stage (cache base)"
+        run: |
+          set -euo pipefail
+          REG="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
+          echo "Building deps stage and pushing as ${REG}:deps-cache"
+          docker buildx build \
+            --platform linux/arm64 \
+            --file ./apps/frontend/Dockerfile \
+            --target deps \
+            --tag "${REG}:deps-cache" \
+            --push \
+            --cache-from "type=registry,ref=${REG}:cache" \
+            --cache-to "type=registry,ref=${REG}:cache,mode=max" \
+            .
+
+      # ----------------------------------------------------------------
+      # STEP 2: Build and push final image, using deps-cache and :cache
+      # ----------------------------------------------------------------
+      - name: "Build and push Docker image (final, using deps-cache)"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -125,10 +146,15 @@ jobs:
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
+          cache-from: |
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:deps-cache
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
+          provenance: false
 
+      # ----------------------------------------------------------------
+      # STEP 3: Pull image & extract frontend artifacts for S3 sync (unchanged)
+      # ----------------------------------------------------------------
       - name: "Pull image locally for asset extraction"
         run: |
           IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}"
@@ -169,7 +195,7 @@ jobs:
           du -sh ./apps/frontend/public || true
 
       # ------------------------
-      # Setup Node & pnpm (필수)
+      # Setup Node & pnpm
       # ------------------------
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
@@ -178,8 +204,7 @@ jobs:
       - uses: pnpm/action-setup@v4
 
       # ------------------------
-      # NEW: Install repository dependencies BEFORE CDK deploy
-      # This ensures esbuild (CDK bundling) can resolve node_modules in the runner.
+      # Install repo deps BEFORE CDK deploy (ensures esbuild finds modules)
       # ------------------------
       - name: "Install repository dependencies (pnpm install)"
         run: |
@@ -188,7 +213,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       # ------------------------
-      # Deploy BlogInfraStack via CDK (pass ImageTag so infra can use pushed image)
+      # Deploy infra & outputs
       # ------------------------
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
@@ -224,4 +249,4 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
-    
+      
