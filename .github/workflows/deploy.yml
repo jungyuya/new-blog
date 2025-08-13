@@ -175,6 +175,9 @@ jobs:
         id: image-def
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut-c1-7)" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
       - name: "Build and push Docker image"
         uses: docker/build-push-action@v5
         with:
@@ -186,7 +189,7 @@ jobs:
           provenance: false
           cache-from: type=gha,scope=${{ github.workflow }}
           cache-to: type=gha,scope=${{ github.workflow }},mode=max
-          
+
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
