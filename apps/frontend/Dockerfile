@@ -9,28 +9,30 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm@10.14.0
 
-# --- [DLC 최적화 1] 의존성 관련 파일만 먼저 복사 ---
-# pnpm install은 이 파일들에만 의존하므로, 소스 코드가 변경되어도 이 단계까지의 캐시는 유지됩니다.
+# --- [최적화 1] pnpm store를 위한 캐시 마운트 설정 ---
+# RUN 명령어에 --mount=type=cache를 사용하여, pnpm store를 빌드 간에 영속적으로 캐싱합니다.
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm config set store-dir /root/.local/share/pnpm/store
+
+# --- [최적화 2] 의존성 설치 단계 ---
+# 소스 코드를 복사하기 전에, 의존성 관련 파일들만 먼저 복사합니다.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY tsconfig.base.json turbo.json ./
-# 각 워크스페이스의 package.json도 미리 복사합니다.
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/backend/package.json ./apps/backend/
 COPY apps/infra/package.json ./apps/infra/
 
-# --- [DLC 최적화 2] 의존성 설치 ---
-# 이 RUN 명령어는 이제 pnpm-lock.yaml이 변경될 때만 다시 실행됩니다.
-RUN pnpm install --frozen-lockfile --filter=frontend...
+# pnpm install을 캐시된 store를 사용하여 실행합니다.
+# 이 단계의 레이어 캐시는 이제 pnpm-lock.yaml이 변경될 때만 깨집니다.
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter=frontend...
 
-# --- [DLC 최적화 3] 나머지 소스 코드 전체 복사 ---
-# 이제 소스 코드를 복사합니다. 이 단계부터의 캐시는 코드 변경 시 깨집니다.
-COPY --link apps ./apps
-RUN if [ -d "packages" ]; then cp -a packages . ; fi
-COPY tsconfig.json ./
+# --- [최적화 3] 소스 코드 복사 및 빌드 ---
+# --link 옵션은 BuildKit의 캐시 효율을 극대화합니다.
+COPY --link . .
 
-# --- [DLC 최적화 4] 애플리케이션 빌드 ---
-# 항상 최신 소스 코드를 바탕으로 빌드를 실행합니다.
+# 애플리케이션 빌드를 실행합니다.
 RUN pnpm --filter frontend run build
+
 
 
 # ===================================================================================

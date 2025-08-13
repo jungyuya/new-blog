@@ -184,7 +184,9 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           provenance: false
-
+          cache-from: type=gha,scope=${{ github.workflow }}
+          cache-to: type=gha,scope=${{ github.workflow }},mode=max
+          
       - name: "Deploy Blog Infrastructure (BlogInfraStack)"
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
