@@ -85,7 +85,7 @@ jobs:
 
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포
-    # ===================================================================================
+  # ===================================================================================
   deploy_blog_app:
     name: "Build and Deploy Blog Application (Multi-stage with deps-cache)"
     needs: [detect_changes, deploy_cicd_infra]
@@ -118,25 +118,43 @@ jobs:
         run: echo "TAG=$(date +%Y%m%d%H%M%S)-$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
 
       # ----------------------------------------------------------------
-      # STEP 1: Build & push deps stage (creates stable deps-cache tag)
+      # STEP 0: Compute lockfile hash (used to tag deps image deterministically)
       # ----------------------------------------------------------------
-      - name: "Build & push deps stage (cache base)"
+      - name: "Compute lockfile hash"
+        id: lock-hash
+        run: |
+          set -euo pipefail
+          # compute SHA1 of lockfile (deterministic tag)
+          if command -v sha1sum >/dev/null 2>&1; then
+            HASH=$(sha1sum pnpm-lock.yaml | cut -d' ' -f1)
+          else
+            HASH=$(shasum -a 1 pnpm-lock.yaml | cut -d' ' -f1)
+          fi
+          echo "LOCK_HASH=$HASH" >> $GITHUB_OUTPUT
+
+      # ----------------------------------------------------------------
+      # STEP 1: Build & push deps stage (tagged by lock hash)
+      # ----------------------------------------------------------------
+      - name: "Build & push deps stage (cache base, tagged by lock hash)"
+        id: deps-build
         run: |
           set -euo pipefail
           REG="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}"
-          echo "Building deps stage and pushing as ${REG}:deps-cache"
+          DEPS_TAG="deps-cache-${{ steps.lock-hash.outputs.LOCK_HASH }}"
+          echo "Building deps stage and pushing as ${REG}:${DEPS_TAG}"
           docker buildx build \
             --platform linux/arm64 \
             --file ./apps/frontend/Dockerfile \
             --target deps \
-            --tag "${REG}:deps-cache" \
+            --tag "${REG}:${DEPS_TAG}" \
             --push \
             --cache-from "type=registry,ref=${REG}:cache" \
             --cache-to "type=registry,ref=${REG}:cache,mode=max" \
             .
+          echo "DEPS_TAG=${DEPS_TAG}" >> $GITHUB_OUTPUT
 
       # ----------------------------------------------------------------
-      # STEP 2: Build and push final image, using deps-cache and :cache
+      # STEP 2: Build and push final image, using deps-cache-<hash> and :cache
       # ----------------------------------------------------------------
       - name: "Build and push Docker image (final, using deps-cache)"
         uses: docker/build-push-action@v5
@@ -147,7 +165,7 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-def.outputs.TAG }}
           platforms: linux/arm64
           cache-from: |
-            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:deps-cache
+            type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.deps-build.outputs.DEPS_TAG }}
             type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache
           cache-to: type=registry,ref=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:cache,mode=max
           provenance: false
@@ -249,4 +267,3 @@ jobs:
           DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
           echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID}"
           aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
-      
