@@ -281,7 +281,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-     "S3Key": "b32f1f6ca27a3381d2034cf181a43e1d3b272bce2bfc0fdcd0e71cacea8b0f0a.zip"
+     "S3Key": "3705a08337f78d18d77e79223604eef4443bbe17aaa5f72ce94ce524badd1d7d.zip"
     },
     "Description": "Handles all backend API logic (CRUD, Auth, etc.) via Hono.",
     "Environment": {
@@ -331,7 +331,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/BackendApiLambda/Resource",
-    "aws:asset:path": "asset.b32f1f6ca27a3381d2034cf181a43e1d3b272bce2bfc0fdcd0e71cacea8b0f0a",
+    "aws:asset:path": "/home/jungyu/projects/new-blog",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
