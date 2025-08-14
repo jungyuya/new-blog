@@ -66,6 +66,16 @@ export class BlogStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
+    // --- [추가] Phase 7의 필수 요건인 GSI 3를 테이블에 추가합니다. ---
+    // 역할: 전체 게시물 목록을 최신순으로 조회하기 위한 인덱스.
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'GSI3', // 데이터 모델링 설계와 일치하는 인덱스 이름
+      partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
+      // projectionType: 기본값은 ALL 이므로, 모든 속성을 인덱스에 복제합니다.
+      // readCapacity, writeCapacity: PAY_PER_REQUEST 모드에서는 설정할 필요가 없습니다.
+    });
+
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
       description: 'Handles all backend API logic (CRUD, Auth, etc.) via Hono.',

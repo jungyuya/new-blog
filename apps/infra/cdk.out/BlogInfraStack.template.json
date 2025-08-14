@@ -124,9 +124,35 @@
      {
       "AttributeName": "SK",
       "AttributeType": "S"
+     },
+     {
+      "AttributeName": "GSI3_PK",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "GSI3_SK",
+      "AttributeType": "S"
      }
     ],
     "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "GSI3",
+      "KeySchema": [
+       {
+        "AttributeName": "GSI3_PK",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "GSI3_SK",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
     "KeySchema": [
      {
       "AttributeName": "PK",
@@ -226,7 +252,18 @@
          ]
         },
         {
-         "Ref": "AWS::NoValue"
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "BlogPostsTable95467250",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
         }
        ]
       },
@@ -890,13 +927,14 @@
      "CacheBehaviors": [
       {
        "AllowedMethods": [
+        "GET",
         "HEAD",
-        "GET"
+        "OPTIONS"
        ],
        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
        "CachedMethods": [
-        "HEAD",
-        "GET"
+        "GET",
+        "HEAD"
        ],
        "Compress": true,
        "PathPattern": "/*/_next/static/*",
@@ -904,14 +942,32 @@
        "ViewerProtocolPolicy": "redirect-to-https"
       },
       {
+       "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+       ],
        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+       "CachedMethods": [
+        "GET",
+        "HEAD"
+       ],
        "Compress": true,
        "PathPattern": "/_next/static/*",
        "TargetOriginId": "FrontendAssetsOrigin",
        "ViewerProtocolPolicy": "redirect-to-https"
       },
       {
+       "AllowedMethods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+       ],
        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+       "CachedMethods": [
+        "GET",
+        "HEAD"
+       ],
        "Compress": true,
        "PathPattern": "/assets/*",
        "TargetOriginId": "FrontendAssetsOrigin",
@@ -919,19 +975,15 @@
       },
       {
        "AllowedMethods": [
-        "HEAD",
-        "DELETE",
-        "POST",
         "GET",
+        "HEAD",
         "OPTIONS",
         "PUT",
-        "PATCH"
+        "POST",
+        "PATCH",
+        "DELETE"
        ],
        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
-       "CachedMethods": [
-        "HEAD",
-        "GET"
-       ],
        "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
        "PathPattern": "/api/*",
        "TargetOriginId": "BackendApiOrigin",
