@@ -164,8 +164,11 @@ jobs:
           echo "TURBO_TEAM is set: ${{ env.TURBO_TEAM != '' }}"
           echo "------------------"
           
-          echo "🚀 Starting the single build with versioned asset prefix..."
-          pnpm --filter frontend run build -- --verbosity=debug
+          echo "🚀 Starting the single build with verbose logging..."
+          # [수정] 불필요한 '--'를 제거하고, Turborepo의 로그 레벨을 환경 변수로 설정하는
+          #       더 안정적인 방법으로 변경합니다.
+          export TURBO_VERBOSITY=4
+          pnpm --filter frontend run build
 
       # --- 3악장: 2중주 (The Dual Deployment) ---
       - name: "Configure AWS Credentials"
