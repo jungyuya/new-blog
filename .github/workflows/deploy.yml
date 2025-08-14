@@ -145,6 +145,10 @@ jobs:
       - name: "The Single Source of Truth: Build Frontend Once"
         # [수정] env 블록을 run과 같은 레벨로 올바르게 위치시킵니다.
         env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: ${{ secrets.TURBO_REMOTE_ONLY }}
+          # -----------------------------------------------------------------
           NODE_ENV: production
           NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
