@@ -170,11 +170,8 @@ export class BlogStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            // --- [최종 핵심 수정] ---
-            // 이 Origin 설정에서 s3OriginConfig 속성 자체를 완전히 제거합니다.
-            // 이렇게 하면 생성되는 CloudFormation 템플릿에 해당 키가 포함되지 않아,
-            // CloudFront는 오직 originAccessControlId만 인식하게 됩니다.
-            // s3OriginConfig: {}, // 이 라인을 삭제하거나 주석 처리합니다.
+            // [수정] 이 아랫줄을 삭제합니다. OAC를 사용할 때는 이 속성이 필요 없습니다.
+            s3OriginConfig: {},
           },
           {
             id: 'BackendApiOrigin',

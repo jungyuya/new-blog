@@ -163,6 +163,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: "PART 1: Build & Push Production Image (Consumes .next)"
+        id: build_image # [추가] 이 스텝에 id를 부여하여 이미지 정보를 참조할 수 있게 합니다.
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -171,6 +172,13 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_release.outputs.release_id }}
           platforms: linux/arm64
           provenance: false
+      
+      
+      - name: "Verify ECR Image Existence (Safety Check)"
+        run: |
+          echo "Verifying that the image was pushed successfully..."
+          aws ecr wait image-scan-complete --repository-name ${{ env.ECR_REPOSITORY }} --image-id imageTag=${{ steps.set_release.outputs.release_id }}
+          echo "✅ ECR image verification successful. Proceeding with deployment."
 
       - name: "Deploy Infrastructure (Activates New Lambda Version)"
         id: cdk_deploy
