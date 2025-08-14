@@ -2,7 +2,7 @@
   "name": "new-blog",
   "private": true,
   "scripts": {
-    "build": "turbo run build --filter=frontend --verbosity=2",
+    "build": "turbo run build --filter=frontend --filter=backend",
     "dev": "concurrently -k --names \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgMagenta.bold\" \"pnpm --filter frontend dev\" \"pnpm --filter backend dev\"",
     "lint": "turbo run lint",
     "clean": "turbo run clean"
