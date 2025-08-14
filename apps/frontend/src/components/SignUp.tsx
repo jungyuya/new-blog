@@ -34,7 +34,7 @@ export default function SignUp() {
                 throw new Error(data.message || '회원가입에 실패했습니다.');
             }
 
-            setSuccess('회원가입에 성공했습니다!! 이메일을 확인하여 계정을 활성화해주세요~');
+            setSuccess('회원가입에 성공했습니다! 이메일을 확인하여 계정을 활성화해주세요.');
 
         } catch (err) {
             if (err instanceof Error) {
@@ -49,7 +49,7 @@ export default function SignUp() {
 
     return (
         <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-center text-gray-900">*회원가입*</h2>
+            <h2 className="text-2xl font-bold text-center text-gray-900">*회원 가입*</h2>
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
