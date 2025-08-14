@@ -191,14 +191,6 @@ jobs:
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
 
-      - name: "Deploy Infrastructure (Activates New Lambda Version)"
-        id: cdk_deploy
-        run: |
-          pnpm --filter infra exec cdk deploy BlogInfraStack \
-            --require-approval never \
-            --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
-            --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
-
       - name: "PART 2: Sync Static Assets to S3 (To Versioned Path)"
         run: |
           set -euo pipefail
