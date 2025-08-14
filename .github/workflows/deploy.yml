@@ -163,7 +163,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: "PART 1: Build & Push Production Image (Consumes .next)"
-        id: build_image # [추가] 이 스텝에 id를 부여하여 이미지 정보를 참조할 수 있게 합니다.
+        id: build_image # [추가] 이 스텝에 id를 부여하여 이미지 정보를 참조
         uses: docker/build-push-action@v5
         with:
           context: .
