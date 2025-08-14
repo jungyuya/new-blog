@@ -19,13 +19,9 @@ RUN pnpm install --prod --frozen-lockfile
 
 # CI가 만든 빌드 산출물(.next/standalone 등)을 그대로 복사
 # (워크플로우에서 pnpm build를 먼저 실행해야 함)
-COPY apps/frontend/.next/standalone /app/standalone
-COPY apps/frontend/.next/static /app/.next/static
-COPY apps/frontend/public /app/public
-
-# Lambda adapter (외부 public registry 이미지를 FROM으로 copy)
-# 이 구문은 BuildKit을 사용하는 경우 외부 이미지로부터 파일을 복사할 수 있습니다.
-# 기존 Dockerfile에서 사용하신 방식을 유지합니다.
+COPY --from=builder /app/apps/frontend/.next/standalone /app/standalone
+COPY --from=builder /app/apps/frontend/public /app/public
+COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 # server.js 정규화 (귀하의 기존 스크립트 로직 그대로 유지)
