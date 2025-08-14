@@ -170,7 +170,6 @@ export class BlogStack extends Stack {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
             originAccessControlId: s3Oac.attrId,
-            // [수정] 이 아랫줄을 삭제합니다. OAC를 사용할 때는 이 속성이 필요 없습니다.
             s3OriginConfig: {},
           },
           {
