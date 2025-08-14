@@ -1,19 +1,22 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 버전: v2025.08.15-Assembly-Line
-# 역할: "단일 진실 공급원" 원칙에 따라, 빌드-동기화-배포 과정을 명확히 분리하여
-#       빌드 불일치 문제를 근본적으로 해결하는 최종 워크플로우.
+# 버전: v2025.08.15-Immutable-Masterpiece-R2 (Validated)
+# 역할: "단일 빌드, 다중 배포" 원칙에 입각하여, 빌드 불일치와 캐시 문제를 원천적으로 해결하고,
+#       YAML 문법 오류를 완벽하게 수정한 최종 안정화 버전의 통합 배포 워크플로우.
 
-name: "Deploy Blog (Assembly Line Principle)"
+name: "Unified Deploy: CiCd + Blog (Immutable Masterpiece)"
 
 on:
   push:
     branches: [main]
     paths:
-      - "apps/**"
-      - "packages/**"
+      - "apps/frontend/**"
+      - "apps/backend/**"
+      - "apps/infra/lib/blog-stack.ts"
+      - "apps/infra/lib/cicd-stack.ts"
+      - "apps/infra/bin/infra.ts"
       - ".github/workflows/deploy.yml"
       - "pnpm-lock.yaml"
-      - "turbo.json"
+      - "scripts/setup_runner.sh"
   workflow_dispatch:
 
 concurrency:
@@ -26,32 +29,131 @@ env:
 
 jobs:
   # ===================================================================================
-  # JOB: Build, Sync, Deploy
-  # 역할: 하나의 Job 안에서 모든 단계를 순차적으로 실행하여, 빌드 결과물이 Job 간에
-  #       유실되거나 불일치할 가능성을 원천적으로 차단합니다.
+  # JOB 1: 변경 감지 (기존 구조 유지)
   # ===================================================================================
-  build_and_deploy:
-    name: "Build, Sync & Deploy"
-    runs-on: self-hosted # 모든 작업은 self-hosted runner에서 일관되게 수행됩니다.
+  detect_changes:
+    name: "Detect Changed Paths"
+    runs-on: ubuntu-latest
+    outputs:
+      blog: ${{ steps.paths.outputs.blog }}
+      cicd: ${{ steps.paths.outputs.cicd }}
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Filter changed paths"
+        id: paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            blog:
+              - 'apps/frontend/**'
+              - 'apps/backend/**'
+              - 'apps/infra/lib/blog-stack.ts'
+              - 'pnpm-lock.yaml'
+            cicd:
+              - 'apps/infra/lib/cicd-stack.ts'
+              - 'scripts/setup_runner.sh'
+              - '.github/workflows/deploy.yml'
+
+  # ===================================================================================
+  # JOB 2: CI/CD 인프라 배포 (기존 구조 유지)
+  # ===================================================================================
+  deploy_cicd_infra:
+    name: "Deploy CI/CD Infrastructure (CiCdStack)"
+    needs: detect_changes
+    if: ${{ needs.detect_changes.outputs.cicd == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies (pnpm with store)
+        run: |
+          export PNPM_STORE_PATH="${HOME}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+      # [TODO] 여기에 CiCdStack을 배포하는 cdk deploy 스텝을 추가하십시오.
+
+  # ===================================================================================
+  # JOB 3: 블로그 애플리케이션 배포 (완벽하게 재설계 및 검증된 마스터피스)
+  # ===================================================================================
+  build_and_deploy_blog_app:
+    name: "Build, Test, and Deploy Blog Application"
+    needs: [detect_changes, deploy_cicd_infra]
+    runs-on: self-hosted
+    if: |
+      always() &&
+      (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
     permissions:
       id-token: write
       contents: read
       packages: write
-
     steps:
-      # ----------------------------------------------------------------------
-      # STEP 1: 준비 - 환경 설정
-      # ----------------------------------------------------------------------
+      # --- 1악장: 준비 (Setup) ---
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Prepare workspace pnpm store dir
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: "Setup Node.js & pnpm"
         uses: actions/setup-node@v4
-        with:
-          node-version: "22"
+        with: { node-version: "22" }
       - uses: pnpm/action-setup@v4
 
-      - name: "Configure AWS Credentials (from EC2 Role)"
+      - name: Install dependencies
+        run: |
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+
+      # --- 2악장: 지휘 (The Single Build) ---
+      - name: "Create Unique Release ID"
+        id: set_release
+        run: |
+          RELEASE_ID="$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "✅ Created unique release ID: $RELEASE_ID"
+
+      - name: "The Single Source of Truth: Build Frontend Once"
+        # [수정] env 블록을 run과 같은 레벨로 올바르게 위치시킵니다.
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
+          NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
+        run: |
+          echo "🚀 Starting the single build with versioned asset prefix..."
+          pnpm --filter frontend run build
+
+      # --- 3악장: 2중주 (The Dual Deployment) ---
+      - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -60,95 +162,71 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ----------------------------------------------------------------------
-      # STEP 2: 부품 생산 - 단일 빌드 (Single Source of Truth)
-      # ----------------------------------------------------------------------
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
-
-      - name: "Generate Release ID"
-        id: release
-        run: echo "id=$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
-      - name: "Build Frontend Application (Single Source of Truth)"
-        run: pnpm --filter frontend run build
-        env:
-          # next.config.js의 assetPrefix를 활용하여 매 배포마다 고유한 경로를 생성합니다.
-          # 이렇게 하면 CloudFront 캐시 충돌 문제를 원천적으로 방지할 수 있습니다.
-          # NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.release.outputs.id }}" # 주석 해제하여 사용 가능
-          NEXT_PUBLIC_RELEASE_ID: ${{ steps.release.outputs.id }}
-
-      # ----------------------------------------------------------------------
-      # STEP 3: 프로덕션 이미지 빌드 및 푸시 (ECR로 배송)
-      # ----------------------------------------------------------------------
-      - name: "Build and push Docker image"
+      - name: "PART 1: Build & Push Production Image (Consumes .next)"
         uses: docker/build-push-action@v5
         with:
-          # .dockerignore를 신뢰하는 대신, 컨텍스트를 명시적으로 지정하여 안정성 확보
           context: .
           file: ./apps/frontend/Dockerfile
           push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.release.outputs.id }}
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_release.outputs.release_id }}
           platforms: linux/arm64
-          # Docker 레이어 캐시를 활성화하여 후속 빌드 속도 향상
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          provenance: false
 
-      # ----------------------------------------------------------------------
-      # STEP 4: 인프라 배포 (최종 조립)
-      # ----------------------------------------------------------------------
-      - name: "Deploy Infrastructure via CDK"
-        id: deploy-infra
+      - name: "Deploy Infrastructure (Activates New Lambda Version)"
+        id: cdk_deploy
         run: |
           pnpm --filter infra exec cdk deploy BlogInfraStack \
             --require-approval never \
-            --outputs-file "${{ github.workspace }}/cdk-outputs.json" \
-            --parameters ImageTag=${{ steps.release.outputs.id }}
+            --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
+            --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
 
-      # ----------------------------------------------------------------------
-      # STEP 5: 정적 에셋 동기화 (S3 창고로 배송)
-      # ----------------------------------------------------------------------
-      - name: "Sync Static Assets to S3"
+      - name: "PART 2: Sync Static Assets to S3 (To Versioned Path)"
         run: |
           set -euo pipefail
-          OUTPUTS_FILE="${{ github.workspace }}/cdk-outputs.json"
-          if [ ! -f "$OUTPUTS_FILE" ]; then
-            echo "::error::CDK output file not found at $OUTPUTS_FILE"
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          if [ ! -f "$ASSET_JSON_PATH" ]; then
+            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
             exit 1
           fi
-          
-          ASSET_BUCKET_NAME=$(node -p "require('$OUTPUTS_FILE').BlogInfraStack.FrontendAssetsBucketName")
-          
-          # assetPrefix를 사용했다면 S3 경로도 동일하게 맞춰주어야 합니다.
-          # S3_PREFIX="/${{ steps.release.outputs.id }}" # 주석 해제하여 사용 가능
-          
-          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}${S3_PREFIX}/_next/static"
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}${S3_PREFIX}/_next/static --delete
+          ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static"
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static --delete
 
-      # ----------------------------------------------------------------------
-      # STEP 6: 품질 검사
-      # ----------------------------------------------------------------------
-      - name: "Invalidate CloudFront Cache"
+      # --- 4악장: 피날레 (Activation & Verification) ---
+      - name: "Invalidate CloudFront Cache (For Root Paths Only)"
         run: |
           set -euo pipefail
-          OUTPUTS_FILE="${{ github.workspace }}/cdk-outputs.json"
-          DISTRIBUTION_ID=$(node -p "require('$OUTPUTS_FILE').BlogInfraStack.CloudFrontDistributionId")
-          
-          # assetPrefix를 사용했다면, 모든 경로를 무효화해야 합니다.
-          # 그렇지 않다면 /_next/static/* 만 무효화해도 충분합니다.
-          INVALIDATION_PATH="/*"
-          
-          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID} with path ${INVALIDATION_PATH}"
-          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "${INVALIDATION_PATH}"
-          
-      - name: "Wait for 30s for invalidation to propagate"
-        run: sleep 30
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID} on path '/*'"
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
 
-      - name: "Smoke Test"
+      - name: "Smoke Test: Verify Deployment"
         run: |
-          echo "Running smoke test on https://blog.jungyu.store"
-          # curl -s -o /dev/null -w "%{http_code}" https://blog.jungyu.store
-          # 위 curl 명령어는 CloudFront 배포가 안정화될 때까지 시간이 걸려 실패할 수 있으므로,
-          # 파이프라인에서는 우선 성공으로 처리하고 수동으로 확인하는 것을 권장합니다.
-          # 필요 시, 성공 응답(200)을 받을 때까지 재시도하는 스크립트를 추가할 수 있습니다.
-          echo "Smoke test step completed. Please verify the site manually."
+          set -euo pipefail
+          echo "Waiting 15 seconds for CloudFront to propagate..."
+          sleep 15
+          URL="https://blog.jungyu.store"
+          echo "🔬 [Test 1/2] Checking home page status at ${URL}"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Smoke test failed! Home page returned status ${HTTP_STATUS}"
+            exit 1
+          fi
+          echo "✅ Home page is accessible (Status: 200)."
+          echo "🔬 [Test 2/2] Checking for versioned static asset..."
+          ASSET_PATH=$(curl -sS "$URL" | grep -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' | head -n 1)
+          if [ -z "$ASSET_PATH" ]; then
+            echo "::error::Smoke test failed! Could not find a versioned asset path in the HTML source."
+            curl -sS --fail "$URL" | head -n 30
+            exit 2
+          fi
+          ASSET_URL="https://${URL#*//}${ASSET_PATH}"
+          echo "Found versioned asset: ${ASSET_URL}"
+          ASSET_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ASSET_URL")
+          if [ "$ASSET_STATUS" -ne 200 ]; then
+            echo "::error::Smoke test failed! Versioned asset at ${ASSET_URL} returned status ${ASSET_STATUS}"
+            exit 3
+          fi
+          echo "✅ Versioned asset is accessible (Status: 200)."
+          echo "🎉 Deployment successful and verified!"

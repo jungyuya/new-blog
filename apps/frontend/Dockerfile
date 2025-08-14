@@ -19,9 +19,10 @@ RUN pnpm install --prod --frozen-lockfile
 
 # CI가 만든 빌드 산출물(.next/standalone 등)을 그대로 복사
 # (워크플로우에서 pnpm build를 먼저 실행해야 함)
-COPY --from=builder /app/apps/frontend/.next/standalone /app/standalone
-COPY --from=builder /app/apps/frontend/public /app/public
-COPY --from=builder /app/apps/frontend/.next/static /app/.next/static
+COPY apps/frontend/.next/standalone /app/standalone
+COPY apps/frontend/.next/static /app/.next/static
+COPY apps/frontend/public /app/public
+
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 # server.js 정규화 (귀하의 기존 스크립트 로직 그대로 유지)
