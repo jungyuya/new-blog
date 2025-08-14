@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold">키자루급 CI/CD 속도 보장</h1>
+        <h1 className="text-4xl font-bold">Suceessfully, DO IT. && DEEP DIVE!</h1>
         <p className="text-lg text-gray-600 mt-2">Turborepo cache DONE, Self Hosted Runner DONE, Speed TEST DONE.</p>
       </div>
       <SignUp />
