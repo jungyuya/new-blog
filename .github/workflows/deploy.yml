@@ -88,6 +88,12 @@ jobs:
           pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
       # [TODO] 여기에 CiCdStack을 배포하는 cdk deploy 스텝을 추가하십시오.
 
+            # "Install dependencies" 스텝 바로 다음에 추가
+      - name: "Check network connectivity to Vercel"
+        run: |
+          echo "Pinging Vercel API endpoint..."
+          curl -v https://api.vercel.com/v1/now/health
+
   # ===================================================================================
   # JOB 3: 블로그 애플리케이션 배포 (완벽하게 재설계 및 검증된 마스터피스)
   # ===================================================================================
@@ -153,8 +159,13 @@ jobs:
           NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
         run: |
+          echo "--- DEBUG INFO ---"
+          echo "TURBO_TOKEN is set: ${{ env.TURBO_TOKEN != '' }}"
+          echo "TURBO_TEAM is set: ${{ env.TURBO_TEAM != '' }}"
+          echo "------------------"
+          
           echo "🚀 Starting the single build with versioned asset prefix..."
-          pnpm --filter frontend run build
+          pnpm --filter frontend run build -- --verbosity=debug
 
       # --- 3악장: 2중주 (The Dual Deployment) ---
       - name: "Configure AWS Credentials"
