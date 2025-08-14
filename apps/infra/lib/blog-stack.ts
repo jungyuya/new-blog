@@ -187,9 +187,44 @@ export class BlogStack extends Stack {
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
         cacheBehaviors: [
-          { pathPattern: '/_next/static/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId, compress: true },
-          { pathPattern: '/assets/*', targetOriginId: 'FrontendAssetsOrigin', viewerProtocolPolicy: 'redirect-to-https', cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId, compress: true },
-          { pathPattern: '/api/*', targetOriginId: 'BackendApiOrigin', viewerProtocolPolicy: 'redirect-to-https', allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'], cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId, originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId },
+          // 1) 버전화된 정적 파일(우선 처리)
+          {
+            pathPattern: "/*/_next/static/*",
+            targetOriginId: "FrontendAssetsOrigin",
+            viewerProtocolPolicy: "redirect-to-https",
+            allowedMethods: ["HEAD", "GET"],
+            cachedMethods: ["HEAD", "GET"],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+
+          // 2) 기존 정적 자산 패턴
+          {
+            pathPattern: "/_next/static/*",
+            targetOriginId: "FrontendAssetsOrigin",
+            viewerProtocolPolicy: "redirect-to-https",
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            compress: true
+          },
+
+          {
+            pathPattern: "/assets/*",
+            targetOriginId: "FrontendAssetsOrigin",
+            viewerProtocolPolicy: "redirect-to-https",
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            compress: true
+          },
+
+          // 3) API 패턴
+          {
+            pathPattern: "/api/*",
+            targetOriginId: "BackendApiOrigin",
+            viewerProtocolPolicy: "redirect-to-https",
+            allowedMethods: ["HEAD", "DELETE", "POST", "GET", "OPTIONS", "PUT", "PATCH"],
+            cachedMethods: ["HEAD", "GET"],
+            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
+          }
         ],
       },
     });
