@@ -177,8 +177,19 @@ jobs:
       - name: "Verify ECR Image Existence (Safety Check)"
         run: |
           echo "Verifying that the image was pushed successfully..."
-          aws ecr wait image-scan-complete --repository-name ${{ env.ECR_REPOSITORY }} --image-id imageTag=${{ steps.set_release.outputs.release_id }}
+          # aws ecr wait image-scan-complete 대신, 이미지 존재 자체를 확인하는 batch-get-image를 사용합니다.
+          # 이미지가 존재하지 않으면 이 명령어는 에러를 내며 실패하고, 파이프라인은 즉시 중단됩니다.
+          # --query "images[].imageId" > /dev/null 부분은 불필요한 JSON 출력을 숨기기 위함입니다.
+          aws ecr batch-get-image --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=${{ steps.set_release.outputs.release_id }} --query "images[].imageId" > /dev/null
           echo "✅ ECR image verification successful. Proceeding with deployment."
+
+      - name: "Deploy Infrastructure (Activates New Lambda Version)"
+        id: cdk_deploy
+        run: |
+          pnpm --filter infra exec cdk deploy BlogInfraStack \
+            --require-approval never \
+            --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
+            --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
 
       - name: "Deploy Infrastructure (Activates New Lambda Version)"
         id: cdk_deploy
