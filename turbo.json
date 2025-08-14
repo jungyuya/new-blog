@@ -7,6 +7,16 @@
         ".next/**",
         "dist/**",
         "!.next/cache/**"
+      ],
+      "inputs": [
+        "src/**",
+        "public/**",
+        "next.config.js",
+        "package.json",
+        "tsconfig.json",
+        "pnpm-lock.yaml",
+        "../../packages/**",
+        "../../turbo.json"
       ]
     },
     "dev": {
