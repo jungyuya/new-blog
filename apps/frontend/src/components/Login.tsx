@@ -32,10 +32,14 @@ export default function Login() {
       // 새로고침을 통해 깨끗한 상태에서 시작하게 할 수도 있습니다.
       // window.location.href = '/';
 
-    } catch (err: any) {
-      // api.ts에서 throw한 에러를 여기서 잡습니다.
+    } catch (err) { // 'any' 타입을 제거합니다.
       console.error('Login failed:', err);
-      setError(err.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+      // err가 Error 인스턴스인지 확인하여 타입 안전성을 높입니다.
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('알 수 없는 오류가 발생했습니다.');
+      }
     } finally {
       // 성공/실패 여부와 관계없이 로딩 상태를 해제합니다.
       setIsLoading(false);
