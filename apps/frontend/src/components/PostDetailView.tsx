@@ -54,12 +54,16 @@ export default function PostDetailView({ post }: PostDetailViewProps) {
       {/* --- [핵심] isOwner가 true일 때만 이 버튼들을 렌더링합니다. --- */}
       {isOwner && (
         <div className="flex space-x-4 mb-8">
+          {/* --- [핵심 수정] --- */}
+          {/* onClick 핸들러가 router.push를 호출하여, '.../edit' 경로로 페이지를 이동시킵니다. */}
           <button 
-            onClick={() => alert('수정 기능은 곧 구현될 예정입니다!')} // TODO: 수정 페이지로 이동하는 로직 구현
+            onClick={() => router.push(`/posts/${post.postId}/edit`)}
             className="px-4 py-2 text-sm font-medium text-white bg-yellow-500 rounded-md hover:bg-yellow-600"
           >
             수정
           </button>
+          {/* --- [수정 완료] --- */}
+
           <button
             onClick={handleDelete}
             disabled={isDeleting}

@@ -7,13 +7,14 @@ import { notFound } from 'next/navigation'; // [추가] 404 페이지를 보여�
 
 // [개선] 이 컴포넌트는 서버에서 데이터를 fetch하므로 async 함수로 유지합니다.
 export default async function PostDetailPage({ params }: { params: { postId: string } }) {
-  const { postId } = params;
+  const awaitedParams = await params;
+  const { postId } = awaitedParams;
 
   try {
     // [수정] 'fetchPostById(postId)' 대신 'api.fetchPostById(postId)'를 호출합니다.
     // api.ts에서 반환하는 값은 { post: Post } 형태이므로, 구조 분해 할당을 사용합니다.
     const { post } = await api.fetchPostById(postId);
-    
+
     // [개선] api.fetchPostById가 실패하면 에러를 throw하므로,
     // post가 없는 경우는 404 에러로 간주하고 notFound()를 호출하는 것이 더 명확합니다.
     // (물론 api.ts의 에러 처리 로직에 따라 이 부분은 달라질 수 있지만, 현재 구조에서는 이 방식이 안전합니다.)
