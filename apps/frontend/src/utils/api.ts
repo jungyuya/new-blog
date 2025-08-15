@@ -1,35 +1,35 @@
-// 파일 위치: apps/frontend/src/utils/api.ts
-// 버전: v2.0.0 (Centralized, Cookie-based API Client)
-// 역할: 프로젝트의 모든 백엔드 API 호출을 중앙에서 관리하고,
-//       HttpOnly 쿠키 기반 인증을 기본으로 지원하는 견고한 클라이언트.
+// 파일 위치: apps/frontend/src/utils/api.ts (v3.0 - Step 1 수정안)
+// 역할: 환경 변수 의존성을 완전히 제거하고, 상대 경로('/api')를 기준으로 통신하는 최종 클라이언트.
 
-// [유지] Post 타입 정의는 데이터 구조를 명확히 하므로 그대로 유지합니다.
 export interface Post {
-  PK: string;
-  SK: string;
-  postId: string;
-  title: string;
-  content: string;
-  authorId: string; // [수정] '인가' 구현을 위해 authorId를 추가합니다.
-  authorEmail: string;
-  createdAt: string;
-  updatedAt: string;
+    PK: string;
+    SK: string;
+    postId: string;
+    title: string;
+    content: string;
+    authorId: string;
+    authorEmail: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
-// [유지] 환경 변수를 사용하는 방식은 유연성을 위해 그대로 유지합니다.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+// --- [핵심 수정] ---
+// 기존: const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+// 변경: 외부 환경 변수에 대한 의존성을 제거하고, 항상 '/api'라는 고정된 값을 사용하도록 변경합니다.
+// 이제 이 코드는 어떤 환경에서 실행되든 항상 동일하게 동작합니다.
+const API_BASE_URL = '/api';
+// --- [수정 완료] ---
 
-// [개선] 모든 fetch 로직을 중앙에서 관리하는 래퍼 함수입니다.
-// 일관된 에러 처리와 공통 옵션(credentials) 설정을 보장합니다.
+
+// fetchWrapper 함수는 URL 조합 방식 외에는 변경점이 없습니다.
 async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${API_BASE_URL}${path}`; // 예: '/api' + '/auth/login' = '/api/auth/login'
 
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    // [핵심] 이 옵션으로 모든 요청에 자동으로 쿠키를 포함시킵니다.
     credentials: 'include',
     ...options,
   };
@@ -40,8 +40,7 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
     const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response.' }));
     throw new Error(errorData.message || `API call failed with status ${response.status}`);
   }
-
-  // 응답 본문이 없는 경우 (e.g., 204 No Content)를 처리합니다.
+  
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     return response.json() as Promise<T>;
@@ -49,8 +48,7 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   return Promise.resolve({} as T);
 }
 
-// [개선] 중앙화된 api 객체입니다.
-// 이제 각 API 함수는 '어떻게' 통신할지가 아닌, '무엇을' 할지만 정의하면 됩니다.
+// api 객체의 구조는 변경점이 없습니다. 호출하는 경로가 상대 경로라는 점만 인지하면 됩니다.
 export const api = {
   // --- Auth APIs ---
   login: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
@@ -60,34 +58,24 @@ export const api = {
     });
   },
 
-  logout: (): Promise<{ message: string }> => {
-    return fetchWrapper('/auth/logout', {
-      method: 'POST',
-      // 로그아웃은 특별한 데이터를 보낼 필요가 없으므로 body가 없습니다.
-    });
-  },
-
-    signup: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
-    return fetchWrapper('/auth/signup', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-      // [중요] 회원가입은 쿠키를 주고받을 필요가 없지만,
-      // fetchWrapper의 기본값을 따르는 것이 일관성에 좋습니다.
-    });
-  },
-
-  // [추가] 현재 로그인된 사용자의 정보를 가져오는 함수
-  // AuthContext에서 앱 시작 시 호출하여 세션 유효성을 검사합니다.
   fetchCurrentUser: (): Promise<{ user: { id: string; email: string } }> => {
     return fetchWrapper('/users/me', {
       method: 'GET',
     });
-
   },
 
+  logout: (): Promise<{ message: string }> => {
+    return fetchWrapper('/auth/logout', {
+      method: 'POST',
+    });
+  },
 
-
-  // TODO: 필요 시 logout, signup 등의 함수도 여기에 추가할 수 있습니다.
+  signup: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
+    return fetchWrapper('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
 
   // --- Post APIs ---
   fetchPosts: (): Promise<{ posts: Post[] }> => {
@@ -104,9 +92,7 @@ export const api = {
       body: JSON.stringify(postData),
     });
   },
-
-  // TODO: Phase 7 후반부에 updatePost, deletePost 함수를 여기에 추가할 것입니다.
-
+  
   updatePost: (postId: string, postData: { title?: string; content?: string }): Promise<{ message: string; post: Post }> => {
     return fetchWrapper(`/posts/${postId}`, {
       method: 'PUT',
@@ -119,5 +105,4 @@ export const api = {
       method: 'DELETE',
     });
   },
-
 };
