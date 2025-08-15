@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       // TODO: 백엔드에 /api/auth/logout 엔드포인트가 구현되면 아래 주석을 해제합니다.
-      // await api.logout();
+      await api.logout();
       setUser(null);      // React 상태를 즉시 비웁니다.
       router.push('/'); // 홈페이지로 이동합니다.
     } catch (error) {

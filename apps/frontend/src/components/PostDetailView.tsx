@@ -1,31 +1,77 @@
-// apps/frontend/src/components/PostDetailView.tsx
-'use client';
-import type { Post } from "@/utils/api";
-import Link from "next/link";
+// 파일 위치: apps/frontend/src/components/PostDetailView.tsx
+// 역할: 단일 게시물의 내용을 보여주고, 소유권에 따라 수정/삭제 버튼을 렌더링.
 
-export default function PostDetailView({ post }: { post: Post | null }) {
+'use client';
+
+import { Post } from '@/utils/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { api } from '@/utils/api';
+import { useState } from 'react';
+
+interface PostDetailViewProps {
+  post: Post | null;
+}
+
+export default function PostDetailView({ post }: PostDetailViewProps) {
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (!post) {
-    return (
-      <main className="flex min-h-screen flex-col items-center p-24">
-        <h1 className="text-4xl font-bold mb-8">게시물을 찾을 수 없습니다.</h1>
-        <Link href="/" className="text-blue-600 hover:underline">목록으로 돌아가기</Link>
-      </main>
-    );
+    return <div>게시물을 찾을 수 없습니다.</div>;
   }
+
+  // [핵심] '인가(Authorization)' 로직
+  // 인증 로딩이 끝나고, 로그인한 사용자가 존재하며, 그 사용자의 ID가 게시물의 작성자 ID와 일치하는지 확인합니다.
+  const isOwner = !isAuthLoading && user && user.id === post.authorId;
+
+  const handleDelete = async () => {
+    if (!window.confirm('정말로 이 게시물을 삭제하시겠습니까?')) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await api.deletePost(post.postId);
+      alert('게시물이 삭제되었습니다.');
+      router.push('/'); // 삭제 후 홈페이지로 이동
+    } catch (error) {
+      console.error('Failed to delete post:', error);
+      alert('게시물 삭제에 실패했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center p-8 sm:p-12 md:p-24">
-      <article className="w-full max-w-4xl">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-gray-900">{post.title}</h1>
-        <div className="mb-8 text-gray-500">
-          <span>작성자: {post.authorEmail}</span>
-          <span className="mx-2">|</span>
-          <span>작성일: {new Date(post.createdAt).toLocaleString()}</span>
+    <article className="prose lg:prose-xl max-w-none">
+      <h1 className="mb-4">{post.title}</h1>
+      <div className="text-sm text-gray-500 mb-8">
+        <span>작성자: {post.authorEmail}</span> | 
+        <span>작성일: {new Date(post.createdAt).toLocaleDateString()}</span>
+      </div>
+      
+      {/* --- [핵심] isOwner가 true일 때만 이 버튼들을 렌더링합니다. --- */}
+      {isOwner && (
+        <div className="flex space-x-4 mb-8">
+          <button 
+            onClick={() => alert('수정 기능은 곧 구현될 예정입니다!')} // TODO: 수정 페이지로 이동하는 로직 구현
+            className="px-4 py-2 text-sm font-medium text-white bg-yellow-500 rounded-md hover:bg-yellow-600"
+          >
+            수정
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-400"
+          >
+            {isDeleting ? '삭제 중...' : '삭제'}
+          </button>
         </div>
-        <div className="prose lg:prose-xl max-w-none whitespace-pre-wrap">{post.content}</div>
-        <div className="mt-12 border-t pt-6">
-          <Link href="/" className="text-blue-600 hover:underline">← 목록으로 돌아가기</Link>
-        </div>
-      </article>
-    </main>
+      )}
+
+      {/* 게시물 내용을 마크다운으로 렌더링하려면 별도 라이브러리가 필요합니다. 지금은 텍스트로 표시합니다. */}
+      <p className="whitespace-pre-wrap">{post.content}</p>
+    </article>
   );
 }

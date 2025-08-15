@@ -1,9 +1,12 @@
-// apps/frontend/src/components/SignUp.tsx 
+// 파일 위치: apps/frontend/src/components/SignUp.tsx (리팩토링)
 'use client';
 
 import { useState } from 'react';
+import { api } from '@/utils/api'; // [수정] 중앙 api 클라이언트를 import 합니다.
+import { useRouter } from 'next/navigation'; // [추가] 성공 시 페이지 이동을 위해 import 합니다.
 
 export default function SignUp() {
+    const router = useRouter(); // [추가]
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -11,30 +14,21 @@ export default function SignUp() {
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
-
         e.preventDefault();
         setIsLoading(true);
         setError(null);
         setSuccess(null);
 
-        // [핵심 수정 3] 이제부터는 항상 우리 사이트 내부의 상대 경로로 요청을 보냅니다.
-        const apiUrl = '/api/auth/signup';
-        console.log(`Requesting to: ${apiUrl}`);
-
         try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
+            // [수정] fetch 로직 전체를 api.signup 호출로 대체합니다.
+            const data = await api.signup({ email, password });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || '회원가입에 실패했습니다.');
-            }
-
-            setSuccess('회원가입에 성공했습니다! 이메일을 확인하여 계정을 활성화해주세요.');
+            setSuccess(data.message || '회원가입에 성공했습니다! 2초 후 로그인 페이지로 이동합니다.');
+            
+            // [추가] 성공 시, 2초 후에 로그인 페이지로 자동 이동시켜 사용자 경험을 개선합니다.
+            setTimeout(() => {
+                router.push('/login');
+            }, 2000);
 
         } catch (err) {
             if (err instanceof Error) {
@@ -48,51 +42,40 @@ export default function SignUp() {
     };
 
     return (
-        <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold text-center text-gray-900">*회원 가입*</h2>
-            <form className="space-y-6" onSubmit={handleSubmit}>
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                        E-mail
-                    </label>
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                        Password
-                    </label>
-                    <input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
-                    >
-                        {isLoading ? '가입하는 중...' : '가입하기'}
-                    </button>
-                </div>
-                {error && <p className="text-sm text-center text-red-600">{error}</p>}
-                {success && <p className="text-sm text-center text-green-600">{success}</p>}
-            </form>
-        </div>
+        // [수정] 최상위 div는 페이지 컴포넌트에서 처리하므로 제거합니다.
+        // 이렇게 해야 다른 페이지에서도 이 컴포넌트를 유연하게 재사용할 수 있습니다.
+        <form className="space-y-6" onSubmit={handleSubmit}>
+            {/* ... (기존 form 내용은 변경 없음) ... */}
+            <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                    E-mail
+                </label>
+                <input
+                    id="email" name="email" type="email" autoComplete="email" required
+                    value={email} onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+            </div>
+            <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                    Password
+                </label>
+                <input
+                    id="password" name="password" type="password" autoComplete="new-password" required
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+            </div>
+            <div>
+                <button
+                    type="submit" disabled={isLoading}
+                    className="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
+                >
+                    {isLoading ? '가입하는 중...' : '가입하기'}
+                </button>
+            </div>
+            {error && <p className="text-sm text-center text-red-600">{error}</p>}
+            {success && <p className="text-sm text-center text-green-600">{success}</p>}
+        </form>
     );
 }

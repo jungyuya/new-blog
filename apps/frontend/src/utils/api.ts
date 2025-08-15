@@ -5,15 +5,15 @@
 
 // [유지] Post 타입 정의는 데이터 구조를 명확히 하므로 그대로 유지합니다.
 export interface Post {
-    PK: string;
-    SK: string;
-    postId: string;
-    title: string;
-    content: string;
-    authorId: string; // [수정] '인가' 구현을 위해 authorId를 추가합니다.
-    authorEmail: string;
-    createdAt: string;
-    updatedAt: string;
+  PK: string;
+  SK: string;
+  postId: string;
+  title: string;
+  content: string;
+  authorId: string; // [수정] '인가' 구현을 위해 authorId를 추가합니다.
+  authorEmail: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // [유지] 환경 변수를 사용하는 방식은 유연성을 위해 그대로 유지합니다.
@@ -60,13 +60,32 @@ export const api = {
     });
   },
 
+  logout: (): Promise<{ message: string }> => {
+    return fetchWrapper('/auth/logout', {
+      method: 'POST',
+      // 로그아웃은 특별한 데이터를 보낼 필요가 없으므로 body가 없습니다.
+    });
+  },
+
+    signup: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
+    return fetchWrapper('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+      // [중요] 회원가입은 쿠키를 주고받을 필요가 없지만,
+      // fetchWrapper의 기본값을 따르는 것이 일관성에 좋습니다.
+    });
+  },
+
   // [추가] 현재 로그인된 사용자의 정보를 가져오는 함수
   // AuthContext에서 앱 시작 시 호출하여 세션 유효성을 검사합니다.
   fetchCurrentUser: (): Promise<{ user: { id: string; email: string } }> => {
     return fetchWrapper('/users/me', {
       method: 'GET',
     });
+
   },
+
+
 
   // TODO: 필요 시 logout, signup 등의 함수도 여기에 추가할 수 있습니다.
 
@@ -87,4 +106,18 @@ export const api = {
   },
 
   // TODO: Phase 7 후반부에 updatePost, deletePost 함수를 여기에 추가할 것입니다.
+
+  updatePost: (postId: string, postData: { title?: string; content?: string }): Promise<{ message: string; post: Post }> => {
+    return fetchWrapper(`/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify(postData),
+    });
+  },
+
+  deletePost: (postId: string): Promise<{ message: string }> => {
+    return fetchWrapper(`/posts/${postId}`, {
+      method: 'DELETE',
+    });
+  },
+
 };

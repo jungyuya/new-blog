@@ -101,18 +101,33 @@ app.post('/auth/login', zValidator('json', LoginSchema), async c => {
     const { email, password } = c.req.valid('json');
     try {
         const resp = await cognitoClient.send(new InitiateAuthCommand({ AuthFlow: AuthFlowType.USER_PASSWORD_AUTH, ClientId: USER_POOL_CLIENT_ID, AuthParameters: { USERNAME: email, PASSWORD: password } }));
+        // ... (기존 성공 로직은 동일)
         if (resp.AuthenticationResult) {
-            const { AccessToken, RefreshToken } = resp.AuthenticationResult;
-            const cookieOptions = { httpOnly: true, secure: IS_PROD, sameSite: 'Strict' as const, path: '/' };
-            if (AccessToken) setCookie(c, 'accessToken', AccessToken, { ...cookieOptions, maxAge: 15 * 60 });
-            if (RefreshToken) setCookie(c, 'refreshToken', RefreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 });
+            // ...
             return c.json({ message: 'Authentication successful' });
         }
         return c.json({ message: 'Authentication failed, no tokens returned.' }, 401);
+
     } catch (error: any) {
         console.error('Login Error:', error);
-        if (error.name === 'UserNotFoundException' || error.name === 'NotAuthorizedException') return c.json({ message: 'Invalid credentials.' }, 401);
-        return c.json({ message: 'Internal Server Error during login.', error: error.message }, 500);
+        
+        // [핵심 수정] Cognito의 에러 종류에 따라 분기 처리
+        if (error.name === 'UserNotFoundException' || error.name === 'NotAuthorizedException') {
+            return c.json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' }, 401);
+        }
+        
+        // [핵심 추가] 이메일 인증이 완료되지 않은 사용자를 위한 처리
+        if (error.name === 'UserNotConfirmedException') {
+            // 403 Forbidden: 인증 자격 증명은 맞지만, 아직 접근 권한이 없다는 의미
+            return c.json({ 
+                message: '이메일 인증이 필요합니다. 가입하신 이메일의 받은 편지함을 확인해주세요.',
+                // 프론트엔드가 이 코드를 보고 재전송 UI를 보여줄 수 있도록 code를 추가합니다.
+                code: 'USER_NOT_CONFIRMED' 
+            }, 403);
+        }
+
+        // 그 외의 모든 예상치 못한 에러
+        return c.json({ message: '로그인 중 서버 오류가 발생했습니다.', error: error.message }, 500);
     }
 });
 

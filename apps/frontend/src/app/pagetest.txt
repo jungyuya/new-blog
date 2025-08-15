@@ -37,7 +37,7 @@ export default function Home() {
             Deep Dive!🐬
           </h1>
           <p className="mt-6 text-lg font-medium text-blue-800 transition-transform duration-300 hover:rotate-1">
-            🛠️인테리어 & 여름 휴가 중⛵
+            🛠️인테리어 & 여름  {'천국\'s'} 휴가 중⛵
           </p>
         </div>
 
