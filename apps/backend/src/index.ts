@@ -23,6 +23,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import { v4 as uuidv4 } from 'uuid'; // 고유 ID 생성을 위해
 import { Hono, Context } from 'hono'; // Hono 프레임워크 및 Context 타입 임포트
+import { cors } from 'hono/cors'; // [추가] Hono의 CORS 미들웨어를 import 합니다.
 import { handle, LambdaEvent, LambdaContext } from 'hono/aws-lambda'; // LambdaEvent, LambdaContext 임포트
 import { z, ZodError, ZodIssue } from 'zod'; // Zod 라이브러리 및 ZodError, ZodIssue 타입 임포트
 import { zValidator } from '@hono/zod-validator'; // 올바른 패키지: @hono/zod-validator 임포트
@@ -112,6 +113,17 @@ const UpdatePostSchema = z.object({
 // 6. Hono 앱 초기화
 // ---------------------------
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>().basePath('/api');
+// 역할: 브라우저의 Preflight(OPTIONS) 요청을 자동으로 처리하고,
+//       허용된 출처(Origin)에 대해 API 접근을 허용하는 헤더를 응답에 추가합니다.
+app.use('*', cors({
+  origin: [
+    'http://localhost:3000',      // 로컬 프론트엔드 개발 서버
+    'https://blog.jungyu.store'  // 실제 배포될 프론트엔드 도메인
+  ],
+  credentials: true, // [핵심] 쿠키를 주고받기 위해 반드시 true로 설정해야 합니다.
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // ---------------------------
 // 7. 커스텀 미들웨어: JWT 인증

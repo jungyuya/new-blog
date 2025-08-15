@@ -1,14 +1,19 @@
-// apps/frontend/src/app/page.tsx (SignUp 폼추가)
-import SignUp from '@/components/SignUp'; // SignUp 컴포넌트를 import 합니다.
+import SignUp from '@/components/SignUp';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold">Deep Dive!🐬</h1>
-        <p className="text-lg text-gray-600 mt-2">이제 고속도로 위에서 진정한 개발을 시작해볼까?</p>
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sky-200 via-sky-300 to-blue-400 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white/80 backdrop-blur-sm p-8 shadow-lg">
+        <div className="mb-8 text-center">
+          <h1 className="text-5xl font-bold text-sky-600">
+              Deep Dive!🐬
+          </h1>
+          <p className="mt-4 text-lg text-blue-800">
+            구름 사이로 펼쳐지는 무한한 창공
+          </p>
+        </div>
+        <SignUp />
       </div>
-      <SignUp />
     </main>
   );
 }

@@ -60,6 +60,14 @@ export const api = {
     });
   },
 
+  // [추가] 현재 로그인된 사용자의 정보를 가져오는 함수
+  // AuthContext에서 앱 시작 시 호출하여 세션 유효성을 검사합니다.
+  fetchCurrentUser: (): Promise<{ user: { id: string; email: string } }> => {
+    return fetchWrapper('/users/me', {
+      method: 'GET',
+    });
+  },
+
   // TODO: 필요 시 logout, signup 등의 함수도 여기에 추가할 수 있습니다.
 
   // --- Post APIs ---

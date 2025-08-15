@@ -1,8 +1,8 @@
-// apps/frontend/src/app/layout.tsx (임시 수정본)
+// 파일 위치: apps/frontend/src/app/layout.tsx (수정)
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-// import Providers from "./providers"; // 1. Providers import 구문 주석 처리 또는 삭제
+import Providers from "./providers"; // 1. Providers import 구문을 다시 활성화합니다.
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,8 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* <Providers>{children}</Providers> */} {/* 2. Providers로 감싸던 부분 제거 */}
-        {children} {/* 3. children을 직접 렌더링 */}
+        <Providers>{children}</Providers> {/* 2. children을 Providers로 다시 감싸줍니다. */}
       </body>
     </html>
   );

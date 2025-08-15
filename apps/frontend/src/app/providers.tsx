@@ -1,8 +1,15 @@
-// apps/frontend/src/app/providers.tsx (임시 수정본)
+// 파일 위치: apps/frontend/src/app/providers.tsx
+// 역할: 애플리케이션에서 사용될 모든 전역 Provider들을 한 곳에서 관리합니다.
+
 'use client';
 
-// 모든 Amplify 관련 로직을 제거하고,
-// 단순히 자식 컴포넌트를 그대로 렌더링하는 역할만 수행합니다.
-export default function Providers({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+import { AuthProvider } from '@/contexts/AuthContext';
+import { ReactNode } from 'react';
+
+export default function Providers({ children }: { children: ReactNode }) {
+  return (
+    <AuthProvider>
+      {children}
+    </AuthProvider>
+  );
 }
