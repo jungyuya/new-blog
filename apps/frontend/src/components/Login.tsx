@@ -4,11 +4,12 @@
 'use client';
 
 import { useState } from 'react';
-// [수정] useRouter와 api 대신, 우리가 만든 useAuth 훅을 import 합니다.
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation'; // [추가] useRouter를 다시 import 합니다.
 
 export default function Login() {
   // [수정] AuthContext에서 login 함수와 isLoading 상태를 직접 가져옵니다.
+  const router = useRouter();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,23 +24,17 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
+      // 1. AuthContext의 login 함수를 호출합니다.
       await login({ email, password });
-      // 성공 시 페이지 이동은 AuthContext가 처리
+      
+      // 2. [핵심] login 함수가 에러 없이 성공적으로 완료되면,
+      //    이곳에서 명시적으로 페이지 이동을 실행합니다.
+      router.push('/');
 
     } catch (err) {
       console.error('Login failed:', err);
-      
-      // [핵심 수정] 백엔드에서 보낸 상세 에러 정보를 활용합니다.
-      // fetchWrapper가 response.json()을 파싱하여 에러를 throw 하므로,
-      // err.cause에 상세 정보가 담겨 있을 수 있습니다. (라이브러리 버전에 따라 다를 수 있음)
-      // 가장 안전한 방법은 err.message를 그대로 사용하는 것입니다.
       if (err instanceof Error) {
         setError(err.message);
-
-        // [핵심 추가] 이메일 재전송 UI를 보여주는 로직 (미래 확장)
-        // if (err.message.includes("이메일 인증")) {
-        //   // 여기에 "인증 이메일 재전송" 버튼을 보여주는 상태(state)를 true로 설정할 수 있습니다.
-        // }
       } else {
         setError('알 수 없는 오류가 발생했습니다.');
       }

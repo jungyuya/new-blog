@@ -56,21 +56,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // [추가] 로그인 함수
   const login = async (credentials: { email: string; password: string }) => {
-    try {
-      await api.login(credentials); // 1. API를 호출하여 서버에 쿠키를 생성합니다.
-      await checkUserStatus();      // 2. 성공하면, 사용자 정보를 다시 가져와 React 상태를 업데이트합니다.
-      router.push('/');             // 3. 홈페이지로 이동합니다.
-    } catch (error) {
-      console.error('Login failed in AuthContext:', error);
-      // 에러를 다시 throw하여, Login.tsx 컴포넌트가 받아서 UI에 에러 메시지를 표시할 수 있도록 합니다.
-      throw error;
-    }
+    await api.login(credentials); // 1. API를 호출하여 서버에 쿠키를 생성합니다.
+    await checkUserStatus();      // 2. 성공하면, 사용자 정보를 다시 가져와 React 상태를 업데이트합니다.
+                                  // 3. 페이지 이동은 이 함수를 호출한 컴포넌트(Login.tsx)가 책임집니다.
   };
 
   // [추가] 로그아웃 함수
   const logout = async () => {
     try {
-      // TODO: 백엔드에 /api/auth/logout 엔드포인트가 구현되면 아래 주석을 해제합니다.
       await api.logout();
       setUser(null);      // React 상태를 즉시 비웁니다.
       router.push('/'); // 홈페이지로 이동합니다.

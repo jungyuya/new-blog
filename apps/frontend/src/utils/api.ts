@@ -17,13 +17,14 @@ export interface Post {
 // 기존: const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
 // 변경: 외부 환경 변수에 대한 의존성을 제거하고, 항상 '/api'라는 고정된 값을 사용하도록 변경합니다.
 // 이제 이 코드는 어떤 환경에서 실행되든 항상 동일하게 동작합니다.
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT || '/api';
+
 // --- [수정 완료] ---
 
 
 // fetchWrapper 함수는 URL 조합 방식 외에는 변경점이 없습니다.
 async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${path}`; // 예: '/api' + '/auth/login' = '/api/auth/login'
+  const url = `${API_BASE_URL}${path}`;
 
   const defaultOptions: RequestInit = {
     headers: {
