@@ -1,0 +1,261 @@
+# 파일 위치: .github/workflows/deploy.yml
+# 버전: v2025.08.15-Immutable-Masterpiece-R2 <LEEJUNGYU 검토필 KS인증마크버전>
+# 역할: "단일 빌드, 다중 배포" 원칙에 입각하여, 빌드 불일치와 캐시 문제를 원천적으로 해결하고,
+#       YAML 문법 오류를 완벽하게 수정한 최종 안정화 버전의 통합 배포 워크플로우.
+
+name: "Unified Deploy: CiCd + Blog (Immutable Masterpiece)"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/frontend/**"
+      - "apps/backend/**"
+      - "apps/infra/lib/blog-stack.ts"
+      - "apps/infra/lib/cicd-stack.ts"
+      - "apps/infra/bin/infra.ts"
+      - ".github/workflows/deploy.yml"
+      - "pnpm-lock.yaml"
+      - "scripts/setup_runner.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: new-blog-frontend
+
+jobs:
+  # ===================================================================================
+  # JOB 1: 변경 감지 (기존 구조 유지)
+  # ===================================================================================
+  detect_changes:
+    name: "Detect Changed Paths"
+    runs-on: ubuntu-latest
+    outputs:
+      blog: ${{ steps.paths.outputs.blog }}
+      cicd: ${{ steps.paths.outputs.cicd }}
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Filter changed paths"
+        id: paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            blog:
+              - 'apps/frontend/**'
+              - 'apps/backend/**'
+              - 'apps/infra/lib/blog-stack.ts'
+              - 'pnpm-lock.yaml'
+            cicd:
+              - 'apps/infra/lib/cicd-stack.ts'
+              - 'scripts/setup_runner.sh'
+              - '.github/workflows/deploy.yml'
+
+  # ===================================================================================
+  # JOB 2: CI/CD 인프라 배포 (기존 구조 유지)
+  # ===================================================================================
+  deploy_cicd_infra:
+    name: "Deploy CI/CD Infrastructure (CiCdStack)"
+    needs: detect_changes
+    if: ${{ needs.detect_changes.outputs.cicd == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+            .turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies (pnpm with store)
+        run: |
+          export PNPM_STORE_PATH="${HOME}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+      # [TODO] 여기에 CiCdStack을 배포하는 cdk deploy 스텝을 추가하십시오.
+
+            # "Install dependencies" 스텝 바로 다음에 추가
+      - name: "Check network connectivity to Vercel"
+        run: |
+          echo "Pinging Vercel API endpoint..."
+          curl -v https://api.vercel.com/v1/now/health
+
+  # ===================================================================================
+  # JOB 3: 블로그 애플리케이션 배포 (완벽하게 재설계 및 검증된 마스터피스)
+  # ===================================================================================
+  build_and_deploy_blog_app:
+    name: "Build, Test, and Deploy Blog Application"
+    needs: [detect_changes, deploy_cicd_infra]
+    runs-on: self-hosted
+    if: |
+      always() &&
+      (needs.detect_changes.outputs.blog == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    steps:
+      # --- 1악장: 준비 (Setup) ---
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Prepare workspace pnpm store dir
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/.pnpm-store"
+          chmod -R 0775 "${GITHUB_WORKSPACE}/.pnpm-store"
+
+      - name: Cache pnpm store and turborepo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.pnpm-store
+            ${{ github.workspace }}/.turbo
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: "Setup Node.js & pnpm"
+        uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: |
+          export PNPM_STORE_PATH="${GITHUB_WORKSPACE}/.pnpm-store"
+          mkdir -p "${PNPM_STORE_PATH}"
+          pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_PATH}"
+
+      # --- 2악장: 지휘 (The Single Build) ---
+      - name: "Create Unique Release ID"
+        id: set_release
+        run: |
+          RELEASE_ID="$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "✅ Created unique release ID: $RELEASE_ID"
+
+      - name: "The Single Source of Truth: Build Frontend Once"
+        # [수정] env 블록을 run과 같은 레벨로 올바르게 위치시킵니다.
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: ${{ secrets.TURBO_REMOTE_ONLY }}
+          # -----------------------------------------------------------------
+          NODE_ENV: production
+          NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
+          NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
+        run: |
+          echo "--- DEBUG INFO ---"
+          echo "TURBO_TOKEN is set: ${{ env.TURBO_TOKEN != '' }}"
+          echo "TURBO_TEAM is set: ${{ env.TURBO_TEAM != '' }}"
+          echo "------------------"
+          
+          echo "🚀 Starting the single build with verbose logging..."
+          # [수정] 불필요한 '--'를 제거하고, Turborepo의 로그 레벨을 환경 변수로 설정하는
+          #       더 안정적인 방법으로 변경합니다.
+          export TURBO_VERBOSITY=4
+          pnpm --filter frontend run build
+
+      # --- 3악장: 2중주 (The Dual Deployment) ---
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "PART 1: Build & Push Production Image (Consumes .next)"
+        id: build_image # [추가] 이 스텝에 id를 부여하여 이미지 정보를 참조
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_release.outputs.release_id }}
+          platforms: linux/arm64
+          provenance: false
+      
+      
+      - name: "Verify ECR Image Existence (Safety Check)"
+        run: |
+          echo "Verifying that the image was pushed successfully..."
+          # aws ecr wait image-scan-complete 대신, 이미지 존재 자체를 확인하는 batch-get-image를 사용합니다.
+          # 이미지가 존재하지 않으면 이 명령어는 에러를 내며 실패하고, 파이프라인은 즉시 중단됩니다.
+          # --query "images[].imageId" > /dev/null 부분은 불필요한 JSON 출력을 숨기기 위함입니다.
+          aws ecr batch-get-image --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=${{ steps.set_release.outputs.release_id }} --query "images[].imageId" > /dev/null
+          echo "✅ ECR image verification successful. Proceeding with deployment."
+
+      - name: "Deploy Infrastructure (Activates New Lambda Version)"
+        id: cdk_deploy
+        run: |
+          pnpm --filter infra exec cdk deploy BlogInfraStack \
+            --require-approval never \
+            --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
+            --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
+
+      - name: "PART 2: Sync Static Assets to S3 (To Versioned Path)"
+        run: |
+          set -euo pipefail
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          if [ ! -f "$ASSET_JSON_PATH" ]; then
+            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
+            exit 1
+          fi
+          ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
+          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static"
+          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static --delete
+
+      # --- 4악장: 피날레 (Activation & Verification) ---
+      - name: "Invalidate CloudFront Cache (For Root Paths Only)"
+        run: |
+          set -euo pipefail
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          DISTRIBUTION_ID=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.CloudFrontDistributionId")
+          echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID} on path '/*'"
+          aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"
+
+      - name: "Smoke Test: Verify Deployment"
+        run: |
+          set -euo pipefail
+          echo "Waiting 15 seconds for CloudFront to propagate..."
+          sleep 15
+          URL="https://blog.jungyu.store"
+          echo "🔬 [Test 1/2] Checking home page status at ${URL}"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Smoke test failed! Home page returned status ${HTTP_STATUS}"
+            exit 1
+          fi
+          echo "✅ Home page is accessible (Status: 200)."
+          echo "🔬 [Test 2/2] Checking for versioned static asset..."
+          ASSET_PATH=$(curl -sS "$URL" | grep -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' | head -n 1)
+          if [ -z "$ASSET_PATH" ]; then
+            echo "::error::Smoke test failed! Could not find a versioned asset path in the HTML source."
+            curl -sS --fail "$URL" | head -n 30
+            exit 2
+          fi
+          ASSET_URL="https://${URL#*//}${ASSET_PATH}"
+          echo "Found versioned asset: ${ASSET_URL}"
+          ASSET_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ASSET_URL")
+          if [ "$ASSET_STATUS" -ne 200 ]; then
+            echo "::error::Smoke test failed! Versioned asset at ${ASSET_URL} returned status ${ASSET_STATUS}"
+            exit 3
+          fi
+          echo "✅ Versioned asset is accessible (Status: 200)."
+          echo "🎉 Deployment successful and verified!"

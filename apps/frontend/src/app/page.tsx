@@ -9,7 +9,7 @@ export default function Home() {
               Deep Dive!🐬
           </h1>
           <p className="mt-4 text-lg text-blue-800">
-            구름 사이로 펼쳐지는 무한한 창공
+             🛠️인테리어 & 여름 휴가 중⛵
           </p>
         </div>
         <SignUp />
