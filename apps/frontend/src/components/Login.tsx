@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Login() {
   // [수정] AuthContext에서 login 함수와 isLoading 상태를 직접 가져옵니다.
-  const { login, isLoading: isAuthLoading } = useAuth(); 
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
