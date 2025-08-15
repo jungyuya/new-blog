@@ -1,59 +1,86 @@
-// 파일 위치: apps/frontend/src/contexts/AuthContext.tsx
-// 역할: 애플리케이션 전체의 인증 상태(사용자 정보, 로딩 상태)를 관리하고 공유하는 Context를 정의합니다.
+// 파일 위치: apps/frontend/src/contexts/AuthContext.tsx (v2.0 최종 리팩토링)
+// 역할: 모든 인증 로직(상태, API 호출)을 중앙에서 관리하는 최종 버전.
 
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// [수정] 백엔드에서 사용자 정보를 가져오기 위한 api 객체를 임포트합니다.
-// GET /api/users/me 엔드포인트가 필요하므로, api.ts에 해당 함수를 추가해야 합니다.
-// 지금은 임시로 주석 처리하고, 다음 단계에서 api.ts를 수정하겠습니다.
-// import { api } from '@/utils/api'; 
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { api } from '@/utils/api'; 
+import { useRouter } from 'next/navigation';
 
-// 사용자 정보의 타입을 정의합니다. 백엔드의 응답과 일치해야 합니다.
+// 사용자 정보 타입 (변경 없음)
 interface User {
   id: string;
   email: string;
 }
 
-// Context가 제공할 값들의 타입을 정의합니다.
+// [개선] Context가 제공할 값들의 타입을 확장합니다.
+// 로그인/로그아웃 함수를 추가하여 외부 컴포넌트에서 호출할 수 있도록 합니다.
 interface AuthContextType {
-  user: User | null;      // 현재 로그인된 사용자 정보 (없으면 null)
-  isLoading: boolean;     // 사용자 정보를 불러오는 중인지 여부
-  // TODO: 로그인, 로그아웃 함수도 여기에 추가될 예정입니다.
+  user: User | null;
+  isLoading: boolean;
+  login: (credentials: { email: string; password: string }) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
-// Context 객체를 생성합니다. 초기값은 undefined로 설정하여,
-// Provider 없이 사용될 경우 에러를 발생시키도록 합니다.
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 자식 컴포넌트들에게 인증 상태를 제공하는 Provider 컴포넌트입니다.
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // 앱 시작 시 항상 로딩 상태로 시작
+  const [isLoading, setIsLoading] = useState(true);
+
+  // [개념 설명] useCallback: React의 성능 최적화 훅(Hook)입니다.
+  // 무엇(What): 함수를 메모리에 '기억(memoization)'해두는 역할을 합니다.
+  // 왜(Why): 이 훅으로 감싸진 함수는, 의존성 배열([])의 값이 변경되지 않는 한,
+  // 컴포넌트가 리렌더링 되어도 새로 생성되지 않습니다.
+  // 이는 AuthProvider를 사용하는 자식 컴포넌트들의 불필요한 리렌더링을 방지하여 성능을 향상시킵니다.
+  const checkUserStatus = useCallback(async () => {
+    try {
+      const response = await api.fetchCurrentUser(); 
+      if (response.user) {
+        setUser(response.user);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.warn('AuthProvider: No active user session found.', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // 의존성 배열이 비어있으므로, 이 함수는 앱 전체 생명주기 동안 단 한번만 생성됩니다.
 
   useEffect(() => {
-    // 컴포넌트가 처음 마운트될 때, 쿠키를 통해 로그인 상태를 확인하는 함수를 호출합니다.
-    const checkUserStatus = async () => {
-      try {
-        // [임시] 아직 /api/users/me가 없으므로, 일단 비로그인 상태로 처리합니다.
-        // TODO: 아래 주석을 해제하고 실제 API를 호출해야 합니다.
-        // const response = await api.fetchCurrentUser(); 
-        // setUser(response.user);
-        console.log("AuthProvider: No user session found (placeholder).");
-      } catch (error) {
-        // API 호출 실패 시 (예: 유효하지 않은 쿠키), 비로그인 상태로 간주합니다.
-        console.error('Failed to fetch current user:', error);
-        setUser(null);
-      } finally {
-        // API 호출이 성공하든 실패하든, 로딩 상태를 해제합니다.
-        setIsLoading(false);
-      }
-    };
-
     checkUserStatus();
-  }, []); // [] 의존성 배열은 이 useEffect가 컴포넌트 마운트 시 한 번만 실행되도록 합니다.
+  }, [checkUserStatus]); // checkUserStatus 함수가 변경될 때만 실행됩니다 (실질적으로는 최초 1회).
 
-  const value = { user, isLoading };
+  // [추가] 로그인 함수
+  const login = async (credentials: { email: string; password: string }) => {
+    try {
+      await api.login(credentials); // 1. API를 호출하여 서버에 쿠키를 생성합니다.
+      await checkUserStatus();      // 2. 성공하면, 사용자 정보를 다시 가져와 React 상태를 업데이트합니다.
+      router.push('/');             // 3. 홈페이지로 이동합니다.
+    } catch (error) {
+      console.error('Login failed in AuthContext:', error);
+      // 에러를 다시 throw하여, Login.tsx 컴포넌트가 받아서 UI에 에러 메시지를 표시할 수 있도록 합니다.
+      throw error;
+    }
+  };
+
+  // [추가] 로그아웃 함수
+  const logout = async () => {
+    try {
+      // TODO: 백엔드에 /api/auth/logout 엔드포인트가 구현되면 아래 주석을 해제합니다.
+      // await api.logout();
+      setUser(null);      // React 상태를 즉시 비웁니다.
+      router.push('/'); // 홈페이지로 이동합니다.
+    } catch (error) {
+      console.error('Logout failed in AuthContext:', error);
+      throw error;
+    }
+  };
+
+  const value = { user, isLoading, login, logout };
 
   return (
     <AuthContext.Provider value={value}>
@@ -62,11 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// 컴포넌트에서 Context를 쉽게 사용하기 위한 커스텀 훅입니다.
+// useAuth 훅 (변경 없음)
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // AuthProvider로 감싸져 있지 않은 곳에서 이 훅을 사용하면 에러를 발생시킵니다.
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

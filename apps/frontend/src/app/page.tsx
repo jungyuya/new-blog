@@ -15,8 +15,8 @@ export default function Home() {
           <h1 className="text-5xl font-extrabold text-sky-600 drop-shadow-lg transition-colors duration-500 hover:text-blue-500">
             Deep Dive!🐬
           </h1>
-          <p className="mt-4 text-lg font-medium text-blue-800 transition-transform duration-300 hover:rotate-1">
-            🛠️인테리어 & 여름 휴가 중⛵
+          <p className="mt-4 text-lg font-medium text-blue-900 transition-transform duration-300 hover:rotate-1">
+            🛠️인테리어 중 && 여름 휴가 중!⛵
           </p>
         </div>
         <SignUp />

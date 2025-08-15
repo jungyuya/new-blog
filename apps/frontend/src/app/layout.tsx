@@ -2,7 +2,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Providers from "./providers"; // 1. Providers import 구문을 다시 활성화합니다.
+import Providers from "./providers";
+import Header from "@/components/Header"; // 1. Header 컴포넌트를 import 합니다.
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,7 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>{children}</Providers> {/* 2. children을 Providers로 다시 감싸줍니다. */}
+        <Providers>
+          <Header /> {/* 2. Providers 바로 안쪽에 Header를 추가합니다. */}
+          <main className="container mx-auto px-6 py-8"> {/* 3. 메인 컨텐츠 영역을 감싸줍니다. */}
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );
