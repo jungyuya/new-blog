@@ -28,7 +28,7 @@ export default function Login() {
       await login({ email, password });
       
       // 2. [핵심] login 함수가 에러 없이 성공적으로 완료되면,
-      //    이곳에서 명시적으로 페이지 이동을 실행합니다.
+      //   이곳에서 명시적으로 페이지 이동을 실행합니다.
       router.push('/');
 
     } catch (err) {
