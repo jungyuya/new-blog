@@ -16,23 +16,13 @@ export interface Post {
 // --- [핵심 업그레이드] ---
 // 실행 환경에 따라 다른 API 기본 URL을 반환하는 함수입니다.
 const getApiBaseUrl = () => {
-  // 'typeof window'는 JavaScript가 실행되는 환경을 감지하는 가장 표준적인 방법입니다.
-  // 브라우저 환경(클라이언트): 'window' 객체가 존재하므로 'object'를 반환합니다.
-  // Node.js 환경(서버): 'window' 객체가 없으므로 'undefined'를 반환합니다.
   if (typeof window === 'undefined') {
-    // 여기는 서버 환경에서만 실행되는 코드입니다 (e.g., 서버 컴포넌트).
-    // 서버는 외부와 통신해야 하므로, 반드시 전체 주소(절대 경로)가 필요합니다.
-    // 이 값은 이후 Step 2에서 Lambda의 런타임 환경 변수로 주입해 줄 것입니다.
     return process.env.INTERNAL_API_ENDPOINT;
   }
-  
-  // 여기는 브라우저 환경에서만 실행되는 코드입니다 (e.g., 클라이언트 컴포넌트).
-  // 브라우저는 현재 도메인을 기준으로 요청을 보내므로, 상대 경로를 사용합니다.
-  // 이 요청은 CloudFront 또는 Next.js의 rewrites 프록시가 가로채서 백엔드로 전달합니다.
   return '/api';
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+const API_BASE_URL = getApiBaseUrl();
 // --- [업그레이드 완료] ---
 
 

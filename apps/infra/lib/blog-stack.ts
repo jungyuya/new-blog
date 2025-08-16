@@ -143,6 +143,7 @@ export class BlogStack extends Stack {
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
         PORT: '3000',
         NEXT_PUBLIC_API_ENDPOINT: '/api',
+        INTERNAL_API_ENDPOINT: httpApi.url!,
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
