@@ -32,7 +32,7 @@ const getApiBaseUrl = () => {
   return '/api';
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT || '/api'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
 // --- [업그레이드 완료] ---
 
 

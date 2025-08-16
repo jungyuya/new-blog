@@ -24,15 +24,6 @@ const nextConfig = {
     NEXT_PUBLIC_RELEASE_ID: process.env.NEXT_PUBLIC_RELEASE_ID || '',
   },
 
-  // 개발 환경에서만 동작하는 리라이트(프록시)
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:4000/api/:path*',
-      },
-    ];
-  },
 };
 
 module.exports = nextConfig;
