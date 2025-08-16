@@ -1,27 +1,51 @@
-import SignUp from '@/components/SignUp';
-import { Inter } from 'next/font/google';
+// 파일 위치: apps/frontend/src/app/page.tsx (수정)
+// 역할: 블로그의 메인 페이지. 서버 컴포넌트로서 전체 게시물 목록을 보여줍니다.
 
-const inter = Inter({ subsets: ['latin'] });
+import { api, Post } from "@/utils/api";
+import Link from "next/link";
 
-export default function Home() {
+// [개념 설명] 이 페이지는 'use client' 지시어가 없으므로 '서버 컴포넌트'입니다.
+// 따라서 이 async 함수는 사용자의 브라우저가 아닌, 서버(AWS Lambda)에서 실행됩니다.
+export default async function HomePage() {
+  
+  let posts: Post[] = [];
+  let error: string | null = null;
+
+  try {
+    // 서버 환경에서 api.fetchPosts()를 호출합니다.
+    // api.ts의 getApiBaseUrl() 함수가 서버 환경임을 인지하고,
+    // INTERNAL_API_ENDPOINT 환경 변수를 사용하여 절대 경로로 API를 호출합니다.
+    const response = await api.fetchPosts();
+    posts = response.posts;
+  } catch (err) {
+    console.error("Failed to fetch posts on server:", err);
+    error = "게시물 목록을 불러오는 데 실패했습니다.";
+  }
+
   return (
-    <main className={`relative flex min-h-screen items-center justify-center bg-gradient-to-br from-sky-200 via-sky-300 to-blue-400 p-4 overflow-hidden ${inter.className}`}>
+    <div>
+      <h1 className="text-3xl font-bold mb-8">최신 게시물</h1>
       
-      {/* 마우스를 따라 움직이는 그라데이션 효과 (애니메이션) */}
-      <div className="absolute top-0 left-0 w-full h-full animate-gradient-move"></div>
-
-      <div className="relative z-10 w-full max-w-md rounded-xl bg-white/80 backdrop-blur-sm p-8 shadow-2xl transition-all duration-300 hover:shadow-sky-500/50">
-        <div className="mb-8 text-center">
-          <h1 className="text-5xl font-extrabold text-sky-600 drop-shadow-lg transition-colors duration-500 hover:text-blue-500">
-            Deep Dive!🐬
-          </h1>
-          <p className="mt-4 text-lg font-medium text-blue-900 transition-transform duration-300 hover:rotate-1">
-            🛠️인테리어 중 && 여름 휴가 중!⛵
-          </p>
+      {error ? (
+        <p className="text-red-500">{error}</p>
+      ) : posts.length > 0 ? (
+        <div className="space-y-6">
+          {posts.map((post) => (
+            <Link 
+              href={`/posts/${post.postId}`} 
+              key={post.postId} 
+              className="block p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100"
+            >
+              <h2 className="mb-2 text-2xl font-bold tracking-tight text-gray-900">{post.title}</h2>
+              <p className="font-normal text-gray-700">
+                작성자: {post.authorEmail} | 작성일: {new Date(post.createdAt).toLocaleDateString()}
+              </p>
+            </Link>
+          ))}
         </div>
-        <SignUp />
-        
-      </div>
-    </main>
+      ) : (
+        <p>아직 작성된 게시물이 없습니다.</p>
+      )}
+    </div>
   );
 }
