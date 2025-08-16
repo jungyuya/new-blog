@@ -31,6 +31,21 @@ const API_BASE_URL = getApiBaseUrl();
 async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
 
+  // --- [SSR 쿠키 처리 로직 추가 시작] ---
+  const headers = new Headers(options.headers || {});
+  headers.set('Content-Type', 'application/json');
+
+  if (typeof window === 'undefined') {
+    // 서버 환경일 경우, next/headers에서 쿠키를 동적으로 import하여 사용합니다.
+    // 이 방식은 Next.js가 서버 컴포넌트 렌더링 과정에서 쿠키에 접근할 수 있도록 해줍니다.
+    const { cookies } = await import('next/headers');
+    const cookieHeader = cookies().toString();
+    if (cookieHeader) {
+      headers.set('Cookie', cookieHeader);
+    }
+  }
+  // --- [SSR 쿠키 처리 로직 추가 끝] ---
+
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
