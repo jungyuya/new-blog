@@ -6,6 +6,7 @@ import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation'; // [추가] 404 페이지를 보여주기 위한 Next.js 내장 함수
 
 // [개선] 이 컴포넌트는 서버에서 데이터를 fetch하므로 async 함수로 유지합니다.
+export const dynamic = 'force-dynamic';
 export default async function PostDetailPage({ params }: { params: { postId: string } }) {
   const awaitedParams = await params;
   const { postId } = awaitedParams;

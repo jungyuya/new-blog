@@ -1,6 +1,7 @@
-// 파일 위치: apps/frontend/src/utils/api.ts (v4.0 - Environment Aware)
-// 역할: 실행 환경(서버/클라이언트)을 스스로 인지하여, 올바른 API 엔드포인트를 사용하는 최종 버전.
+// 파일 위치: apps/frontend/src/utils/api.ts (v4.5 - Final Verified Code)
+// 역할: TypeScript 오류를 모두 해결하고, cookies()의 비동기 특성을 완벽히 처리하는 최종 버전.
 
+// Post 타입을 여기에 직접 정의합니다.
 export interface Post {
     PK: string;
     SK: string;
@@ -13,8 +14,6 @@ export interface Post {
     updatedAt: string;
 }
 
-// --- [핵심 업그레이드] ---
-// 실행 환경에 따라 다른 API 기본 URL을 반환하는 함수입니다.
 const getApiBaseUrl = () => {
   if (typeof window === 'undefined') {
     return process.env.INTERNAL_API_ENDPOINT;
@@ -23,36 +22,35 @@ const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
-// --- [업그레이드 완료] ---
 
-
-// fetchWrapper와 api 객체는 이제 이 똑똑해진 API_BASE_URL을 사용하므로,
-// 코드 변경 없이도 모든 환경에서 올바르게 동작하게 됩니다.
 async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
 
-  // --- [SSR 쿠키 처리 로직 추가 시작] ---
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
 
   if (typeof window === 'undefined') {
-    // 서버 환경일 경우, next/headers에서 쿠키를 동적으로 import하여 사용합니다.
-    // 이 방식은 Next.js가 서버 컴포넌트 렌더링 과정에서 쿠키에 접근할 수 있도록 해줍니다.
     const { cookies } = await import('next/headers');
-    const cookieHeader = cookies().toString();
-    if (cookieHeader) {
+    
+    // [핵심 최종 수정 1] cookies()는 Promise를 반환하므로 반드시 await으로 실제 객체를 가져옵니다.
+    const cookieStore = await cookies();
+    
+    const allCookies = cookieStore.getAll();
+    
+    if (allCookies.length > 0) {
+      // [핵심 최종 수정 2] map의 인자에 명시적 타입을 추가하여 암시적 'any' 오류를 방지합니다.
+      const cookieHeader = allCookies
+        .map((cookie: { name: string; value: string }) => `${cookie.name}=${cookie.value}`)
+        .join('; ');
       headers.set('Cookie', cookieHeader);
     }
   }
-  // --- [SSR 쿠키 처리 로직 추가 끝] ---
 
   const defaultOptions: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    credentials: 'include',
     ...options,
+    headers: headers,
+    credentials: 'include',
+    cache: 'no-store', // Next.js 데이터 캐시 비활성화
   };
 
   const response = await fetch(url, defaultOptions);
@@ -69,7 +67,6 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   return Promise.resolve({} as T);
 }
 
-// api 객체는 변경할 필요가 없습니다.
 export const api = {
   // --- Auth APIs ---
   login: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
@@ -78,7 +75,6 @@ export const api = {
       body: JSON.stringify(credentials),
     });
   },
-  // ... (이하 모든 함수는 기존과 동일)
   fetchCurrentUser: (): Promise<{ user: { id: string; email: string } }> => {
     return fetchWrapper('/users/me', { method: 'GET' });
   },

@@ -6,6 +6,7 @@ import Link from "next/link";
 
 // [개념 설명] 이 페이지는 'use client' 지시어가 없으므로 '서버 컴포넌트'입니다.
 // 따라서 이 async 함수는 사용자의 브라우저가 아닌, 서버(AWS Lambda)에서 실행됩니다.
+export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   
   let posts: Post[] = [];
