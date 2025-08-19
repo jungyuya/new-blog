@@ -8,6 +8,7 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import { CfnUserPoolGroup } from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -56,6 +57,13 @@ export class BlogStack extends Stack {
       accessTokenValidity: Duration.days(1),
       idTokenValidity: Duration.days(1),
       refreshTokenValidity: Duration.days(90),
+    });
+
+    new cognito.CfnUserPoolGroup(this, 'AdminsGroup', {
+      groupName: 'Admins', // 그룹 이름
+      userPoolId: userPool.userPoolId, // 이 그룹이 속할 User Pool의 ID
+      description: 'Administrators with full access permissions', // 그룹에 대한 설명
+      precedence: 0, // 우선순위 (숫자가 낮을수록 높음)
     });
 
     const postsTable = new dynamodb.Table(this, 'BlogPostsTable', {
