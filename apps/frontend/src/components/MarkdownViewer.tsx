@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { materialDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { CSSProperties } from 'react'; // [추가]
 import { ComponentProps } from 'react';
 import '@toast-ui/editor/dist/toastui-editor-viewer.css';
 
@@ -30,7 +31,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
                         return match ? (
                             <SyntaxHighlighter
                                 // [해결] style prop의 타입 불일치 문제를 해결하기 위해 any 타입으로 단언합니다.
-                                style={materialDark as any}
+                                style={materialDark as { [key: string]: CSSProperties }}
                                 language={match[1]}
                                 PreTag="div"
                             >
