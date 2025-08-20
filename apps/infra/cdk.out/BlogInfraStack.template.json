@@ -113,6 +113,20 @@
     "aws:cdk:path": "BlogInfraStack/BlogUserPool/BlogAppClient/Resource"
    }
   },
+  "AdminsGroup": {
+   "Type": "AWS::Cognito::UserPoolGroup",
+   "Properties": {
+    "Description": "Administrators with full access permissions",
+    "GroupName": "Admins",
+    "Precedence": 0,
+    "UserPoolId": {
+     "Ref": "BlogUserPoolBB1AE2CC"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "BlogInfraStack/AdminsGroup"
+   }
+  },
   "BlogPostsTable95467250": {
    "Type": "AWS::DynamoDB::Table",
    "Properties": {
@@ -132,6 +146,10 @@
      {
       "AttributeName": "GSI3_SK",
       "AttributeType": "S"
+     },
+     {
+      "AttributeName": "createdAt",
+      "AttributeType": "S"
      }
     ],
     "BillingMode": "PAY_PER_REQUEST",
@@ -150,6 +168,29 @@
       ],
       "Projection": {
        "ProjectionType": "ALL"
+      }
+     },
+     {
+      "IndexName": "GSI2",
+      "KeySchema": [
+       {
+        "AttributeName": "PK",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "createdAt",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "NonKeyAttributes": [
+        "postId",
+        "title",
+        "authorNickname",
+        "status",
+        "visibility"
+       ],
+       "ProjectionType": "INCLUDE"
       }
      }
     ],
@@ -318,7 +359,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-786382940028-ap-northeast-2",
-     "S3Key": "b32f1f6ca27a3381d2034cf181a43e1d3b272bce2bfc0fdcd0e71cacea8b0f0a.zip"
+     "S3Key": "08382487779dc9737492308ec40a742adfb45393e217c7d36f577d1ebd52f9c6.zip"
     },
     "Description": "Handles all backend API logic (CRUD, Auth, etc.) via Hono.",
     "Environment": {
@@ -368,7 +409,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/BackendApiLambda/Resource",
-    "aws:asset:path": "asset.b32f1f6ca27a3381d2034cf181a43e1d3b272bce2bfc0fdcd0e71cacea8b0f0a",
+    "aws:asset:path": "asset.08382487779dc9737492308ec40a742adfb45393e217c7d36f577d1ebd52f9c6",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -817,7 +858,8 @@
      "Variables": {
       "AWS_LAMBDA_EXEC_WRAPPER": "/opt/extensions/lambda-adapter",
       "PORT": "3000",
-      "NEXT_PUBLIC_API_ENDPOINT": {
+      "NEXT_PUBLIC_API_ENDPOINT": "/api",
+      "INTERNAL_API_ENDPOINT": {
        "Fn::Join": [
         "",
         [
@@ -829,7 +871,7 @@
          {
           "Ref": "AWS::URLSuffix"
          },
-         "/"
+         "/api"
         ]
        ]
       },
@@ -1191,7 +1233,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12SwW7bMAyGn6V3RcscDNvVdTGsh7aBs54DWqY9JbZkUFSCQNC7D5LmrNvp/yhSP0nZlay2X+X2Aa5uo/rzZtKdDAcGdRbNYPZAMCMjCbi6Y1B2NJqtDO8OaW/tlGruvEIzaTT8MVVOouhvBmbbdzL8hG7CVJIhignmroejsT2enHzN8t0bxdoaoWGWobXlQta9nbS65QkzReF2R3AO2ck6iXA7GR69OiM/gkNRMF34Q0X++nyM13FkaAZznyI1Q5q1cyl6suqM9DzDiPeKFd6pPAxNUcCiR2C8wu1SyfCDeakXnbJJUnhgGPNiBdJRaz0XejaMI8Ha/78w10WBimSLi3WaLd3yumqyvh/IGs47vJEetamVQucaa5jKl3vSjkl3PvlFQcnty06GukVlqc8dMh2QY7G8AqtfMtQT0JyXSBCjaNFZTwpFfvy0iTajaLxjO99z2W/lf1J7shfdI+XZm8G8wLJkg8G8eV48R5H+DHlyny5VJT9/k9uHk9N6Q96wnlG2RX8DgoCK680CAAA="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2WSwZLTMAyGn2XvrinpMHDNZgfYA2wnZc8dxVGC28TKyHI7HU/enbFDygKn/5Ml/5KcFLrYftTbB7j6jWnPm8E2Oh4EzFlVndsDw4iCrODqj9FQ76yQjq8eeU80pJo7r1ANFp28Tf1/8oUpTLNqbw5Gahsdf0AzYKrIMKsBxqaFo6MWT15/z/I5OCOWnLIw6ljTciHrngZrbnnkTLPyuyN4j+J1mUT5nY6PwZxRHsGjWjBd+E2L/PF5G6/j6Fh17j5FaoY8Wu9T9ETmjPw8Qo/3ihVeeXkpHmYFk+1B8Aq3S6HjV5GpnGzKJknhQaDPiy2QjmoKstCzE+wZ1v7/hLluVmhY1ziRt0J8y+uagULbMTnJO7yw7a0rjUHvK3LCy6d8sl7YNiH5zYqT24edjmWNhrjNHTIdUObF8gpifupYDsBjXiLBPKsaPQU2qPLjp02s61UVvNB4z2W/lf9K7ZkutkXOs1ed+wbTlA069xJkCjKr9Gfok393KQr9/pPePpy8tRsOTuyIul70F3NgOHfeAgAA"
    },
    "Metadata": {
     "aws:cdk:path": "BlogInfraStack/CDKMetadata/Default"

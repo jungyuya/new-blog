@@ -7,6 +7,7 @@ import { serve } from '@hono/node-server';
 import postsRouter from './routes/posts.router';
 import authRouter from './routes/auth.router';
 import usersRouter from './routes/users.router';
+import tagsRouter from './routes/tags.router';
 import type { AppEnv } from './lib/types';
 
 const app = new Hono<AppEnv>().basePath('/api');
@@ -26,6 +27,7 @@ app.use('*', async (c, next) => {
 app.route('/posts', postsRouter);
 app.route('/auth', authRouter);
 app.route('/users', usersRouter);
+app.route('/tags', tagsRouter); // [추가]
 
 // --- Error Handling ---
 app.onError((err, c) => {
@@ -39,7 +41,8 @@ export { app };
 // --- Server Export ---
 export const handler = handle(app);
 
-if (process.env.NODE_ENV !== 'production') {
+// [수정] NODE_ENV가 'development'일 때만 로컬 서버를 실행하도록 명확히 변경
+if (process.env.NODE_ENV === 'development') {
   serve({ fetch: app.fetch, port: 4000 }, (info) => {
     console.log(`[BACKEND] Development server is running at http://localhost:${info.port}`);
   });

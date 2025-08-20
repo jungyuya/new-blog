@@ -20,19 +20,54 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     if (!token) {
       return c.json({ message: 'Unauthorized: Access token cookie not found.' }, 401);
     }
-    
+
     const payload = await verifier.verify(token);
-    
+
     c.set('userId', payload.sub);
     c.set('userEmail', payload.email as string);
     c.set('userGroups', (payload['cognito:groups'] as string[]) || []);
-    
+
     await next();
   } catch (error: any) {
     console.error('Cookie Auth Error:', error);
     return c.json({ message: 'Unauthorized: Invalid access token from cookie.' }, 401);
   }
 };
+
+
+// =================================================================
+// 선택적 인증 미들웨어 (Optional Auth Middleware)
+// =================================================================
+/**
+ * accessToken 쿠키가 존재하면 검증하고 사용자 정보를 주입합니다.
+ * 쿠키가 없어도 에러를 반환하지 않고 다음 핸들러로 넘어갑니다.
+ * 공개 콘텐츠이지만, 로그인 상태에 따라 다른 처리가 필요할 때 사용합니다.
+ */
+export const tryCookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
+  try {
+    const token = getCookie(c, 'accessToken');
+
+    // [핵심] 토큰이 없을 경우, 그냥 다음으로 넘어갑니다.
+    if (!token) {
+      await next();
+      return;
+    }
+
+    const payload = await verifier.verify(token);
+
+    c.set('userId', payload.sub);
+    c.set('userEmail', payload.email as string);
+    c.set('userGroups', (payload['cognito:groups'] as string[]) || []);
+
+  } catch (error: any) {
+    // 토큰이 있지만 유효하지 않은 경우(만료 등)에도 에러를 던지지 않고,
+    // 그냥 로그인하지 않은 사용자인 것처럼 처리합니다.
+    console.warn('Optional Auth: Invalid token found, treating as guest.', error.message);
+  }
+
+  await next();
+};
+
 
 // =================================================================
 // 관리자 전용 미들웨어 (Admin-Only Middleware)

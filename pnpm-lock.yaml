@@ -18,6 +18,9 @@ importers:
       concurrently:
         specifier: ^9.2.0
         version: 9.2.0
+      cross-env:
+        specifier: ^10.0.0
+        version: 10.0.0
       turbo:
         specifier: 2.5.5
         version: 2.5.5

@@ -74,14 +74,22 @@ export class BlogStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // --- [추가] Phase 7의 필수 요건인 GSI 3를 테이블에 추가합니다. ---
-    // 역할: 전체 게시물 목록을 최신순으로 조회하기 위한 인덱스.
+    // --- [기존] GSI 3 (전체 게시물 최신순 조회용) ---
     postsTable.addGlobalSecondaryIndex({
-      indexName: 'GSI3', // 데이터 모델링 설계와 일치하는 인덱스 이름
+      indexName: 'GSI3',
       partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
-      // projectionType: 기본값은 ALL 이므로, 모든 속성을 인덱스에 복제합니다.
-      // readCapacity, writeCapacity: PAY_PER_REQUEST 모드에서는 설정할 필요가 없습니다.
+    });
+
+    // --- [신규 추가] GSI 2 (태그별 게시물 최신순 조회용) ---
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'GSI2', // 태그 조회를 위한 인덱스
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING }, // PK(TAG#...)를 그대로 사용
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING }, // createdAt으로 정렬
+      // ProjectionType을 설정하여, 쿼리 시 추가 데이터를 가져올 수 있게 합니다.
+      // ALL로 하면 모든 속성을 복제하지만, INCLUDE는 특정 속성만 복제하여 비용을 절감합니다.
+      projectionType: dynamodb.ProjectionType.INCLUDE,
+      nonKeyAttributes: ['postId', 'title', 'authorNickname', 'status', 'visibility'],
     });
 
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {

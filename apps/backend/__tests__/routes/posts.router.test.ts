@@ -1,106 +1,144 @@
-// 파일 위치: apps/backend/__tests__/routes/posts.router.test.ts (v2.2 - 데이터 수정 최종본)
-
+// 파일 위치: apps/backend/__tests__/routes/posts.router.test.ts (v3.0 - 최종 안정화 버전)
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { serve } from '@hono/node-server';
 import type { app } from '../../src/index';
 import { ddbDocClient } from '../../src/lib/dynamodb';
 
-// --- 모킹 및 서버 설정은 이전과 동일 ---
-
+// =================================================================
+// 🤫 [MOCKING] - 모든 외부 의존성을 모킹합니다.
+// =================================================================
+// 1. DynamoDB 클라이언트 모킹
 vi.mock('../../src/lib/dynamodb', () => ({
-    ddbDocClient: { send: vi.fn() },
+  ddbDocClient: { send: vi.fn() },
 }));
 
-const { mockVerify } = vi.hoisted(() => ({ mockVerify: vi.fn() }));
-
+// 2. Cognito JWT 검증기 모킹 (hoisted mock 사용)
+const { mockVerify } = vi.hoisted(() => ({
+  mockVerify: vi.fn(),
+}));
 vi.mock('aws-jwt-verify', () => ({
-    CognitoJwtVerifier: { create: vi.fn().mockReturnValue({ verify: mockVerify }) },
+  CognitoJwtVerifier: { create: vi.fn().mockReturnValue({ verify: mockVerify }) },
 }));
 
+// =================================================================
+// 🚀 [TEST SERVER SETUP] - 블랙박스 테스트를 위한 서버 설정
+// =================================================================
 let server: ReturnType<typeof serve>;
-let appInstance: typeof app;
-
 beforeAll(async () => {
-    const imported = await import('../../src/index');
-    appInstance = imported.app;
-    server = serve({ fetch: appInstance.fetch, port: 4001 });
+  // 테스트 서버는 고유한 포트(4001)에서 실행합니다.
+  server = serve({ fetch: (await import('../../src/index')).app.fetch, port: 4001 });
 });
-
 afterAll(() => {
-    server?.close();
+  server?.close();
 });
-
 beforeEach(() => {
-    vi.resetAllMocks();
+  // [핵심] 각 테스트 실행 전에 모든 mock의 상태(호출 기록, mockResolvedValue 등)를 깨끗하게 초기화합니다.
+  vi.resetAllMocks();
 });
 
-// --- 테스트 스위트 ---
+// =================================================================
+// 🧪 [TEST SUITE] - Posts API
+// =================================================================
 describe('Posts API (/api/posts)', () => {
 
-    describe('GET /', () => {
-        it('should return 200 OK with an array of posts when data exists', async () => {
-            // ✅ [수정] 실제 코드의 필터 로직을 통과할 수 있도록 완전한 데이터를 제공합니다.
-            const mockPosts = [
-                {
-                    postId: '1',
-                    title: 'Test Post 1',
-                    data_type: 'Post', // 필터 조건 1
-                    isDeleted: false,  // 필터 조건 2
-                },
-            ];
-            (ddbDocClient.send as any).mockResolvedValue({ Items: mockPosts });
-
-            const response = await request(server).get('/api/posts');
-
-            expect(response.status).toBe(200);
-            // 이제 posts 배열은 비어있지 않으므로, 아래 검증이 성공합니다.
-            expect(response.body.posts[0].title).toBe('Test Post 1');
-        });
-
-        // 'empty array' 테스트는 변경할 필요가 없습니다.
-        it('should return 200 OK with an empty array when no data exists', async () => {
-            (ddbDocClient.send as any).mockResolvedValue({ Items: [] });
-            const response = await request(server).get('/api/posts');
-            expect(response.status).toBe(200);
-            expect(response.body.posts).toEqual([]);
-        });
+  // --- 1. GET / (목록 조회) ---
+  describe('GET /', () => {
+    it('should return only public/published posts for guests (no token)', async () => {
+      (ddbDocClient.send as any).mockResolvedValue({ Items: [] });
+      await request(server).get('/api/posts');
+      const queryArgs = (ddbDocClient.send as any).mock.calls[0][0].input;
+      expect(queryArgs.FilterExpression).toBe('#status = :published AND #visibility = :public');
     });
 
-    // POST 테스트 스위트는 변경할 필요가 없습니다.
-    describe('POST /', () => {
-        it('should return 403 Forbidden if user is not an admin', async () => {
-            const mockUserPayload = {
-                sub: 'user-uuid-123',
-                email: 'user@example.com',
-                'cognito:groups': ['Users'],
-            };
-            mockVerify.mockResolvedValue(mockUserPayload);
-            const newPostData = { title: 'New Post', content: 'This is content.' };
-            const response = await request(server)
-                .post('/api/posts')
-                .set('Cookie', 'accessToken=fake-user-token')
-                .send(newPostData);
-            expect(response.status).toBe(403);
-            expect(response.body.message).toContain('Administrator access is required');
-        });
-
-        it('should return 201 Created if user is an admin', async () => {
-            const mockAdminPayload = {
-                sub: 'admin-uuid-456',
-                email: 'admin@example.com',
-                'cognito:groups': ['Admins', 'Users'],
-            };
-            mockVerify.mockResolvedValue(mockAdminPayload);
-            (ddbDocClient.send as any).mockResolvedValue({});
-            const newPostData = { title: 'Admin Post', content: 'Content by admin.' };
-            const response = await request(server)
-                .post('/api/posts')
-                .set('Cookie', 'accessToken=fake-admin-token')
-                .send(newPostData);
-            expect(response.status).toBe(201);
-            expect(response.body.message).toContain('Post created successfully!');
-            expect(response.body.post.authorId).toBe('admin-uuid-456');
-        });
+    it('should return all posts for admins', async () => {
+      mockVerify.mockResolvedValue({ 'cognito:groups': ['Admins'] });
+      (ddbDocClient.send as any).mockResolvedValue({ Items: [] });
+      const response = await request(server).get('/api/posts').set('Cookie', 'accessToken=fake-admin-token');
+      expect(response.status).toBe(200);
+      const queryArgs = (ddbDocClient.send as any).mock.calls[0][0].input;
+      expect(queryArgs.FilterExpression).toBeUndefined();
     });
+  });
+
+  // --- 2. POST / (게시물 생성) ---
+  describe('POST /', () => {
+    const newPostData = { title: 'New Post', content: 'This is content.', tags: ['React', 'AWS'] };
+
+    it('should return 403 Forbidden if user is not an admin', async () => {
+      mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
+      const response = await request(server)
+        .post('/api/posts')
+        .set('Cookie', 'accessToken=fake-user-token')
+        .send(newPostData);
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 201 Created if user is an admin', async () => {
+      mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
+      (ddbDocClient.send as any).mockResolvedValue({});
+      const response = await request(server)
+        .post('/api/posts')
+        .set('Cookie', 'accessToken=fake-admin-token')
+        .send(newPostData);
+      expect(response.status).toBe(201);
+      const sendCall = (ddbDocClient.send as any).mock.calls[0][0];
+      expect(sendCall.constructor.name).toBe('BatchWriteCommand');
+      const writeRequests = sendCall.input.RequestItems[process.env.TABLE_NAME!];
+      expect(writeRequests.length).toBe(3); // Post 1개 + Tag 2개
+    });
+  });
+
+  // --- 3. GET /:postId (상세 조회) ---
+  describe('GET /:postId', () => {
+    it('should return 403 Forbidden when a non-author tries to access a private post', async () => {
+      const mockPrivatePost = { postId: 'private-1', visibility: 'private', authorId: 'author-1' };
+      (ddbDocClient.send as any).mockResolvedValue({ Item: mockPrivatePost });
+      mockVerify.mockResolvedValue({ sub: 'another-user-id' }); // 작성자가 아닌 다른 사용자
+      const response = await request(server)
+        .get('/api/posts/private-1')
+        .set('Cookie', 'accessToken=another-user-token');
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 200 OK when the author accesses their private post', async () => {
+      const mockPrivatePost = { postId: 'private-1', visibility: 'private', authorId: 'author-1' };
+      (ddbDocClient.send as any).mockResolvedValue({ Item: mockPrivatePost });
+      mockVerify.mockResolvedValue({ sub: 'author-1' }); // 작성자 본인
+      const response = await request(server)
+        .get('/api/posts/private-1')
+        .set('Cookie', 'accessToken=author-token');
+      expect(response.status).toBe(200);
+      expect(response.body.post.postId).toBe('private-1');
+      // GetCommand, UpdateCommand(viewCount) 총 2번 호출되었는지 확인
+      expect((ddbDocClient.send as any).mock.calls.length).toBe(2);
+    });
+  });
+
+  // --- 4. PUT /:postId (게시물 수정) ---
+  describe('PUT /:postId', () => {
+    it('should return 403 Forbidden if a non-admin tries to update a post', async () => {
+        mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
+        const response = await request(server)
+            .put('/api/posts/1')
+            .set('Cookie', 'accessToken=user-token')
+            .send({ title: 'Updated Title' });
+        expect(response.status).toBe(403);
+    });
+
+    it('should update a post successfully if user is an admin', async () => {
+      mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
+      // 순서대로 Get(소유권), Batch(태그), Update(게시물)의 mock 응답을 설정
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: { postId: '1', authorId: 'admin-id', tags: [] } })
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Attributes: { title: 'Updated Title' } });
+      const response = await request(server)
+        .put('/api/posts/1')
+        .set('Cookie', 'accessToken=admin-token')
+        .send({ title: 'Updated Title', tags: ['updated'] });
+      expect(response.status).toBe(200);
+      expect(response.body.post.title).toBe('Updated Title');
+    });
+  });
 });
