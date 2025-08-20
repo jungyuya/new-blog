@@ -3,15 +3,16 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { PutCommand, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
-import { cookieAuthMiddleware, adminOnlyMiddleware } from '../middlewares/auth.middleware'; 
+import { cookieAuthMiddleware, adminOnlyMiddleware } from '../middlewares/auth.middleware';
 import type { AppEnv } from '../lib/types';
 
 const CreatePostSchema = z.object({
   title: z.string().min(1, '제목은 필수 항목입니다.').max(100, '제목은 100자를 초과할 수 없습니다.'),
   content: z.string().min(1, '내용은 필수 항목입니다.'),
+  tags: z.array(z.string()).optional(),
 });
 
 const UpdatePostSchema = z.object({
@@ -50,19 +51,81 @@ postsRouter.get('/:postId', async (c) => {
   }
 });
 
-// [3] POST / - 새 게시물 생성 (인증 필요)
-postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('json', CreatePostSchema), async (c) => {
-  const { title, content } = c.req.valid('json');
-  const userId = c.get('userId');
-  const userEmail = c.get('userEmail');
-  const postId = uuidv4();
-  const now = new Date().toISOString();
-  const TABLE_NAME = process.env.TABLE_NAME!;
-  const item = { PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post', postId, title, content, authorId: userId, authorEmail: userEmail, createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0, GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`, GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}` };
+// --- [3] POST / - 새 게시물 생성 (인증 필요) ---
+postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('json', CreatePostSchema), async (c) => {  try {
+    const { title, content, tags = [] } = c.req.valid('json'); // tags가 없으면 빈 배열([])을 기본값으로 사용
+    const userId = c.get('userId');
+    const userEmail = c.get('userEmail');
+    const postId = uuidv4();
+    const now = new Date().toISOString();
+    const TABLE_NAME = process.env.TABLE_NAME!;
 
-  try {
-    await ddbDocClient.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-    return c.json({ message: 'Post created successfully!', post: item }, 201);
+    // 1. 게시물(Post) 아이템 객체를 먼저 정의합니다.
+    const postItem = {
+      PK: `POST#${postId}`,
+      SK: 'METADATA',
+      data_type: 'Post',
+      postId,
+      title,
+      content,
+      authorId: userId,
+      authorEmail: userEmail,
+      createdAt: now,
+      updatedAt: now,
+      isDeleted: false,
+      viewCount: 0,
+      isPublished: true, // 기본값: 발행 상태
+      authorNickname: userEmail?.split('@')[0] || '익명',
+      tags: tags, // 클라이언트로부터 받은 태그
+      thumbnailUrl: '',
+      GSI1_PK: `USER#${userId}`,
+      GSI1_SK: `POST#${now}#${postId}`,
+      GSI3_PK: 'POST#ALL',
+      GSI3_SK: `${now}#${postId}`
+    };
+
+    // 2. DynamoDB에 보낼 모든 쓰기 요청을 담을 배열을 준비합니다.
+    //    타입을 명시하여 안정성을 높입니다.
+    const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
+
+    // 3. 게시물(Post) 아이템 생성 요청을 배열에 추가합니다.
+    writeRequests.push({
+      PutRequest: {
+        Item: postItem,
+      },
+    });
+
+    // 4. 각 태그(Tag)에 대한 아이템 생성 요청을 배열에 추가합니다.
+    for (const tagName of tags) {
+      const tagItem = {
+        PK: `TAG#${tagName.trim()}`, // 태그 앞뒤 공백 제거
+        SK: `POST#${postId}`,
+        // 검색 결과 페이지에서 사용할 데이터를 비정규화하여 저장 (읽기 성능 최적화)
+        postId: postId,
+        title: title,
+        createdAt: now,
+        authorNickname: postItem.authorNickname,
+        isPublished: postItem.isPublished,
+      };
+      writeRequests.push({
+        PutRequest: {
+          Item: tagItem,
+        },
+      });
+    }
+
+    // 5. BatchWriteCommand를 사용하여 모든 아이템을 한 번의 API 호출로 생성합니다.
+    //    RequestItems의 테이블 이름은 반드시 process.env.TABLE_NAME을 사용해야 합니다.
+    const command = new BatchWriteCommand({
+      RequestItems: {
+        [TABLE_NAME]: writeRequests,
+      },
+    });
+    await ddbDocClient.send(command);
+
+    // 6. 성공 시, 생성된 게시물 정보를 클라이언트에 반환합니다.
+    return c.json({ message: 'Post created successfully!', post: postItem }, 201);
+
   } catch (error: any) {
     console.error('Create Post Error:', error.stack || error);
     return c.json({ message: 'Internal Server Error creating post.', error: error.message }, 500);

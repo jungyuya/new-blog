@@ -14,6 +14,6 @@ export default defineConfig({
     
     // (선택 사항이지만 권장) 테스트 실행 전에 매번 실행될 설정 파일을 지정합니다.
     // 이 파일은 나중에 만들 것입니다.
-    // setupFiles: './src/test/setup.ts', 
+    setupFiles: './src/test/setup.ts', 
   },
 });
