@@ -133,3 +133,15 @@ Learn more about the power of Turborepo:
 - [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
 - [Configuration Options](https://turborepo.com/docs/reference/configuration)
 - [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+
+
+
+## Architecture & Environment
+
+This project follows a serverless-first architecture on AWS. All infrastructure is managed via AWS CDK.
+
+### Target Production Environment
+
+- **Runtime:** AWS Lambda with Node.js 20.x
+- **Architecture:** ARM64
+- **OS Environment:** Amazon Linux 2023 (AL2023)

@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/bc0fafd1008abccbd38435eaba236480dcb79ed824cb504490fb9f6c69ea635d.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/392dded8443872ade25fb7949d2ce61a32be7ce1dbf4e79364a448ee4850b4a9.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -72,6 +72,66 @@
             "data": "BlogPostsTable95467250"
           }
         ],
+        "/BlogInfraStack/BlogImageBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogImageBucket1A8E8BD6"
+          }
+        ],
+        "/BlogInfraStack/BlogImageBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogImageBucketPolicyD24BFEF4"
+          }
+        ],
+        "/BlogInfraStack/BlogImageBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogImageBucketAutoDeleteObjectsCustomResource4E565E04"
+          }
+        ],
+        "/BlogInfraStack/BlogImageBucket/Notifications/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogImageBucketNotificationsABD1F4B4"
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/BlogInfraStack/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC"
+          }
+        ],
+        "/BlogInfraStack/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleDefaultPolicy2CF63D36"
+          }
+        ],
+        "/BlogInfraStack/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691"
+          }
+        ],
         "/BlogInfraStack/BackendApiLambda/ServiceRole/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -96,28 +156,28 @@
             "data": "BlogHttpApiGatewayCD53D1DC"
           }
         ],
+        "/BlogInfraStack/BlogHttpApiGateway/DefaultRoute/DefaultIntegration/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogHttpApiGatewayDefaultRouteDefaultIntegration5685EF86"
+          }
+        ],
+        "/BlogInfraStack/BlogHttpApiGateway/DefaultRoute/DefaultIntegration-Permission": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogHttpApiGatewayDefaultRouteDefaultIntegrationPermission28420E72"
+          }
+        ],
+        "/BlogInfraStack/BlogHttpApiGateway/DefaultRoute/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BlogHttpApiGatewayDefaultRoute72E8028D"
+          }
+        ],
         "/BlogInfraStack/BlogHttpApiGateway/DefaultStage/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "BlogHttpApiGatewayDefaultStage8637BB43"
-          }
-        ],
-        "/BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/LambdaIntegration/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogHttpApiGatewayANYproxyLambdaIntegration98027455"
-          }
-        ],
-        "/BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/LambdaIntegration-Permission": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogHttpApiGatewayANYproxyLambdaIntegrationPermissionAD440C12"
-          }
-        ],
-        "/BlogInfraStack/BlogHttpApiGateway/ANY--{proxy+}/Resource": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "BlogHttpApiGatewayANYproxyF2BA0DA1"
           }
         ],
         "/BlogInfraStack/FrontendAssetsBucket/Resource": [
@@ -136,24 +196,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "FrontendAssetsBucketAutoDeleteObjectsCustomResource81511928"
-          }
-        ],
-        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
-          {
-            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
-            "data": true
-          }
-        ],
-        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
-          }
-        ],
-        "/BlogInfraStack/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
           }
         ],
         "/BlogInfraStack/FrontendServerLambda/ServiceRole/Resource": [
@@ -252,6 +294,12 @@
             "data": "CloudFrontDistributionId"
           }
         ],
+        "/BlogInfraStack/ImageBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageBucketName"
+          }
+        ],
         "/BlogInfraStack/BackendApiLambdaErrorsAlarm/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -268,6 +316,18 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "CDKMetadata"
+          }
+        ],
+        "/BlogInfraStack/Exports/Output{\"Fn::GetAtt\":[\"BlogImageBucket1A8E8BD6\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttBlogImageBucket1A8E8BD6ArnD9C38B16"
+          }
+        ],
+        "/BlogInfraStack/Exports/Output{\"Ref\":\"BlogImageBucket1A8E8BD6\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefBlogImageBucket1A8E8BD6B7E42535"
           }
         ],
         "/BlogInfraStack/BootstrapVersion": [
@@ -386,6 +446,97 @@
         ]
       },
       "displayName": "CiCdStack"
+    },
+    "ImageProcessorStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "ImageProcessorStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "ImageProcessorStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://786382940028/ap-northeast-2",
+      "properties": {
+        "templateFile": "ImageProcessorStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-deploy-role-786382940028-ap-northeast-2",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-cfn-exec-role-786382940028-ap-northeast-2",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-786382940028-ap-northeast-2/273c898705c1409958a35cdbc6ac0d650f5ba963e2ad400dc569cd1bff7d72a7.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "ImageProcessorStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::786382940028:role/cdk-hnb659fds-lookup-role-786382940028-ap-northeast-2",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "BlogInfraStack",
+        "ImageProcessorStack.assets"
+      ],
+      "metadata": {
+        "/ImageProcessorStack/SharpLambdaLayer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SharpLambdaLayer10080CDF"
+          }
+        ],
+        "/ImageProcessorStack/ImageProcessorFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageProcessorFunctionServiceRoleBF4C20FC"
+          }
+        ],
+        "/ImageProcessorStack/ImageProcessorFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageProcessorFunctionServiceRoleDefaultPolicy3F61B55D"
+          }
+        ],
+        "/ImageProcessorStack/ImageProcessorFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageProcessorFunction11AF6264"
+          }
+        ],
+        "/ImageProcessorStack/ImageUploadedRule/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageUploadedRule30CBB4C9"
+          }
+        ],
+        "/ImageProcessorStack/ImageUploadedRule/AllowEventRuleImageProcessorStackImageProcessorFunctionEAA4DD1C": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ImageUploadedRuleAllowEventRuleImageProcessorStackImageProcessorFunctionEAA4DD1CCF6703A6"
+          }
+        ],
+        "/ImageProcessorStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/ImageProcessorStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/ImageProcessorStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "ImageProcessorStack"
     },
     "Tree": {
       "type": "cdk:tree",

@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
@@ -336,22 +337,80 @@ postsRouter.put(
   }
 );
 
-// [5] DELETE /:postId - 게시물 삭제 (인증 필요)
-postsRouter.delete('/:postId', cookieAuthMiddleware, adminOnlyMiddleware, async (c) => {
-  const postId = c.req.param('postId');
-  const userId = c.get('userId');
-  const now = new Date().toISOString();
-  const TABLE_NAME = process.env.TABLE_NAME!;
-  try {
-    const { Item: existing } = await ddbDocClient.send(new GetCommand({ TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' } }));
-    if (!existing || existing.isDeleted) return c.json({ message: 'Post not found for deletion.' }, 404);
-    if (existing.authorId !== userId) return c.json({ message: 'Forbidden: You are not the author.' }, 403);
-    await ddbDocClient.send(new UpdateCommand({ TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' }, UpdateExpression: 'set isDeleted = :d, updatedAt = :u', ExpressionAttributeValues: { ':d': true, ':u': now } }));
-    return c.json({ message: 'Post soft-deleted successfully!' }, 200);
-  } catch (error: any) {
-    console.error('Delete Post Error:', error);
-    return c.json({ message: 'Internal Server Error deleting post.', error: error.message }, 500);
+// --- [5] DELETE /:postId - 게시물 삭제 (v2.0 - S3 이미지 동시 삭제) (인증필요)---
+postsRouter.delete(
+  '/:postId',
+  cookieAuthMiddleware,
+  adminOnlyMiddleware,
+  async (c) => {
+    const postId = c.req.param('postId');
+    const userId = c.get('userId');
+    const TABLE_NAME = process.env.TABLE_NAME!;
+    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+    const s3 = new S3Client({ region: process.env.REGION });
+
+    try {
+      // 1. 삭제 전 원본 게시물을 가져와 소유권 및 content를 확인합니다.
+      const { Item: existingPost } = await ddbDocClient.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+      }));
+
+      if (!existingPost || existingPost.isDeleted) {
+        return c.json({ message: 'Post not found for deletion.' }, 404);
+      }
+      if (existingPost.authorId !== userId) {
+        return c.json({ message: 'Forbidden: You are not the author.' }, 403);
+      }
+
+      // 2. [핵심] 게시물 content에서 S3 이미지 URL들을 추출합니다.
+      const content = existingPost.content || '';
+      // 정규표현식을 사용하여 마크다운 이미지 태그에서 S3 객체 키를 추출합니다.
+      const imageUrlRegex = new RegExp(`https://${BUCKET_NAME}.s3.[^/]+/(images|thumbnails)/([^)]+)`, 'g');
+      const keysToDelete = new Set<string>();
+
+      let match;
+      while ((match = imageUrlRegex.exec(content)) !== null) {
+        // match[1] = 'images' or 'thumbnails', match[2] = 'uuid.webp'
+        const key = `${match[1]}/${match[2]}`;
+        keysToDelete.add(key);
+        // 섬네일이 있다면, 원본 이미지도 함께 삭제 목록에 추가 (또는 그 반대)
+        if (match[1] === 'images') {
+          keysToDelete.add(`thumbnails/${match[2]}`);
+        } else {
+          keysToDelete.add(`images/${match[2]}`);
+        }
+      }
+
+      // 3. [핵심] S3에서 추출된 이미지 객체들을 삭제합니다.
+      if (keysToDelete.size > 0) {
+        const deleteCommand = new DeleteObjectsCommand({
+          Bucket: BUCKET_NAME,
+          Delete: {
+            Objects: Array.from(keysToDelete).map(key => ({ Key: key })),
+            Quiet: true, // 성공한 객체에 대한 정보를 응답에서 생략
+          },
+        });
+        await s3.send(deleteCommand);
+        console.log(`Deleted ${keysToDelete.size} objects from S3 for post ${postId}`);
+      }
+
+      // 4. DynamoDB에서 게시물을 soft-delete 합니다.
+      const now = new Date().toISOString();
+      await ddbDocClient.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+        UpdateExpression: 'set isDeleted = :d, updatedAt = :u',
+        ExpressionAttributeValues: { ':d': true, ':u': now },
+      }));
+
+      return c.json({ message: 'Post and associated images soft-deleted successfully!' }, 200);
+
+    } catch (error: any) {
+      console.error('Delete Post Error:', error);
+      return c.json({ message: 'Internal Server Error deleting post.', error: error.message }, 500);
+    }
   }
-});
+);
 
 export default postsRouter;

@@ -1,6 +1,5 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.09-The-Purified-Masterpiece
-// 역할: 모든 불순물을 제거하고, CDK의 원칙에 가장 부합하도록 정화된 최종 인프라 구성
+// 최종 버전: v2025.08.26-The-Purified-Masterpiece
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
@@ -26,8 +25,12 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 
+
+
 export class BlogStack extends Stack {
+  public readonly imageBucket: s3.IBucket;
   constructor(scope: Construct, id: string, props?: StackProps) {
+
     super(scope, id, props);
 
     const projectRoot = path.join(__dirname, '..', '..', '..');
@@ -40,6 +43,8 @@ export class BlogStack extends Stack {
     // ===================================================================================
     // SECTION 1: 백엔드 리소스 정의 (변경 없음)
     // ===================================================================================
+
+    // --- 1.1. 인증 리소스 ---
     const userPool = new cognito.UserPool(this, 'BlogUserPool', {
       userPoolName: `BlogUserPool-${this.stackName}`,
       selfSignUpEnabled: true,
@@ -66,6 +71,7 @@ export class BlogStack extends Stack {
       precedence: 0, // 우선순위 (숫자가 낮을수록 높음)
     });
 
+    // --- 1.2. 데이터베이스 리소스 ---
     const postsTable = new dynamodb.Table(this, 'BlogPostsTable', {
       tableName: `BlogPosts-${this.stackName}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -74,14 +80,14 @@ export class BlogStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // --- [기존] GSI 3 (전체 게시물 최신순 조회용) ---
+    // --- GSI 3 (전체 게시물 최신순 조회용) ---
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI3',
       partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
     });
 
-    // --- [신규 추가] GSI 2 (태그별 게시물 최신순 조회용) ---
+    // --- GSI 2 (태그별 게시물 최신순 조회용) ---
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI2', // 태그 조회를 위한 인덱스
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING }, // PK(TAG#...)를 그대로 사용
@@ -92,12 +98,37 @@ export class BlogStack extends Stack {
       nonKeyAttributes: ['postId', 'title', 'authorNickname', 'status', 'visibility'],
     });
 
+    // --- 1.3. 이미지 S3저장소 리소스 ---
+    this.imageBucket = new s3.Bucket(this, 'BlogImageBucket', {
+      bucketName: `blog-image-bucket-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`, // 버킷 이름 규칙 준수
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: false,
+        blockPublicPolicy: false,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: false,
+      }),
+      publicReadAccess: true,
+      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.POST, s3.HttpMethods.GET],
+          allowedOrigins: ['http://localhost:3000', `https://blog.jungyu.store`],
+          allowedHeaders: ['*'],
+          maxAge: 3000,
+        },
+      ],
+      eventBridgeEnabled: true,
+    });
+
+    // --- 1.4 백엔드 컴퓨팅 리소스 ---
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
       functionName: `blog-backend-api-${this.stackName}`,
       description: 'Handles all backend API logic (CRUD, Auth, etc.) via Hono.',
       entry: path.join(projectRoot, 'apps', 'backend', 'src', 'index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
       memorySize: 256,
       timeout: Duration.seconds(30),
       environment: {
@@ -107,17 +138,20 @@ export class BlogStack extends Stack {
         USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         REGION: this.region,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        IMAGE_BUCKET_NAME: this.imageBucket.bucketName,
       },
       tracing: lambda.Tracing.ACTIVE,
-      bundling: { minify: true, externalModules: [] },
+
+      bundling: {
+        minify: true,
+        externalModules: ['@aws-sdk/*'],
+      },
     });
+
     cdk.Tags.of(backendApiLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(backendApiLambda).add('Tier', 'Backend');
 
-    postsTable.grantReadWriteData(backendApiLambda);
-    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['dynamodb:Query'], resources: [`${postsTable.tableArn}/index/*`] }));
-    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({ actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GlobalSignOut'], resources: [userPool.userPoolArn] }));
-
+    // --- 1.5. API 게이트웨이 리소스 ---
     const httpApi = new HttpApi(this, 'BlogHttpApiGateway', {
       apiName: `BlogHttpApi-${this.stackName}`,
       corsPreflight: {
@@ -126,13 +160,29 @@ export class BlogStack extends Stack {
         allowHeaders: ['Content-Type', 'Authorization'],
         allowCredentials: true,
       },
+      defaultIntegration: new HttpLambdaIntegration('DefaultIntegration', backendApiLambda),
     });
 
-    const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', backendApiLambda);
-    httpApi.addRoutes({ path: '/{proxy+}', methods: [HttpMethod.ANY], integration: lambdaIntegration });
+    // ===================================================================================
+    // SECTION 2: 권한 부여 및 관계 설정 (Grant permissions and define relationships)
+    // ===================================================================================
+    postsTable.grantReadWriteData(backendApiLambda);
+    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:Query'],
+      resources: [`${postsTable.tableArn}/index/*`],
+    }));
+    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GetUser'],
+      resources: [userPool.userPoolArn],
+    }));
+
+    // [핵심] S3 버킷에 대한 권한을 여기에 모아서 부여합니다.
+    this.imageBucket.grantPut(backendApiLambda, 'uploads/*');
+    this.imageBucket.grantDelete(backendApiLambda, 'images/*');
+    this.imageBucket.grantDelete(backendApiLambda, 'thumbnails/*');
 
     // ===================================================================================
-    // SECTION 2: 프론트엔드 리소스 정의 (정화된 최종 완성본)
+    // SECTION 3: 프론트엔드 리소스 정의 (정화된 최종 완성본)
     // ===================================================================================
     const domainName = 'jungyu.store';
     const siteDomain = `blog.${domainName}`;
@@ -282,7 +332,7 @@ export class BlogStack extends Stack {
     });
 
     // ===================================================================================
-    // SECTION 3: 스택 출력 및 모니터링
+    // SECTION 4: 스택 출력 및 모니터링
     // ===================================================================================
     new CfnOutput(this, 'ApiGatewayEndpoint', { value: httpApi.url!, description: 'HTTP API Gateway endpoint URL' });
     new CfnOutput(this, 'UserPoolIdOutput', { value: userPool.userPoolId, description: 'Cognito User Pool ID' });
@@ -291,6 +341,8 @@ export class BlogStack extends Stack {
     new CfnOutput(this, 'FrontendURL', { value: `https://${siteDomain}`, description: 'URL of the frontend CloudFront distribution' });
     new CfnOutput(this, 'FrontendAssetsBucketName', { value: assetsBucket.bucketName, description: 'S3 Bucket for frontend assets' });
     new CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.ref, description: 'ID of the CloudFront distribution' });
+    // --- 이 스택의 출력(Output)으로 버킷 이름을 내보냅니다. ---
+    new cdk.CfnOutput(this, 'ImageBucketName', { value: this.imageBucket.bucketName, description: 'S3 Bucket for storing blog images' });
 
     backendApiLambda.metricErrors({ period: Duration.minutes(5) }).createAlarm(this, 'BackendApiLambdaErrorsAlarm', {
       threshold: 1, evaluationPeriods: 1, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, alarmDescription: 'Lambda function errors detected!',

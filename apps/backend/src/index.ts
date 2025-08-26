@@ -8,7 +8,10 @@ import postsRouter from './routes/posts.router';
 import authRouter from './routes/auth.router';
 import usersRouter from './routes/users.router';
 import tagsRouter from './routes/tags.router';
+import imagesRouter from './routes/images.router';
 import type { AppEnv } from './lib/types';
+
+
 
 const app = new Hono<AppEnv>().basePath('/api');
 
@@ -28,6 +31,7 @@ app.route('/posts', postsRouter);
 app.route('/auth', authRouter);
 app.route('/users', usersRouter);
 app.route('/tags', tagsRouter); // [추가]
+app.route('/images', imagesRouter);
 
 // --- Error Handling ---
 app.onError((err, c) => {

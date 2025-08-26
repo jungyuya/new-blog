@@ -3,15 +3,15 @@
   "version": "1.0.1",
   "description": "Backend Lambda function for the blog service",
   "main": "dist/index.js",
-"scripts": {
-  "dev": "cross-env NODE_ENV=development dotenv -e ./.env -- tsx watch --clear-screen=false src/index.ts",
-  "check": "tsc --noEmit",
-  "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js",
-  "test": "vitest run",
-  "test:watch": "vitest",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development dotenv -e ./.env -- tsx watch --clear-screen=false src/index.ts",
+    "check": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:setup": "bash ../../scripts/local-db-setup.sh",
-  "clean": "rm -rf dist"
-},
+    "clean": "rm -rf dist"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -31,7 +31,9 @@
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.859.0",
     "@aws-sdk/client-dynamodb": "^3.859.0",
+    "@aws-sdk/client-s3": "^3.873.0",
     "@aws-sdk/lib-dynamodb": "^3.859.0",
+    "@aws-sdk/s3-request-presigner": "^3.873.0",
     "@hono/zod-validator": "^0.7.2",
     "aws-jwt-verify": "^5.1.0",
     "hono": "^4.8.12",
