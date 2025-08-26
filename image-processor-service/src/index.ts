@@ -1,69 +1,65 @@
-// 파일 위치: image-processor-service/src/index.ts
+// 파일 위치: image-processor-service/src/index.ts (v1.1 - EventBridge 호환 최종본)
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import type { S3Event, S3Handler } from 'aws-lambda';
+// [수정] S3Event 대신, EventBridge 이벤트를 처리하기 위한 타입을 import 합니다.
+import type { EventBridgeEvent, Handler } from 'aws-lambda';
 import sharp from 'sharp';
 import * as path from 'path';
 
-// S3 클라이언트를 핸들러 외부에서 초기화하여 재사용합니다 (Lambda 성능 최적화).
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'ap-northeast-2' });
 
-/**
- * S3 'ObjectCreated' 이벤트에 의해 트리거되는 Lambda 핸들러입니다.
- * 'uploads/' 폴더에 업로드된 이미지를 리사이징하여 'images/'와 'thumbnails/' 폴더에 저장하고,
- * 원본 이미지를 삭제합니다.
- */
-export const handler: S3Handler = async (event: S3Event): Promise<void> => {
+// [수정] S3 'Object Created' 이벤트의 detail 타입을 정의합니다.
+interface S3ObjectCreatedDetail {
+  bucket: {
+    name: string;
+  };
+  object: {
+    key: string;
+  };
+}
+
+// [수정] 핸들러의 타입을 EventBridge 이벤트에 맞게 변경합니다.
+export const handler: Handler<EventBridgeEvent<'Object Created', S3ObjectCreatedDetail>> = async (event) => {
   console.log('Lambda triggered with event:', JSON.stringify(event, null, 2));
 
-  // S3 이벤트는 여러 개의 레코드를 포함할 수 있으므로, Promise.all로 병렬 처리합니다.
-  await Promise.all(
-    event.Records.map(async (record) => {
-      // 1. 이벤트 정보에서 버킷 이름과 객체(이미지 파일) 키를 추출합니다.
-      const sourceBucket = record.s3.bucket.name;
-      const sourceKey = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+  // [수정] EventBridge 이벤트는 단일 이벤트를 전달하므로, Records.map 루프가 필요 없습니다.
+  // 1. 이벤트의 'detail' 객체에서 버킷 이름과 객체 키를 추출합니다.
+  const sourceBucket = event.detail.bucket.name;
+  const sourceKey = decodeURIComponent(event.detail.object.key.replace(/\+/g, ' '));
 
-      console.log(`Processing image: s3://${sourceBucket}/${sourceKey}`);
+  console.log(`Processing image: s3://${sourceBucket}/${sourceKey}`);
 
-      // [안전장치] 무한 루프 방지를 위해 'uploads/' 폴더에 있는 파일만 처리합니다.
-      if (!sourceKey.startsWith('uploads/')) {
-        console.log(`Skipping file as it is not in the 'uploads/' directory.`);
-        return;
-      }
+  if (!sourceKey.startsWith('uploads/')) {
+    console.log(`Skipping file as it is not in the 'uploads/' directory.`);
+    return; // map이 아니므로 return으로 함수를 종료합니다.
+  }
 
-      try {
-        // 2. S3에서 원본 이미지 파일을 Buffer 형태로 가져옵니다.
-        const getObjectCommand = new GetObjectCommand({ Bucket: sourceBucket, Key: sourceKey });
-        const getObjectResponse = await s3.send(getObjectCommand);
-        const imageBufferArray = await getObjectResponse.Body?.transformToByteArray();
+  try {
+    // 2. S3에서 원본 이미지 파일을 가져오는 로직 (이전과 동일)
+    const getObjectCommand = new GetObjectCommand({ Bucket: sourceBucket, Key: sourceKey });
+    const getObjectResponse = await s3.send(getObjectCommand);
+    const imageBufferArray = await getObjectResponse.Body?.transformToByteArray();
+    if (!imageBufferArray) throw new Error('Failed to get image buffer from S3 object.');
+    const imageBuffer = Buffer.from(imageBufferArray);
 
-        if (!imageBufferArray) {
-          throw new Error('Failed to get image buffer from S3 object.');
-        }
-        const imageBuffer = Buffer.from(imageBufferArray);
+    // 3. 이미지 리사이징을 병렬로 처리하는 로직 (이전과 동일)
+    await Promise.all([
+      resizeAndUpload(imageBuffer, sourceBucket, sourceKey, 'images', 1200),
+      resizeAndUpload(imageBuffer, sourceBucket, sourceKey, 'thumbnails', 300),
+    ]);
 
-        // 3. 일반용 이미지와 섬네일용 이미지 생성을 병렬로 처리합니다.
-        await Promise.all([
-          resizeAndUpload(imageBuffer, sourceBucket, sourceKey, 'images', 1200),
-          resizeAndUpload(imageBuffer, sourceBucket, sourceKey, 'thumbnails', 300),
-        ]);
+    // 4. 원본 이미지를 삭제하는 로직 (이전과 동일)
+    const deleteObjectCommand = new DeleteObjectCommand({ Bucket: sourceBucket, Key: sourceKey });
+    await s3.send(deleteObjectCommand);
 
-        // 4. 모든 리사이징이 성공하면, 원본 이미지를 삭제합니다.
-        const deleteObjectCommand = new DeleteObjectCommand({ Bucket: sourceBucket, Key: sourceKey });
-        await s3.send(deleteObjectCommand);
+    console.log(`Successfully processed and deleted original image: ${sourceKey}`);
 
-        console.log(`Successfully processed and deleted original image: ${sourceKey}`);
-
-      } catch (error) {
-        console.error(`Error processing image ${sourceKey}:`, error);
-        throw error; // 실패 시 에러를 던져 Lambda 실행이 실패했음을 알립니다.
-      }
-    })
-  );
+  } catch (error) {
+    console.error(`Error processing image ${sourceKey}:`, error);
+    throw error;
+  }
 };
 
-/**
- * 이미지를 리사이징하고 지정된 S3 경로에 업로드하는 헬퍼 함수
- */
+// resizeAndUpload 헬퍼 함수는 변경할 필요가 없습니다.
 async function resizeAndUpload(
   buffer: Buffer,
   bucket: string,

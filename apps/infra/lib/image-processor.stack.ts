@@ -32,28 +32,12 @@ export class ImageProcessorStack extends Stack {
         //      CDK의 bundling 기능을 사용하여 우리만의 Layer를 직접 빌드합니다.
         const sharpLayer = new lambda.LayerVersion(this, 'SharpLambdaLayer', {
             layerVersionName: `sharp-layer-${this.stackName}`,
-            description: 'A Lambda Layer for the sharp image processing library',
+            description: 'A Lambda Layer for the sharp image processing library, built from a local zip file.',
 
-            // [수정] Layer의 소스 코드는 'image-processor-service'가 아닌,
-            //        Layer 전용으로 만든 'layers/sharp-layer' 디렉토리를 사용합니다.
-            code: lambda.Code.fromAsset(path.join(__dirname, '../layers/sharp-layer'), {
-                bundling: {
-                    image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-                    command: [
-                        'bash', '-c', [
-                            'cp /asset-input/package.json /asset-output/',
-                            'cd /asset-output',
-                            // 1. 첫 번째 npm install
-                            'npm install --arch=arm64 --platform=linux --cache /asset-output/npm_cache sharp-libvips-aws-lambda',
-                            // 2. [핵심 수정] 두 번째 npm install에도 동일한 --cache 옵션을 추가합니다.
-                            'npm install --omit=dev --cache /asset-output/npm_cache sharp',
-                            'mkdir -p nodejs',
-                            'mv node_modules nodejs/node_modules',
-                            'rm -rf npm_cache package.json'
-                        ].join(' && ')
-                    ],
-                },
-            }),
+            // [핵심 수정] 이제 CDK는 빌드를 수행하지 않고, 이미 존재하는 zip 파일을 그대로 사용합니다.
+            // projectRoot 변수는 JUNGYU 님의 기존 코드에 이미 정의되어 있습니다.
+            code: lambda.Code.fromAsset(path.join(projectRoot, 'out', 'sharp-layer.zip')),
+
             compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
             compatibleArchitectures: [lambda.Architecture.ARM_64],
         });
