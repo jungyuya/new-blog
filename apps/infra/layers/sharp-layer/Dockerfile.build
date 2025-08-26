@@ -1,0 +1,9 @@
+FROM --platform=linux/arm64 public.ecr.aws/lambda/nodejs:20
+WORKDIR /var/task
+RUN dnf install -y zip && dnf clean all
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+RUN mkdir -p /layer/nodejs && \
+    cp -r node_modules /layer/nodejs/ && \
+    cp package.json /layer/nodejs/ && \
+    cd /layer && zip -r /var/task/sharp-layer.zip .

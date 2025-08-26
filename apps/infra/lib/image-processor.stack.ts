@@ -43,7 +43,10 @@ export class ImageProcessorStack extends Stack {
                         'bash', '-c', [
                             'cp /asset-input/package.json /asset-output/',
                             'cd /asset-output',
-                            'npm install --production --arch=arm64 --platform=linux --cache /asset-output/npm_cache',
+                            // 1. 첫 번째 npm install
+                            'npm install --arch=arm64 --platform=linux --cache /asset-output/npm_cache sharp-libvips-aws-lambda',
+                            // 2. [핵심 수정] 두 번째 npm install에도 동일한 --cache 옵션을 추가합니다.
+                            'npm install --omit=dev --cache /asset-output/npm_cache sharp',
                             'mkdir -p nodejs',
                             'mv node_modules nodejs/node_modules',
                             'rm -rf npm_cache package.json'
