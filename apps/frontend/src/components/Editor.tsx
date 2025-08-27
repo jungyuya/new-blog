@@ -1,9 +1,10 @@
-// 파일 위치: apps/frontend/src/components/Editor.tsx
+// 파일 위치: apps/frontend/src/components/Editor.tsx (v1.1 - 타입 오류 해결 최종본)
 'use client';
 
 import { Editor as TuiEditor, EditorProps } from '@toast-ui/react-editor';
 import '@toast-ui/editor/dist/toastui-editor.css';
 import { useRef } from 'react';
+import { api } from '@/utils/api';
 
 // Editor 컴포넌트가 받을 props 타입을 정의합니다.
 interface EditorPropsWithHandlers extends EditorProps {
@@ -12,16 +13,47 @@ interface EditorPropsWithHandlers extends EditorProps {
 }
 
 export default function Editor({ onChange, initialValue = '' }: EditorPropsWithHandlers) {
-  // Editor 인스턴스를 저장하기 위한 ref
+  // [수정] ref의 타입을 TuiEditor로 명확히 지정합니다.
   const editorRef = useRef<TuiEditor>(null);
 
-  // 내용이 변경될 때마다 호출될 함수
   const handleContentChange = () => {
     if (editorRef.current) {
-      // 에디터의 현재 내용을 Markdown 문자열로 가져옵니다.
       const content = editorRef.current.getInstance().getMarkdown();
-      // 부모 컴포넌트로 변경된 내용을 전달합니다.
       onChange(content);
+    }
+  };
+
+  const onUploadImage = async (blob: File | Blob, callback: (url: string, altText: string) => void) => {
+    console.log('Uploading image...', blob);
+    try {
+      const fileName = blob instanceof File ? blob.name : 'image.png';
+      // [수정] 이제 api.getPresignedUrl이 존재하므로 오류가 발생하지 않습니다.
+      const { presignedUrl, publicUrl } = await api.getPresignedUrl(fileName);
+
+      console.log('Got presigned URL:', presignedUrl);
+      console.log('Public URL will be:', publicUrl);
+
+      const response = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: {
+          'Content-Type': blob.type,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload image to S3.');
+      }
+
+      console.log('Image upload successful!');
+      callback(publicUrl, 'alt text');
+
+      handleContentChange();
+
+
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      alert('이미지 업로드에 실패했습니다.');
     }
   };
 
@@ -30,13 +62,15 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
       <TuiEditor
         ref={editorRef}
         initialValue={initialValue}
-        previewStyle="vertical" // 미리보기 스타일 (탭 또는 수직 분할)
+        previewStyle="vertical"
         height="600px"
-        initialEditType="markdown" // 초기 편집 타입 (마크다운 또는 위지윅)
+        initialEditType="markdown"
         useCommandShortcut={true}
-        language="ko-KR" // 언어 설정
-        // 내용이 변경될 때마다 handleContentChange 함수를 호출
-        onChange={handleContentChange} 
+        language="ko-KR"
+        onChange={handleContentChange}
+        hooks={{
+          addImageBlobHook: onUploadImage,
+        }}
       />
     </div>
   );

@@ -74,5 +74,5 @@ pnpm-debug.log* # [추가]
 *.pem
 
 # AWS CDK artifacts
-cdk.out/
+cdk.out
 cdk.context.json

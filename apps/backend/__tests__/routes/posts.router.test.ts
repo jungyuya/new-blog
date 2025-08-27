@@ -4,6 +4,7 @@ import request from 'supertest';
 import { serve } from '@hono/node-server';
 import type { app } from '../../src/index';
 import { ddbDocClient } from '../../src/lib/dynamodb';
+import { S3Client } from '@aws-sdk/client-s3';
 
 // =================================================================
 // 🤫 [MOCKING] - 모든 외부 의존성을 모킹합니다.
@@ -19,6 +20,19 @@ const { mockVerify } = vi.hoisted(() => ({
 }));
 vi.mock('aws-jwt-verify', () => ({
   CognitoJwtVerifier: { create: vi.fn().mockReturnValue({ verify: mockVerify }) },
+}));
+
+
+const { mockS3Send } = vi.hoisted(() => ({ mockS3Send: vi.fn() }));
+vi.mock('@aws-sdk/client-s3', () => ({
+  S3Client: vi.fn(() => ({
+    send: mockS3Send,
+  })),
+  // [핵심 수정] new DeleteObjectsCommand(input)이 호출되면,
+  // { input } 이라는 속성을 가진 객체를 반환하도록 모킹합니다.
+  DeleteObjectsCommand: vi.fn((input) => ({
+    input: input,
+  })),
 }));
 
 // =================================================================
@@ -91,7 +105,7 @@ describe('Posts API (/api/posts)', () => {
 
   // --- 3. GET /:postId (상세 조회) ---
   describe('GET /:postId', () => {
-    it('should return 403 Forbidden when a non-author tries to access a private post', async () => {
+    it('should return 403 Forbidden when a non-authitor tries to access a private post', async () => {
       const mockPrivatePost = { postId: 'private-1', visibility: 'private', authorId: 'author-1' };
       (ddbDocClient.send as any).mockResolvedValue({ Item: mockPrivatePost });
       mockVerify.mockResolvedValue({ sub: 'another-user-id' }); // 작성자가 아닌 다른 사용자
@@ -118,13 +132,14 @@ describe('Posts API (/api/posts)', () => {
   // --- 4. PUT /:postId (게시물 수정) ---
   describe('PUT /:postId', () => {
     it('should return 403 Forbidden if a non-admin tries to update a post', async () => {
-        mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
-        const response = await request(server)
-            .put('/api/posts/1')
-            .set('Cookie', 'accessToken=user-token')
-            .send({ title: 'Updated Title' });
-        expect(response.status).toBe(403);
+      mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
+      const response = await request(server)
+        .put('/api/posts/1')
+        .set('Cookie', 'accessToken=user-token')
+        .send({ title: 'Updated Title' });
+      expect(response.status).toBe(403);
     });
+
 
     it('should update a post successfully if user is an admin', async () => {
       mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
@@ -140,5 +155,47 @@ describe('Posts API (/api/posts)', () => {
       expect(response.status).toBe(200);
       expect(response.body.post.title).toBe('Updated Title');
     });
+
+
+    // --- 5. DELETE /:postId (게시물 삭제) ---
+    describe('DELETE /:postId', () => {
+      it('should soft-delete post and send request to delete S3 images', async () => {
+        // [1] Given (준비) - 이전과 동일
+        mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
+        const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+        const imageUrl = `https://${BUCKET_NAME}.s3.ap-northeast-2.amazonaws.com/images/image-to-delete.webp`;
+        const mockPost = {
+          postId: 'post-to-delete',
+          authorId: 'admin-id',
+          isDeleted: false,
+          content: `Image here: ![test](${imageUrl})`
+        };
+        (ddbDocClient.send as any)
+          .mockResolvedValueOnce({ Item: mockPost })
+          .mockResolvedValueOnce({});
+        mockS3Send.mockResolvedValue({});
+
+        // [2] When (실행) - 이전과 동일
+        const response = await request(server)
+          .delete('/api/posts/post-to-delete')
+          .set('Cookie', 'accessToken=fake-admin-token');
+
+        // [3] Then (검증)
+        expect(response.status).toBe(200);
+        expect(response.body.message).toContain('soft-deleted successfully');
+        expect(mockS3Send).toHaveBeenCalledTimes(1);
+
+        // [핵심 수정] mockS3Send가 받은 인자(command)에서 .input 속성을 통해 실제 파라미터에 접근합니다.
+        const deleteCommandArgs = mockS3Send.mock.calls[0][0].input;
+        expect(deleteCommandArgs.Delete.Objects.length).toBe(2);
+        expect(deleteCommandArgs.Delete.Objects).toContainEqual({ Key: 'images/image-to-delete.webp' });
+        expect(deleteCommandArgs.Delete.Objects).toContainEqual({ Key: 'thumbnails/image-to-delete.webp' });
+
+        const updateCommandCall = (ddbDocClient.send as any).mock.calls[1][0];
+        expect(updateCommandCall.constructor.name).toBe('UpdateCommand');
+        expect(updateCommandCall.input.UpdateExpression).toContain('isDeleted = :d');
+      });
+    });
+
   });
 });

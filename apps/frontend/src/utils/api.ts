@@ -3,15 +3,15 @@
 
 // Post 타입을 여기에 직접 정의합니다.
 export interface Post {
-    PK: string;
-    SK: string;
-    postId: string;
-    title: string;
-    content: string;
-    authorId: string;
-    authorEmail: string;
-    createdAt: string;
-    updatedAt: string;
+  PK: string;
+  SK: string;
+  postId: string;
+  title: string;
+  content: string;
+  authorId: string;
+  authorEmail: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const getApiBaseUrl = () => {
@@ -31,12 +31,12 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
 
   if (typeof window === 'undefined') {
     const { cookies } = await import('next/headers');
-    
+
     // [핵심 최종 수정 1] cookies()는 Promise를 반환하므로 반드시 await으로 실제 객체를 가져옵니다.
     const cookieStore = await cookies();
-    
+
     const allCookies = cookieStore.getAll();
-    
+
     if (allCookies.length > 0) {
       // [핵심 최종 수정 2] map의 인자에 명시적 타입을 추가하여 암시적 'any' 오류를 방지합니다.
       const cookieHeader = allCookies
@@ -59,7 +59,7 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
     const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response.' }));
     throw new Error(errorData.message || `API call failed with status ${response.status}`);
   }
-  
+
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
     return response.json() as Promise<T>;
@@ -93,6 +93,12 @@ export const api = {
   },
   createNewPost: (postData: { title: string; content: string }): Promise<{ message: string; post: Post }> => {
     return fetchWrapper('/posts', { method: 'POST', body: JSON.stringify(postData) });
+  },
+  getPresignedUrl: (fileName: string): Promise<{ presignedUrl: string; key: string; publicUrl: string; }> => {
+    // 쿼리 파라미터를 포함하여 GET 요청을 보냅니다.
+    return fetchWrapper(`/images/presigned-url?fileName=${encodeURIComponent(fileName)}`, {
+      method: 'GET',
+    });
   },
   updatePost: (postId: string, postData: { title?: string; content?: string }): Promise<{ message: string; post: Post }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'PUT', body: JSON.stringify(postData) });

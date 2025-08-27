@@ -100,7 +100,7 @@ export class BlogStack extends Stack {
 
     // --- 1.3. 이미지 S3저장소 리소스 ---
     this.imageBucket = new s3.Bucket(this, 'BlogImageBucket', {
-      bucketName: `blog-image-bucket-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`, // 버킷 이름 규칙 준수
+      bucketName: `blog-image-bucket-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
       blockPublicAccess: new s3.BlockPublicAccess({
         blockPublicAcls: false,
         blockPublicPolicy: false,
@@ -119,6 +119,27 @@ export class BlogStack extends Stack {
         },
       ],
       eventBridgeEnabled: true,
+
+      // --- S3 수명 주기(Lifecycle) 규칙 ---
+      lifecycleRules: [
+        {
+          id: 'AbortIncompleteUploadsAfter7Days',
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+          enabled: true,
+        },
+        {
+          id: 'ExpireUploadsAfter1Day',
+          // ↓ 여기: filters 대신 prefix 사용
+          prefix: 'uploads/',
+          expiration: cdk.Duration.days(1),
+          enabled: true,
+        },
+        // (선택 사항) 나중에 images/나 thumbnails/ 폴더의 고아 객체도 정리할 수 있습니다.
+        // {
+        //   description: 'Delete incomplete multipart uploads after 7 days',
+        //   abortIncompleteMultipartUploadAfter: cdk.Duration.days(7)
+        // }
+      ],
     });
 
     // --- 1.4 백엔드 컴퓨팅 리소스 ---

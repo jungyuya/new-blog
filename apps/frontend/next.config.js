@@ -24,6 +24,17 @@ const nextConfig = {
     NEXT_PUBLIC_RELEASE_ID: process.env.NEXT_PUBLIC_RELEASE_ID || '',
   },
 
+    images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'blog-image-bucket-bloginfrastack.s3.ap-northeast-2.amazonaws.com',
+        port: '',
+        pathname: '/**', // 버킷 내의 모든 경로(/images/**, /thumbnails/**)를 허용
+      },
+    ],
+  },
+
   // 개발 환경에서만 동작하는 리라이트(프록시)
   async rewrites() {
     return [

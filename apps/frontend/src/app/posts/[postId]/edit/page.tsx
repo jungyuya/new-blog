@@ -40,7 +40,7 @@ function EditPostForm() {
     }
     try {
       const { post: fetchedPost } = await api.fetchPostById(postId);
-      
+
       // [핵심] 소유권 검증 로직 추가
       if (user && fetchedPost.authorId !== user.id) {
         alert('이 게시물을 수정할 권한이 없습니다.');
@@ -116,13 +116,17 @@ function EditPostForm() {
         <div>
           <label className="block text-lg font-medium text-gray-800 mb-2">내용</label>
           <div className="mt-1">
-            {/* Editor는 key prop을 통해 initialValue가 변경될 때 재생성되도록 할 수 있습니다. */}
-            {/* 또는 initialContent가 설정된 후에 렌더링하도록 합니다. */}
-            {!isLoading && (
+            {/* [핵심 수정] isLoading이 false이고, initialContent가 빈 문자열이 아닐 때만 Editor를 렌더링하도록 조건을 강화합니다. */}
+            {/* 이렇게 하면 데이터가 완전히 준비된 상태에서만 Editor가 마운트되는 것을 보장할 수 있습니다. */}
+            {!isLoading && initialContent && (
               <Editor
                 initialValue={initialContent}
                 onChange={(value) => setContent(value)}
               />
+            )}
+            {/* 로딩 중이거나, 아직 initialContent가 없을 때 보여줄 플레이스홀더 */}
+            {(isLoading || !initialContent) && (
+              <div className="w-full h-96 bg-gray-200 animate-pulse rounded-md"></div>
             )}
           </div>
         </div>
