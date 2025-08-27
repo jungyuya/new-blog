@@ -59,32 +59,57 @@ export const handler: Handler<EventBridgeEvent<'Object Created', S3ObjectCreated
   }
 };
 
-// resizeAndUpload 헬퍼 함수는 변경할 필요가 없습니다.
+/**
+ * 이미지를 리사이징하고 지정된 S3 경로에 업로드하는 헬퍼 함수
+ * [v1.1] GIF 파일은 WebP로 변환하지 않고 원본 포맷을 유지하도록 수정
+ */
 async function resizeAndUpload(
   buffer: Buffer,
   bucket: string,
   originalKey: string,
   targetFolder: 'images' | 'thumbnails',
   maxWidth: number
-): Promise<void> {
-  const fileName = originalKey.substring(originalKey.indexOf('/') + 1);
-  // 확장자를 webp로 변경합니다.
-  const newFileName = `${path.parse(fileName).name}.webp`;
-  const targetKey = `${targetFolder}/${newFileName}`;
+): Promise<{ targetKey: string }> { // [수정] 반환 값에 targetKey를 포함
+  const originalFileName = originalKey.substring(originalKey.indexOf('/') + 1);
+  const fileExtension = path.extname(originalFileName).toLowerCase();
+  const fileNameWithoutExt = path.parse(originalFileName).name;
 
-  const resizedBuffer = await sharp(buffer)
-    .resize({ width: maxWidth, withoutEnlargement: true })
-    .webp({ quality: 80 })
-    .toBuffer();
+  let processedBuffer: Buffer;
+  let targetKey: string;
+  let contentType: string;
+
+  // [핵심] 파일 확장자가 .gif인 경우, 별도로 처리합니다.
+  if (fileExtension === '.gif') {
+    console.log(`Processing as GIF: ${originalFileName}`);
+    // GIF는 애니메이션을 유지하기 위해 리사이징만 수행하고 포맷은 변경하지 않습니다.
+    processedBuffer = await sharp(buffer, { animated: true })
+      .resize({ width: maxWidth, withoutEnlargement: true })
+      .toBuffer();
+
+    targetKey = `${targetFolder}/${fileNameWithoutExt}.gif`;
+    contentType = 'image/gif';
+  } else {
+    console.log(`Processing as standard image (to WebP): ${originalFileName}`);
+    // GIF가 아닌 다른 이미지들은 WebP로 변환하여 최적화합니다.
+    processedBuffer = await sharp(buffer)
+      .resize({ width: maxWidth, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+
+    targetKey = `${targetFolder}/${fileNameWithoutExt}.webp`;
+    contentType = 'image/webp';
+  }
 
   const putObjectCommand = new PutObjectCommand({
     Bucket: bucket,
     Key: targetKey,
-    Body: resizedBuffer,
-    ContentType: 'image/webp',
+    Body: processedBuffer,
+    ContentType: contentType,
   });
 
   await s3.send(putObjectCommand);
-  console.log(`Uploaded resized image to: s3://${bucket}/${targetKey}`);
-}
+  console.log(`Uploaded processed image to: s3://${bucket}/${targetKey}`);
 
+  // [추가] 생성된 파일의 키를 반환합니다. (향후 확장을 위해)
+  return { targetKey };
+}

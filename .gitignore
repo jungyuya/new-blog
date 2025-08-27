@@ -77,6 +77,3 @@ pnpm-debug.log* # [추가]
 cdk.out
 cdk.context.json
 
-# Build artifacts
-/out
-/apps/infra/cdk.out

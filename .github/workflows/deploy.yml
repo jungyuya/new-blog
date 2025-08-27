@@ -150,26 +150,18 @@ jobs:
 
       - name: "The Single Source of Truth: Build Frontend Once"
         env:
-          # --- [제거] Turborepo 관련 환경 변수들을 모두 삭제합니다. ---
-          
-          # -----------------------------------------------------------------
           NODE_ENV: production
           NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
-          # --- [추가] 빌드 시점에, 운영 환경에서 사용할 API 경로를 명시적으로 주입합니다. ---
           NEXT_PUBLIC_API_ENDPOINT: /api
-        run: |
-          # --- [제거] Turborepo 관련 디버깅 echo 구문들을 모두 삭제합니다. ---
-          
+        run: |          
           echo "🚀 Starting the single build..."
-          # --- [제거] Turborepo 관련 환경 변수 설정을 삭제합니다. ---
           pnpm --filter frontend run build
 
       - name: "Build Sharp Lambda Layer Artifact"
         if: ${{ needs.detect_changes.outputs.blog == 'true' || needs.detect_changes.outputs.common == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           echo "Building the sharp-layer.zip artifact on the runner..."
-          # 빌드 스크립트에 실행 권한을 부여하고 실행합니다.
           chmod +x ./build-sharp-layer.sh
           ./build-sharp-layer.sh
         
@@ -194,8 +186,7 @@ jobs:
           tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.set_release.outputs.release_id }}
           platforms: linux/arm64
           provenance: false
-      
-      
+         
       - name: "Verify ECR Image Existence (Safety Check)"
         run: |
           echo "Verifying that the image was pushed successfully..."

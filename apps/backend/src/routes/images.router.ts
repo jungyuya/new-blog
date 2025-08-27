@@ -23,32 +23,35 @@ const PresignedUrlQuerySchema = z.object({
 imagesRouter.get(
     '/presigned-url',
     cookieAuthMiddleware,
-    adminOnlyMiddleware, // 관리자만 이미지 업로드 가능
+    adminOnlyMiddleware,
     zValidator('query', PresignedUrlQuerySchema),
     async (c) => {
         try {
             const { fileName } = c.req.valid('query');
 
-            // 1. 파일 확장자를 추출하고, 고유한 파일 이름을 생성합니다.
-            //    해킹 시도를 방지하기 위해, 사용자가 제공한 파일 이름은 그대로 사용하지 않습니다.
-            const extension = path.extname(fileName);
-            const uniqueFileName = `${uuidv4()}${extension}`;
-            const key = `uploads/${uniqueFileName}`;
+            const extension = path.extname(fileName).toLowerCase();
+            const uniqueFileNameWithoutExt = uuidv4();
 
-            // 2. Presigned URL을 생성하기 위한 명령(Command)을 만듭니다.
+            // [핵심 수정] 최종 파일 확장자를 결정합니다.
+            const finalExtension = extension === '.gif' ? '.gif' : '.webp';
+            const finalFileName = `${uniqueFileNameWithoutExt}${finalExtension}`;
+
+            const key = `uploads/${uniqueFileNameWithoutExt}${extension}`; // 원본 확장자로 업로드
+
             const command = new PutObjectCommand({
                 Bucket: BUCKET_NAME,
                 Key: key,
             });
 
-            // 3. getSignedUrl 함수를 사용하여 10분 동안 유효한 URL을 생성합니다.
-            const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 600초 = 10분
+            const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
 
-            // 4. 프론트엔드에 URL과, 업로드 후 사용할 최종 파일 키를 함께 반환합니다.
+            // [핵심 수정] publicUrl을 생성할 때, 동적으로 결정된 최종 파일 이름을 사용합니다.
+            const publicUrl = `https://${BUCKET_NAME}.s3.${process.env.REGION}.amazonaws.com/images/${finalFileName}`;
+
             return c.json({
                 presignedUrl,
-                key, // 예: uploads/uuid-123.jpg
-                publicUrl: `https://${BUCKET_NAME}.s3.${process.env.REGION}.amazonaws.com/images/${uniqueFileName.replace(extension, '.webp')}` // 최종적으로 접근할 URL
+                key,
+                publicUrl,
             });
 
         } catch (error) {
@@ -57,5 +60,4 @@ imagesRouter.get(
         }
     }
 );
-
 export default imagesRouter;
