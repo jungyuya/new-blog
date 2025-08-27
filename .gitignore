@@ -76,3 +76,7 @@ pnpm-debug.log* # [추가]
 # AWS CDK artifacts
 cdk.out
 cdk.context.json
+
+# Build artifacts
+/out
+/apps/infra/cdk.out

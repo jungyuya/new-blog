@@ -165,6 +165,15 @@ jobs:
           # --- [제거] Turborepo 관련 환경 변수 설정을 삭제합니다. ---
           pnpm --filter frontend run build
 
+      - name: "Build Sharp Lambda Layer Artifact"
+        if: ${{ needs.detect_changes.outputs.blog == 'true' || needs.detect_changes.outputs.common == 'true' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "Building the sharp-layer.zip artifact on the runner..."
+          # 빌드 스크립트에 실행 권한을 부여하고 실행합니다.
+          chmod +x ./build-sharp-layer.sh
+          ./build-sharp-layer.sh
+        
+
       # --- 3악장: 2중주 (The Dual Deployment) ---
       - name: "Configure AWS Credentials"
         uses: aws-actions/configure-aws-credentials@v4

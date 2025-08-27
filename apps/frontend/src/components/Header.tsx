@@ -37,7 +37,7 @@ export default function Header() {
           ) : user ? (
             // [유지] 로그인 상태 UI는 그대로 유지합니다.
             <>
-              <span className="text-gray-600">환영합니다! {user.email} 님!</span>
+              <span className="text-gray-600">환영합니다~! {user.email} 님!</span>
               
               {/* [핵심 수정] '새 글 작성' 버튼을 isAdmin이 true일 때만 렌더링하도록 <></>로 감싸고 조건을 추가합니다. */}
               {isAdmin && (
