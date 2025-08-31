@@ -7,6 +7,7 @@ import { api, Post } from '@/utils/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
+import PostMetadataEditor, { type PostMetadata } from '@/components/PostMetadataEditor';
 
 // Editor 컴포넌트를 동적으로 import 합니다.
 const Editor = dynamic(() => import('@/components/Editor'), {
@@ -27,9 +28,18 @@ function EditPostForm() {
   const [initialContent, setInitialContent] = useState<string>('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [metadata, setMetadata] = useState<PostMetadata>({
+    tags: [],
+    status: 'published',
+    visibility: 'public',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleMetadataChange = useCallback((newMetadata: PostMetadata) => {
+    setMetadata(newMetadata);
+  }, []);
 
   // 게시물 데이터를 불러오는 함수
   const fetchPost = useCallback(async () => {
@@ -78,9 +88,16 @@ function EditPostForm() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await api.updatePost(postId, { title, content });
+      // [수정] 수정된 메타데이터도 함께 전송합니다.
+      await api.updatePost(postId!, {
+        title,
+        content,
+        tags: metadata.tags,
+        status: metadata.status,
+        visibility: metadata.visibility,
+      });
       alert('게시물이 성공적으로 수정되었습니다.');
-      router.push(`/posts/${postId}`);
+      router.push(`/posts/${postId!}`);
     } catch (err) {
       // [해결] err 변수를 console.error에서 사용하여 'no-unused-vars' 규칙을 만족시킵니다.
       console.error('게시물 수정 실패:', err);
@@ -99,47 +116,57 @@ function EditPostForm() {
   }
 
   return (
-    <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-4xl font-bold mb-8">글 수정하기</h1>
-      <form onSubmit={handleSubmit} className="w-full flex flex-col gap-6">
-        <div>
-          <label htmlFor="title" className="block text-lg font-medium text-gray-800 mb-2">제목</label>
+      <form onSubmit={handleSubmit}>
+        {/* --- 1. 제목 입력 영역 --- */}
+        <div className="mb-8">
+          <label htmlFor="title" className="sr-only">제목</label>
           <input
             id="title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm"
+            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-500 transition-colors bg-transparent"
             required
           />
         </div>
-        <div>
-          <label className="block text-lg font-medium text-gray-800 mb-2">내용</label>
-          <div className="mt-1">
-            {/* [핵심 수정] isLoading이 false이고, initialContent가 빈 문자열이 아닐 때만 Editor를 렌더링하도록 조건을 강화합니다. */}
-            {/* 이렇게 하면 데이터가 완전히 준비된 상태에서만 Editor가 마운트되는 것을 보장할 수 있습니다. */}
-            {!isLoading && initialContent && (
-              <Editor
-                initialValue={initialContent}
-                onChange={(value) => setContent(value)}
-              />
-            )}
-            {/* 로딩 중이거나, 아직 initialContent가 없을 때 보여줄 플레이스홀더 */}
-            {(isLoading || !initialContent) && (
-              <div className="w-full h-96 bg-gray-200 animate-pulse rounded-md"></div>
-            )}
+
+        {/* --- 2. 본문 에디터 영역 --- */}
+        <div className="mb-8">
+          <label htmlFor="content" className="sr-only">내용</label>
+          {/* [수정] 데이터 로딩이 완료된 후에만 Editor를 렌더링합니다. */}
+          {!isLoading && (
+            <Editor
+              initialValue={content}
+              onChange={(value) => setContent(value)}
+            />
+          )}
+        </div>
+
+        {/* --- 3. 메타데이터 설정 영역 --- */}
+        <div className="mb-8">
+          <PostMetadataEditor
+            initialData={metadata}
+            onMetadataChange={handleMetadataChange}
+          />
+        </div>
+
+        {/* 에러 메시지 표시 영역 */}
+        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+
+        {/* --- 4. 하단 고정 버튼 영역 --- */}
+        <footer className="sticky bottom-0 left-0 w-full bg-white bg-opacity-90 backdrop-blur-sm p-4 mt-8 border-t">
+          <div className="container mx-auto flex justify-end max-w-4xl px-4">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-8 py-3 bg-yellow-500 text-white font-semibold rounded-md shadow-sm hover:bg-yellow-600 disabled:bg-gray-400"
+            >
+              {isSubmitting ? '수정 중...' : '수정 완료'}
+            </button>
           </div>
-        </div>
-        {error && <p className="text-red-500 text-center">{error}</p>}
-        <div className="flex justify-end mt-4">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-8 py-3 bg-yellow-500 text-white font-semibold rounded-md shadow-sm hover:bg-yellow-600 disabled:bg-gray-400"
-          >
-            {isSubmitting ? '수정 중...' : '수정 완료'}
-          </button>
-        </div>
+        </footer>
       </form>
     </main>
   );

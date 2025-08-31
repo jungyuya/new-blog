@@ -100,9 +100,19 @@ export const api = {
       method: 'GET',
     });
   },
-  updatePost: (postId: string, postData: { title?: string; content?: string }): Promise<{ message: string; post: Post }> => {
+  updatePost: (
+    postId: string,
+    postData: {
+      title?: string;
+      content?: string;
+      tags?: string[];
+      status?: 'published' | 'draft';
+      visibility?: 'public' | 'private';
+    }
+  ): Promise<{ message: string; post: Post }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'PUT', body: JSON.stringify(postData) });
   },
+
   deletePost: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'DELETE' });
   },

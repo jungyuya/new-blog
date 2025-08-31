@@ -1,11 +1,14 @@
 // 파일 위치: apps/frontend/src/app/posts/new/page.tsx (v1.1 - Editor 적용 최종본)
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { api } from '@/utils/api';
-import dynamic from 'next/dynamic'; // [추가]
+import dynamic from 'next/dynamic';
+import PostMetadataEditor, { type PostMetadata } from '@/components/PostMetadataEditor';
+
+
 
 // [추가] Editor 컴포넌트를 동적으로 import 합니다.
 const Editor = dynamic(() => import('@/components/Editor'), {
@@ -24,15 +27,25 @@ export default function NewPostPage() {
 function NewPostForm() {
   const router = useRouter();
   const [title, setTitle] = useState('');
-  // [수정] content 상태는 Editor의 initialValue로 사용됩니다.
   const [content, setContent] = useState('');
+  // [추가] 메타데이터를 위한 새로운 상태 변수
+  const [metadata, setMetadata] = useState<PostMetadata>({
+    tags: [],
+    status: 'published',
+    visibility: 'public',
+  });
+  // [추가] PostMetadataEditor로부터 변경 사항을 받을 콜백 함수
+  const handleMetadataChange = useCallback((newMetadata: PostMetadata) => {
+    setMetadata(newMetadata);
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    
+
     // [추가] 제목과 내용 유효성 검사를 강화합니다.
     if (!title.trim() || !content.trim()) {
       setError('제목과 내용을 모두 입력해주세요.');
@@ -42,7 +55,15 @@ function NewPostForm() {
     setIsLoading(true);
 
     try {
-      const newPostData = { title, content };
+      // [핵심] title, content와 함께 metadata 상태를 API 호출에 포함시킵니다.
+      const newPostData = {
+        title,
+        content,
+        tags: metadata.tags,
+        status: metadata.status,
+        visibility: metadata.visibility,
+      };
+
       const result = await api.createNewPost(newPostData);
       console.log('Post created successfully:', result);
       router.push(`/posts/${result.post.postId}`);
@@ -59,43 +80,56 @@ function NewPostForm() {
   };
 
   return (
-    // [수정] 레이아웃을 조금 더 깔끔하게 조정합니다.
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-8">새 글 작성</h1>
-      <form onSubmit={handleSubmit} className="w-full flex flex-col gap-6">
-        <div>
-          <label htmlFor="title" className="block text-lg font-medium text-gray-800 mb-2">제목</label>
+    // [수정] 전체적인 레이아웃을 중앙 정렬된 단일 컬럼으로 변경합니다.
+    <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <form onSubmit={handleSubmit}>
+        {/* --- 1. 제목 입력 영역 --- */}
+        <div className="mb-8">
+          {/* [수정] JUNGYU 님의 기존 스타일을 유지하여, 크고 굵은 하단 테두리 스타일로 변경 */}
+          <label htmlFor="title" className="sr-only">제목</label>
           <input
             id="title"
             type="text"
             placeholder="제목을 입력하세요"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-200 transition-colors bg-transparent"
             required
           />
         </div>
-        <div>
-          <label htmlFor="content" className="block text-lg font-medium text-gray-800 mb-2">내용</label>
-          {/* [핵심 교체] textarea를 Editor 컴포넌트로 교체합니다. */}
-          <div className="mt-1">
-            <Editor
-              initialValue={content}
-              // Editor의 내용이 변경될 때마다 content 상태를 업데이트합니다.
-              onChange={(value) => setContent(value)}
-            />
+
+        {/* --- 2. 본문 에디터 영역 --- */}
+        <div className="mb-8">
+          <label htmlFor="content" className="sr-only">내용</label>
+          <Editor
+            initialValue={content}
+            onChange={(value) => setContent(value)}
+          />
+        </div>
+
+        {/* --- 3. 메타데이터 설정 영역 --- */}
+        <div className="mb-8">
+          <PostMetadataEditor
+            initialData={metadata}
+            onMetadataChange={handleMetadataChange}
+          />
+        </div>
+
+        {/* 에러 메시지 표시 영역 */}
+        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+
+        {/* --- 4. 하단 고정 버튼 영역 --- */}
+        <footer className="sticky bottom-0 left-0 w-full bg-white bg-opacity-90 backdrop-blur-sm p-4 mt-8 border-t">
+          <div className="container mx-auto flex justify-end max-w-4xl px-4">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400"
+            >
+              {isLoading ? '저장 중...' : '글 저장하기'}
+            </button>
           </div>
-        </div>
-        {error && <p className="text-red-500 text-center">{error}</p>}
-        <div className="flex justify-end mt-4">
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400"
-          >
-            {isLoading ? '저장 중...' : '게시물 저장'}
-          </button>
-        </div>
+        </footer>
       </form>
     </main>
   );
