@@ -24,3 +24,28 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ================================================================ */
+/* Custom Styles for Markdown Content                             */
+/* ================================================================ */
+
+/* [수정] prose 클래스 내부의 이미지에 직접 스타일을 적용하여 우선순위를 높입니다. */
+.prose img {
+  /* 
+    [핵심] 이미지의 너비를 텍스트 폭과 유사하게 제한합니다.
+    'max-w-3xl' (768px) 또는 'max-w-4xl' (896px) 정도가 일반적인 본문 폭입니다.
+    여기서는 768px을 기준으로 설정하겠습니다. 이 값은 조정 가능합니다.
+  */
+  max-width: 768px;
+  
+  /* 너비가 제한되었으므로, 가운데 정렬을 위해 마진을 설정합니다. */
+  margin-left: auto;
+  margin-right: auto;
+  
+  /* 나머지 미적 스타일은 유지합니다. */
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
