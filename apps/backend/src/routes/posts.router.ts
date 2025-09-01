@@ -27,6 +27,8 @@ const UpdatePostSchema = z.object({
   tags: z.array(z.string()).optional(),
   status: z.enum(['published', 'draft']).optional(),
   visibility: z.enum(['public', 'private']).optional(),
+  thumbnailUrl: z.string().url().optional(),
+  imageUrl: z.string().url().optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: '수정할 내용을 하나 이상 제공해야 합니다.' }
@@ -132,21 +134,29 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
 // --- [3] POST / - 새 게시물 생성 (인증 필요) ---
 postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('json', CreatePostSchema), async (c) => {
   try {
-    // 1. 유효성 검사를 통과한 데이터를 가져옵니다.
-    //    기본값을 설정하여, 클라이언트가 값을 보내지 않아도 안전하게 처리합니다.
-    const {
-      title,
-      content,
-      tags = [],
-      status = 'published',
-      visibility = 'public'
-    } = c.req.valid('json');
-
+    const { title, content, tags = [], status = 'published', visibility = 'public' } = c.req.valid('json');
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
     const postId = uuidv4();
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
+    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+
+    // --- [핵심 추가] ---
+    // 1. content에서 첫 번째 이미지 URL을 추출합니다.
+    const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+    const firstImageMatch = content.match(imageUrlRegex);
+
+    let thumbnailUrl = '';
+    let imageUrl = '';
+
+    if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+      // 우리 S3 버킷의 이미지일 경우에만 처리합니다.
+      imageUrl = firstImageMatch[1];
+      // imageUrl로부터 thumbnailUrl을 생성합니다. (예: .../images/.. -> .../thumbnails/..)
+      thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
+    }
+    // --- [추가 완료] ---
 
     // 2. [수정] 확장된 속성을 포함하여 Post 아이템 객체를 정의합니다.
     const postItem = {
@@ -162,13 +172,13 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
       updatedAt: now,
       isDeleted: false,
       viewCount: 0,
-      // --- [반영된 속성들] ---
       status: status,
       visibility: visibility,
-      authorNickname: userEmail?.split('@')[0] || '익명', // 임시 닉네임
+      authorNickname: userEmail?.split('@')[0] || '익명',
       tags: tags,
-      thumbnailUrl: '', // 아직 기능이 없으므로 빈 값
-      // ---
+      // [수정] 추출된 URL 값을 thumbnailUrl과 imageUrl에 할당합니다.
+      thumbnailUrl: thumbnailUrl,
+      imageUrl: imageUrl,
       GSI1_PK: `USER#${userId}`,
       GSI1_SK: `POST#${now}#${postId}`,
       GSI3_PK: 'POST#ALL',
@@ -227,7 +237,7 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
-  adminOnlyMiddleware, // [추가] 권한 검사
+  adminOnlyMiddleware,
   zValidator('json', UpdatePostSchema),
   async (c) => {
     const postId = c.req.param('postId');
@@ -235,6 +245,7 @@ postsRouter.put(
     const userId = c.get('userId');
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
+    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
     try {
       // 1. 수정 전 원본 게시물을 가져와 소유권을 확인합니다.
@@ -250,35 +261,31 @@ postsRouter.put(
         return c.json({ message: 'Forbidden: You are not the author.' }, 403);
       }
 
-      // 2. [핵심] 태그(tags)가 변경된 경우, 기존 태그 아이템을 삭제하고 새로 생성합니다.
-      //    (DynamoDB TransactWriteItems를 사용하면 더 안전하게 처리할 수 있습니다.)
+      // 2. [핵심] 태그(tags)가 변경된 경우, 기존 태그와 새 태그를 비교하여
+      //    DynamoDB의 Tag 아이템들을 동기화합니다.
       if (updateData.tags) {
-        const oldTags = existingPost.tags || [];
-        const newTags = updateData.tags;
+        const oldTags: string[] = existingPost.tags || [];
+        const newTags: string[] = updateData.tags;
 
-        // 삭제할 태그: (기존 태그) - (새 태그)
-        const tagsToDelete = oldTags.filter((t: string) => !newTags.includes(t));
-        // 추가할 태그: (새 태그) - (기존 태그)
-        const tagsToAdd = newTags.filter((t: string) => !oldTags.includes(t));
+        const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
+        const tagsToAdd = newTags.filter(t => !oldTags.includes(t));
 
         const writeRequests: any[] = [];
 
-        // 삭제 요청 추가
-        tagsToDelete.forEach((tagName: string) => {
+        tagsToDelete.forEach(tagName => {
           writeRequests.push({
             DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } },
           });
         });
 
-        // 추가 요청 추가
-        tagsToAdd.forEach((tagName: string) => {
+        tagsToAdd.forEach(tagName => {
           writeRequests.push({
             PutRequest: {
               Item: {
                 PK: `TAG#${tagName.trim().toLowerCase()}`,
                 SK: `POST#${postId}`,
                 postId: postId,
-                title: updateData.title || existingPost.title, // 제목이 바뀌면 새 제목으로
+                title: updateData.title || existingPost.title,
                 createdAt: existingPost.createdAt,
                 authorNickname: existingPost.authorNickname,
                 status: updateData.status || existingPost.status,
@@ -295,13 +302,28 @@ postsRouter.put(
         }
       }
 
-      // 3. [핵심] DynamoDB UpdateExpression을 동적으로 생성합니다.
-      //    클라이언트가 보낸 데이터만 선택적으로 업데이트합니다.
+      // 3. [핵심] content가 수정되었다면, 섬네일 정보를 다시 추출합니다.
+      //    (클라이언트가 직접 thumbnailUrl을 보내지 않은 경우에만)
+      if (updateData.content && !updateData.thumbnailUrl) {
+        const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+        const firstImageMatch = updateData.content.match(imageUrlRegex);
+
+        let thumbnailUrl = '';
+        let imageUrl = '';
+
+        if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+          imageUrl = firstImageMatch[1];
+          thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
+        }
+        updateData.thumbnailUrl = thumbnailUrl;
+        updateData.imageUrl = imageUrl;
+      }
+
+      // 4. DynamoDB UpdateExpression을 동적으로 생성하여 Post 아이템을 업데이트합니다.
       const updateExpressionParts: string[] = [];
       const expressionAttributeValues: Record<string, any> = { ':u': now };
       const expressionAttributeNames: Record<string, string> = {};
 
-      // updateData의 각 키에 대해 UpdateExpression을 구성합니다.
       for (const [key, value] of Object.entries(updateData)) {
         if (value !== undefined) {
           const attrName = `#${key}`;
@@ -312,10 +334,8 @@ postsRouter.put(
         }
       }
 
-      // 업데이트할 내용이 있을 경우에만 실행
       if (updateExpressionParts.length > 0) {
         const updateExpression = `SET updatedAt = :u, ${updateExpressionParts.join(', ')}`;
-
         const { Attributes } = await ddbDocClient.send(new UpdateCommand({
           TableName: TABLE_NAME,
           Key: { PK: `POST#${postId}`, SK: 'METADATA' },
@@ -326,7 +346,6 @@ postsRouter.put(
         }));
         return c.json({ message: 'Post updated successfully!', post: Attributes }, 200);
       } else {
-        // 업데이트할 내용이 없으면 기존 게시물을 그대로 반환
         return c.json({ message: 'No changes detected.', post: existingPost }, 200);
       }
 

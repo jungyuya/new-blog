@@ -51,18 +51,23 @@ function EditPostForm() {
     try {
       const { post: fetchedPost } = await api.fetchPostById(postId);
 
-      // [핵심] 소유권 검증 로직 추가
       if (user && fetchedPost.authorId !== user.id) {
         alert('이 게시물을 수정할 권한이 없습니다.');
-        router.replace(`/posts/${postId}`); // 수정 페이지 접근 차단
+        router.replace(`/posts/${postId}`);
         return;
       }
 
+      // [핵심 수정] 불러온 데이터로 모든 상태를 올바르게 초기화합니다.
       setTitle(fetchedPost.title);
       setContent(fetchedPost.content);
-      setInitialContent(fetchedPost.content); // Editor 초기값을 위한 상태 설정
+      // PostMetadataEditor가 사용할 초기 데이터를 설정합니다.
+      setMetadata({
+        tags: fetchedPost.tags || [],
+        status: fetchedPost.status || 'published',
+        visibility: fetchedPost.visibility || 'public',
+      });
+
     } catch (err) {
-      // [해결] err 변수를 console.error에서 사용하여 'no-unused-vars' 규칙을 만족시킵니다.
       console.error('게시물 로딩 실패:', err);
       setError('게시물을 불러오는 데 실패했습니다.');
     } finally {

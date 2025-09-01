@@ -12,6 +12,14 @@ export interface Post {
   authorEmail: string;
   createdAt: string;
   updatedAt: string;
+    // --- 추가된 속성들 ---
+  viewCount?: number;
+  status?: 'published' | 'draft';
+  visibility?: 'public' | 'private';
+  authorNickname?: string;
+  tags?: string[];
+  thumbnailUrl?: string;
+  isDeleted?: boolean;
 }
 
 const getApiBaseUrl = () => {
@@ -91,7 +99,13 @@ export const api = {
   fetchPostById: (postId: string): Promise<{ post: Post }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'GET' });
   },
-  createNewPost: (postData: { title: string; content: string }): Promise<{ message: string; post: Post }> => {
+  createNewPost: (postData: {
+    title: string;
+    content: string;
+    tags?: string[];
+    status?: 'published' | 'draft';
+    visibility?: 'public' | 'private';
+  }): Promise<{ message: string; post: Post }> => {
     return fetchWrapper('/posts', { method: 'POST', body: JSON.stringify(postData) });
   },
   getPresignedUrl: (fileName: string): Promise<{ presignedUrl: string; key: string; publicUrl: string; }> => {
