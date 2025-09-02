@@ -87,15 +87,16 @@ export class BlogStack extends Stack {
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
     });
 
-    // --- GSI 2 (태그별 게시물 최신순 조회용) ---
+    // --- GSI 2 (태그별 게시물 최신순 조회용 v2) ---
     postsTable.addGlobalSecondaryIndex({
-      indexName: 'GSI2', // 태그 조회를 위한 인덱스
-      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING }, // PK(TAG#...)를 그대로 사용
-      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING }, // createdAt으로 정렬
-      // ProjectionType을 설정하여, 쿼리 시 추가 데이터를 가져올 수 있게 합니다.
-      // ALL로 하면 모든 속성을 복제하지만, INCLUDE는 특정 속성만 복제하여 비용을 절감합니다.
+      indexName: 'GSI2-v2',
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.INCLUDE,
-      nonKeyAttributes: ['postId', 'title', 'authorNickname', 'status', 'visibility'],
+      nonKeyAttributes: [
+        'postId', 'title', 'authorNickname', 'status', 'visibility',
+        'thumbnailUrl', 'content', 'viewCount', 'tags'
+      ],
     });
 
     // --- 1.3. 이미지 S3저장소 리소스 ---
