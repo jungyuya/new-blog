@@ -1,5 +1,5 @@
 // 파일 위치: apps/infra/lib/InfraStack.ts
-// 최종 버전: v2025.08.26-The-Purified-Masterpiece
+// 최종 버전: v2025.09.03-The-Purified-Masterpiece - GSI2 수정 중
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
