@@ -14,8 +14,8 @@ tagsRouter.get('/:tagName/posts', async (c) => {
   try {
     const command = new QueryCommand({
       TableName: TABLE_NAME,
-      // 수정된 GSI2-v2를 사용합니다.
-      IndexName: 'GSI2-v2', 
+      // GSI2를 사용합니다.
+      IndexName: 'GSI2', 
       KeyConditionExpression: 'PK = :pk',
       // [핵심] 공개되고 발행된 글만 필터링합니다.
       FilterExpression: '#status = :published AND #visibility = :public',

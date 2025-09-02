@@ -87,7 +87,7 @@ export class BlogStack extends Stack {
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
     });
 
-    // --- GSI 2 (태그별 게시물 최신순 조회용 v2) ---
+    // --- GSI 2 (태그별 게시물 최신순 조회용) ---
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI2',
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
