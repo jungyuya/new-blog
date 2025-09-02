@@ -1,0 +1,58 @@
+// 파일 위치: apps/frontend/src/app/tags/[tagName]/page.tsx
+import { api, Post } from "@/utils/api";
+import PostCard from "@/components/PostCard";
+import { notFound } from "next/navigation";
+
+// 동적 렌더링을 명시합니다.
+export const dynamic = 'force-dynamic';
+
+// 페이지 컴포넌트의 props 타입을 정의합니다.
+interface TagPageProps {
+    params: {
+        tagName: string;
+    };
+}
+
+/**
+ * 특정 태그에 속한 모든 게시물 목록을 보여주는 페이지입니다.
+ * 서버 컴포넌트로 구현되어, 서버에서 데이터를 미리 가져옵니다.
+ */
+export default async function TagPage({ params }: TagPageProps) {
+    const awaitedParams = await params;
+    const tagName = decodeURIComponent(awaitedParams.tagName);
+
+    let posts: Post[] = [];
+    let error: string | null = null;
+
+    try {
+        // [핵심] 우리가 만든 새로운 API 함수를 호출합니다.
+        const response = await api.fetchPostsByTag(tagName);
+        posts = response.posts;
+    } catch (err) {
+        console.error(`Failed to fetch posts for tag ${tagName}:`, err);
+        // API 호출 실패 시 404 페이지를 보여줄 수 있습니다.
+        // 또는 에러 메시지를 표시할 수도 있습니다.
+        notFound();
+    }
+
+    return (
+        <div className="container mx-auto px-4 py-8">
+            {/* 페이지 상단에 현재 보고 있는 태그를 명확하게 표시합니다. */}
+            <div className="mb-8 border-b pb-4">
+                <span className="text-gray-500 text-lg">태그:</span>
+                <h1 className="text-2xl font-bold text-blue-400 inline ml-2">#{tagName}</h1>
+            </div>
+
+            {posts.length > 0 ? (
+                // [핵심] 메인 페이지와 동일한 PostCard 그리드 레이아웃을 재사용합니다.
+                <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                    {posts.map((post) => (
+                        <PostCard key={post.postId} post={post} />
+                    ))}
+                </div>
+            ) : (
+                <p>이 태그에 해당하는 게시물이 아직 없습니다.</p>
+            )}
+        </div>
+    );
+}

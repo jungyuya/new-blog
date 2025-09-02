@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/utils/api';
 import { useState } from 'react';
 import ClientOnlyLocalDate from './ClientOnlyLocalDate';
+import Link from 'next/link'; // [추가] Link 컴포넌트를 import 합니다.
+
 
 // 이 컴포넌트가 받을 props 타입을 정의합니다.
 interface PostHeaderProps {
@@ -43,13 +45,28 @@ export default function PostHeader({ post }: PostHeaderProps) {
     <div className="mb-8">
       {/* 제목 */}
       <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
-      
-      {/* 메타 정보 (작성자, 작성일) */}
-      <div className="flex items-center space-x-4 text-sm text-gray-500">
-        <span>작성자: {post.authorEmail}</span>
+
+      {/* 메타 정보 (작성자, 작성일, 조회수) */}
+      <div className="flex items-center space-x-4 text-sm text-gray-500 mb-6">
+        <span>작성자: {post.authorNickname || post.authorEmail.split('@')[0]}</span>
         <span>|</span>
-        <span>작성일: <ClientOnlyLocalDate dateString={post.createdAt} /></span>
+        <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
+        <span>|</span>
+        <span>조회수 {post.viewCount || 0}</span>
       </div>
+
+      {/* [핵심 추가] 태그 목록 */}
+      {post.tags && post.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-8">
+          {post.tags.map(tag => (
+            <Link href={`/tags/${tag}`} key={tag}>
+              <span className="bg-gray-200 text-gray-800 text-sm font-medium px-3 py-1 rounded-full hover:bg-gray-300 transition-colors">
+                {tag}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* 수정/삭제 버튼 (소유자에게만 보임) */}
       {isOwner && (
@@ -69,7 +86,7 @@ export default function PostHeader({ post }: PostHeaderProps) {
           </button>
         </div>
       )}
-      
+
       {/* 구분선 */}
       <hr className="mt-8" />
     </div>

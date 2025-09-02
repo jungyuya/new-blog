@@ -137,6 +137,8 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
     const { title, content, tags = [], status = 'published', visibility = 'public' } = c.req.valid('json');
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
+    const userGroups = c.get('userGroups'); // [추가] 사용자 그룹 정보 가져오기
+    const isAdmin = userGroups?.includes('Admins'); // [추가] 관리자 여부 확인
     const postId = uuidv4();
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
@@ -159,6 +161,9 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
     // --- [추가 완료] ---
 
     // 2. [수정] 확장된 속성을 포함하여 Post 아이템 객체를 정의합니다.
+    const authorNickname = isAdmin
+      ? '관리자'
+      : (userEmail?.split('@')[0] || '사용자');
     const postItem = {
       PK: `POST#${postId}`,
       SK: 'METADATA',
@@ -174,7 +179,7 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
       viewCount: 0,
       status: status,
       visibility: visibility,
-      authorNickname: userEmail?.split('@')[0] || '익명',
+      authorNickname: authorNickname,
       tags: tags,
       // [수정] 추출된 URL 값을 thumbnailUrl과 imageUrl에 할당합니다.
       thumbnailUrl: thumbnailUrl,

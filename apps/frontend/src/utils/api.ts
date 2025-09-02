@@ -12,7 +12,7 @@ export interface Post {
   authorEmail: string;
   createdAt: string;
   updatedAt: string;
-    // --- 추가된 속성들 ---
+  // --- 추가된 속성들 ---
   viewCount?: number;
   status?: 'published' | 'draft';
   visibility?: 'public' | 'private';
@@ -129,5 +129,8 @@ export const api = {
 
   deletePost: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'DELETE' });
+  },
+  fetchPostsByTag: (tagName: string): Promise<{ posts: Post[] }> => {
+    return fetchWrapper(`/tags/${tagName}/posts`, { method: 'GET' });
   },
 };
