@@ -88,16 +88,16 @@ export class BlogStack extends Stack {
     });
 
     // --- GSI 2 (태그별 게시물 최신순 조회용) ---
-    postsTable.addGlobalSecondaryIndex({
-      indexName: 'GSI2',
-      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.INCLUDE,
-      nonKeyAttributes: [
-        'postId', 'title', 'authorNickname', 'status', 'visibility',
-        'thumbnailUrl', 'content', 'viewCount', 'tags'
-      ],
-    });
+    //postsTable.addGlobalSecondaryIndex({
+     // indexName: 'GSI2',
+     // partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+     // sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      //projectionType: dynamodb.ProjectionType.INCLUDE,
+    //  nonKeyAttributes: [
+      //  'postId', 'title', 'authorNickname', 'status', 'visibility',
+     //   'thumbnailUrl', 'content', 'viewCount', 'tags'
+   //   ],
+  //  });
 
     // --- 1.3. 이미지 S3저장소 리소스 ---
     this.imageBucket = new s3.Bucket(this, 'BlogImageBucket', {
