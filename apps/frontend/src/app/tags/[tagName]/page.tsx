@@ -21,17 +21,16 @@ export default async function TagPage({ params }: TagPageProps) {
     const awaitedParams = await params;
     const tagName = decodeURIComponent(awaitedParams.tagName);
 
+    // [수정] let posts는 여러 번 할당될 수 있으므로 유지합니다.
     let posts: Post[] = [];
-    let error: string | null = null;
 
     try {
-        // [핵심] 우리가 만든 새로운 API 함수를 호출합니다.
         const response = await api.fetchPostsByTag(tagName);
         posts = response.posts;
     } catch (err) {
         console.error(`Failed to fetch posts for tag ${tagName}:`, err);
-        // API 호출 실패 시 404 페이지를 보여줄 수 있습니다.
-        // 또는 에러 메시지를 표시할 수도 있습니다.
+        // [수정] error 변수를 제거하고, 에러 발생 시 즉시 notFound()를 호출하여
+        // 불필요한 변수 선언 자체를 없애는 것이 더 깔끔합니다.
         notFound();
     }
 

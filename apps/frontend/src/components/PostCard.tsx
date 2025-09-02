@@ -44,19 +44,15 @@ export default function PostCard({ post }: PostCardProps) {
       <div className="flex flex-col h-full bg-white">
         {/* --- 1. 섬네일 이미지 영역 --- */}
         <div className="relative w-full aspect-video bg-gray-100">
-          {post.thumbnailUrl ? (
-            <Image
-              src={post.thumbnailUrl}
-              alt={post.title}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gray-200">
-              <span className="text-gray-500">이미지가 포함되지 않은 글 입니다.</span>
-            </div>
-          )}
+          <Image
+            // [핵심 수정] post.thumbnailUrl이 falsy(null, undefined, '')일 경우,
+            // public 폴더의 기본 이미지 경로를 사용합니다.
+            src={post.thumbnailUrl || '/123.webp'}
+            alt={post.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
         </div>
 
         {/* --- 2. 콘텐츠 정보 영역 --- */}

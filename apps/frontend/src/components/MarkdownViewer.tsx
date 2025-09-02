@@ -57,7 +57,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
                     },
 
                     // --- [핵심 추가] img 컴포넌트를 오버라이드하여 클릭 이벤트를 추가합니다. ---
-                    img: ({ node, ...props }) => {
+                    img: ({ node: _node, ...props }) => { // [수정] node를 _node로 변경 (ESLint 경고 알림용)
                         const imageIndex = imageSources.findIndex(slide => slide.src === props.src);
                         return (
                             // eslint-disable-next-line @next/next/no-img-element

@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, Post } from '@/utils/api';
+import { api } from '@/utils/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
@@ -25,7 +25,6 @@ function EditPostForm() {
   const postId = typeof params.postId === 'string' ? params.postId : undefined;
 
   // 상태 관리
-  const [initialContent, setInitialContent] = useState<string>('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [metadata, setMetadata] = useState<PostMetadata>({
