@@ -132,125 +132,92 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
 });
 
 // --- [3] POST / - 새 게시물 생성 (인증 필요) ---
-postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('json', CreatePostSchema), async (c) => {
-  try {
-    const { title, content, tags = [], status = 'published', visibility = 'public' } = c.req.valid('json');
-    const userId = c.get('userId');
-    const userEmail = c.get('userEmail');
-    const userGroups = c.get('userGroups'); // [추가] 사용자 그룹 정보 가져오기
-    const isAdmin = userGroups?.includes('Admins'); // [추가] 관리자 여부 확인
-    const postId = uuidv4();
-    const now = new Date().toISOString();
-    const TABLE_NAME = process.env.TABLE_NAME!;
-    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+postsRouter.post(
+  '/',
+  cookieAuthMiddleware,
+  adminOnlyMiddleware,
+  zValidator('json', CreatePostSchema),
+  async (c) => {
+    try {
+      const { title, content, tags = [], status = 'published', visibility = 'public' } = c.req.valid('json');
+      const userId = c.get('userId');
+      const userEmail = c.get('userEmail');
+      const postId = uuidv4();
+      const now = new Date().toISOString();
+      const TABLE_NAME = process.env.TABLE_NAME!;
+      const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
-    // --- [핵심 추가] ---
-    // 1. content에서 첫 번째 이미지 URL을 추출합니다.
-    const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-    const firstImageMatch = content.match(imageUrlRegex);
-
-    let thumbnailUrl = '';
-    let imageUrl = '';
-
-    if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-      // 우리 S3 버킷의 이미지일 경우에만 처리합니다.
-      imageUrl = firstImageMatch[1];
-      // imageUrl로부터 thumbnailUrl을 생성합니다. (예: .../images/.. -> .../thumbnails/..)
-      thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
-    }
-
-
-    const summary = content
-      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '') // 이미지 태그 제거
-      .replace(/<[^>]*>?/gm, ' ')           // HTML 태그 제거
-      .replace(/[#*`_~=\->|]/g, '')        // 마크다운 구문 제거
-      .replace(/\s+/g, ' ')                  // 공백 통합
-      .trim()
-      .substring(0, 150) + (content.length > 150 ? '...' : '');
-
-    // 2. [수정] 확장된 속성을 포함하여 Post 아이템 객체를 정의합니다.
-    const authorNickname = isAdmin
-      ? '관리자'
-      : (userEmail?.split('@')[0] || '사용자');
-    const postItem = {
-      PK: `POST#${postId}`,
-      SK: 'METADATA',
-      data_type: 'Post',
-      postId,
-      title,
-      content: content,
-      summary: summary,
-      authorId: userId,
-      authorEmail: userEmail,
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
-      viewCount: 0,
-      status: status,
-      visibility: visibility,
-      authorNickname: authorNickname,
-      tags: tags,
-      // [수정] 추출된 URL 값을 thumbnailUrl과 imageUrl에 할당합니다.
-      thumbnailUrl: thumbnailUrl,
-      imageUrl: imageUrl,
-      GSI1_PK: `USER#${userId}`,
-      GSI1_SK: `POST#${now}#${postId}`,
-      GSI3_PK: 'POST#ALL',
-      GSI3_SK: `${now}#${postId}`
-    };
-
-    // 3. DynamoDB에 보낼 모든 쓰기 요청을 담을 배열을 준비합니다.
-    const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
-
-    // 4. Post 아이템 생성 요청을 배열에 추가합니다.
-    writeRequests.push({
-      PutRequest: { Item: postItem },
-    });
-
-    // 5. 각 Tag에 대한 아이템 생성 요청을 배열에 추가합니다.
-    for (const tagName of tags) {
-      const normalizedTagName = tagName.trim().toLowerCase();
-      if (normalizedTagName) {
-        const tagItem = {
-          PK: `TAG#${normalizedTagName}`,
-          SK: `POST#${postId}`,
-          // --- [핵심 수정] PostCard가 필요로 하는 모든 데이터를 복제합니다. ---
-          postId: postId,
-          title: title,
-          // content는 요약본만 저장하여 용량을 최적화합니다.
-          summary: summary,
-          authorNickname: postItem.authorNickname,
-          createdAt: now,
-          status: postItem.status,
-          visibility: postItem.visibility,
-          thumbnailUrl: postItem.thumbnailUrl,
-          viewCount: postItem.viewCount,
-          tags: tags, // tags 정보도 함께 저장
-        };
-        writeRequests.push({ PutRequest: { Item: tagItem } });
+      // 1. content에서 첫 번째 이미지 URL을 찾아 thumbnailUrl과 imageUrl을 설정합니다.
+      const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+      const firstImageMatch = content.match(imageUrlRegex);
+      let thumbnailUrl = '';
+      let imageUrl = '';
+      if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+        imageUrl = firstImageMatch[1];
+        thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
       }
+
+      // 2. content를 기반으로 summary를 생성합니다.
+      const summary = content
+        .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
+        .replace(/<[^>]*>?/gm, ' ')
+        .replace(/[#*`_~=\->|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 150) + (content.length > 150 ? '...' : '');
+
+      // 3. Post 아이템 객체를 완전한 형태로 정의합니다.
+      const postItem = {
+        PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post',
+        postId, title, content, summary, authorId: userId, authorEmail: userEmail,
+        createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0,
+        status: status, visibility: visibility, authorNickname: userEmail?.split('@')[0] || '익명',
+        tags: tags, thumbnailUrl: thumbnailUrl, imageUrl: imageUrl,
+        GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
+        GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
+      };
+
+      const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
+      writeRequests.push({ PutRequest: { Item: postItem } });
+
+      // 4. [핵심] Tag 아이템을 생성할 때, PostCard가 필요한 모든 데이터를 postItem에서 복제합니다.
+      for (const tagName of tags) {
+        const normalizedTagName = tagName.trim().toLowerCase();
+        if (normalizedTagName) {
+          const tagItem = {
+            PK: `TAG#${normalizedTagName}`,
+            SK: `POST#${postId}`,
+            // --- 복제되는 속성들 ---
+            postId: postItem.postId,
+            title: postItem.title,
+            summary: postItem.summary,
+            authorNickname: postItem.authorNickname,
+            createdAt: postItem.createdAt,
+            status: postItem.status,
+            visibility: postItem.visibility,
+            thumbnailUrl: postItem.thumbnailUrl,
+            viewCount: postItem.viewCount,
+            tags: postItem.tags,
+          };
+          writeRequests.push({ PutRequest: { Item: tagItem } });
+        }
+      }
+
+      if (writeRequests.length > 0) {
+        await ddbDocClient.send(new BatchWriteCommand({
+          RequestItems: { [TABLE_NAME]: writeRequests },
+        }));
+      }
+
+      return c.json({ message: 'Post created successfully!', post: postItem }, 201);
+    } catch (error: any) {
+      console.error('Create Post Error:', error.stack || error);
+      return c.json({ message: 'Internal Server Error creating post.', error: error.message }, 500);
     }
-
-    // 6. BatchWriteCommand를 사용하여 모든 아이템을 한 번에 생성합니다.
-    if (writeRequests.length > 0) {
-      const command = new BatchWriteCommand({
-        RequestItems: {
-          [TABLE_NAME]: writeRequests,
-        },
-      });
-      await ddbDocClient.send(command);
-    }
-
-    // 7. 성공 응답을 반환합니다.
-    return c.json({ message: 'Post created successfully!', post: postItem }, 201);
-
-  } catch (error: any) {
-    console.error('Create Post Error:', error.stack || error);
-    return c.json({ message: 'Internal Server Error creating post.', error: error.message }, 500);
   }
-});
+);
 
-// --- [4] PUT /:postId - 게시물 수정 (인증 필요) ---
+// --- [4] PUT /:postId - 게시물 수정 (v2.2 - 타입 안전성 강화 최종본) ---
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
@@ -258,63 +225,71 @@ postsRouter.put(
   zValidator('json', UpdatePostSchema),
   async (c) => {
     const postId = c.req.param('postId');
-    const updateData = c.req.valid('json');
+    // [수정] updateData의 타입을 명시적으로 확장 가능한 형태로 받습니다.
+    const updateData: Record<string, any> = { ...c.req.valid('json') };
     const userId = c.get('userId');
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
     const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
     try {
-      // 1. 수정 전 원본 게시물을 가져와 소유권을 확인합니다.
       const { Item: existingPost } = await ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+        TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
       }));
 
-      if (!existingPost || existingPost.isDeleted) {
-        return c.json({ message: 'Post not found for update.' }, 404);
-      }
-      if (existingPost.authorId !== userId) {
-        return c.json({ message: 'Forbidden: You are not the author.' }, 403);
+      if (!existingPost || existingPost.isDeleted) return c.json({ message: 'Post not found.' }, 404);
+      if (existingPost.authorId !== userId) return c.json({ message: 'Forbidden.' }, 403);
+
+      // 1. content가 수정되었다면, summary와 섬네일 정보를 다시 계산합니다.
+      if (updateData.content) {
+        const content = updateData.content;
+        // summary 생성
+        updateData.summary = content
+          .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
+          .replace(/<[^>]*>?/gm, ' ')
+          .replace(/[#*`_~=\->|]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .substring(0, 150) + (content.length > 150 ? '...' : '');
+
+        // 섬네일 URL 추출
+        const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+        const firstImageMatch = content.match(imageUrlRegex);
+        if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+          updateData.imageUrl = firstImageMatch[1];
+          updateData.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
+        } else {
+          updateData.imageUrl = '';
+          updateData.thumbnailUrl = '';
+        }
       }
 
-      // 2. [핵심] 태그(tags)가 변경된 경우, 기존 태그와 새 태그를 비교하여
-      //    DynamoDB의 Tag 아이템들을 동기화합니다.
+      // 3. 태그가 변경된 경우, DynamoDB의 Tag 아이템들을 동기화합니다.
       if (updateData.tags) {
         const oldTags: string[] = existingPost.tags || [];
         const newTags: string[] = updateData.tags;
-
         const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
         const tagsToAdd = newTags.filter(t => !oldTags.includes(t));
-
         const writeRequests: any[] = [];
 
-        tagsToDelete.forEach(tagName => {
-          writeRequests.push({
-            DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } },
-          });
-        });
+        tagsToDelete.forEach(tagName => writeRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
 
-        tagsToAdd.forEach((tagName: string) => {
-          writeRequests.push({
-            PutRequest: {
-              Item: {
-                PK: `TAG#${tagName.trim().toLowerCase()}`,
-                SK: `POST#${postId}`,
-                // --- [핵심 수정] PostCard가 필요로 하는 모든 데이터를 복제합니다. ---
-                postId: postId,
-                title: updateData.title || existingPost.title,
-                content: (updateData.content || existingPost.content).substring(0, 200),
-                authorNickname: existingPost.authorNickname, // 수정 불가 항목
-                createdAt: existingPost.createdAt, // 수정 불가 항목
-                status: updateData.status || existingPost.status,
-                visibility: updateData.visibility || existingPost.visibility,
-                thumbnailUrl: updateData.thumbnailUrl || existingPost.thumbnailUrl,
-                viewCount: existingPost.viewCount, // 조회수는 별도 관리
-                tags: updateData.tags || existingPost.tags,
-              }
-            },
-          });
+        tagsToAdd.forEach(tagName => {
+          const tagItem = {
+            PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
+            postId: postId,
+            title: updateData.title || existingPost.title,
+            // [수정] 이제 updateData.summary가 존재하므로 오류가 발생하지 않습니다.
+            summary: updateData.summary || existingPost.summary,
+            authorNickname: existingPost.authorNickname,
+            createdAt: existingPost.createdAt,
+            status: updateData.status || existingPost.status,
+            visibility: updateData.visibility || existingPost.visibility,
+            thumbnailUrl: updateData.thumbnailUrl === undefined ? existingPost.thumbnailUrl : updateData.thumbnailUrl,
+            viewCount: existingPost.viewCount,
+            tags: newTags,
+          };
+          writeRequests.push({ PutRequest: { Item: tagItem } });
         });
 
         if (writeRequests.length > 0) {
@@ -322,23 +297,6 @@ postsRouter.put(
             RequestItems: { [TABLE_NAME]: writeRequests },
           }));
         }
-      }
-
-      // 3. [핵심] content가 수정되었다면, 섬네일 정보를 다시 추출합니다.
-      //    (클라이언트가 직접 thumbnailUrl을 보내지 않은 경우에만)
-      if (updateData.content && !updateData.thumbnailUrl) {
-        const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-        const firstImageMatch = updateData.content.match(imageUrlRegex);
-
-        let thumbnailUrl = '';
-        let imageUrl = '';
-
-        if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-          imageUrl = firstImageMatch[1];
-          thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
-        }
-        updateData.thumbnailUrl = thumbnailUrl;
-        updateData.imageUrl = imageUrl;
       }
 
       // 4. DynamoDB UpdateExpression을 동적으로 생성하여 Post 아이템을 업데이트합니다.
