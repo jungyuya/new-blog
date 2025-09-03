@@ -158,7 +158,15 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
       // imageUrl로부터 thumbnailUrl을 생성합니다. (예: .../images/.. -> .../thumbnails/..)
       thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
     }
-    // --- [추가 완료] ---
+
+
+    const summary = content
+      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '') // 이미지 태그 제거
+      .replace(/<[^>]*>?/gm, ' ')           // HTML 태그 제거
+      .replace(/[#*`_~=\->|]/g, '')        // 마크다운 구문 제거
+      .replace(/\s+/g, ' ')                  // 공백 통합
+      .trim()
+      .substring(0, 150) + (content.length > 150 ? '...' : '');
 
     // 2. [수정] 확장된 속성을 포함하여 Post 아이템 객체를 정의합니다.
     const authorNickname = isAdmin
@@ -170,7 +178,8 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
       data_type: 'Post',
       postId,
       title,
-      content,
+      content: content,
+      summary: summary,
       authorId: userId,
       authorEmail: userEmail,
       createdAt: now,
@@ -200,22 +209,25 @@ postsRouter.post('/', cookieAuthMiddleware, adminOnlyMiddleware, zValidator('jso
 
     // 5. 각 Tag에 대한 아이템 생성 요청을 배열에 추가합니다.
     for (const tagName of tags) {
-      // 태그 이름에 공백이나 특수문자가 있을 수 있으므로 정규화(normalize)합니다.
       const normalizedTagName = tagName.trim().toLowerCase();
-      if (normalizedTagName) { // 빈 태그는 저장하지 않습니다.
+      if (normalizedTagName) {
         const tagItem = {
           PK: `TAG#${normalizedTagName}`,
           SK: `POST#${postId}`,
+          // --- [핵심 수정] PostCard가 필요로 하는 모든 데이터를 복제합니다. ---
           postId: postId,
           title: title,
-          createdAt: now,
+          // content는 요약본만 저장하여 용량을 최적화합니다.
+          summary: summary,
           authorNickname: postItem.authorNickname,
+          createdAt: now,
           status: postItem.status,
           visibility: postItem.visibility,
+          thumbnailUrl: postItem.thumbnailUrl,
+          viewCount: postItem.viewCount,
+          tags: tags, // tags 정보도 함께 저장
         };
-        writeRequests.push({
-          PutRequest: { Item: tagItem },
-        });
+        writeRequests.push({ PutRequest: { Item: tagItem } });
       }
     }
 
@@ -283,18 +295,23 @@ postsRouter.put(
           });
         });
 
-        tagsToAdd.forEach(tagName => {
+        tagsToAdd.forEach((tagName: string) => {
           writeRequests.push({
             PutRequest: {
               Item: {
                 PK: `TAG#${tagName.trim().toLowerCase()}`,
                 SK: `POST#${postId}`,
+                // --- [핵심 수정] PostCard가 필요로 하는 모든 데이터를 복제합니다. ---
                 postId: postId,
                 title: updateData.title || existingPost.title,
-                createdAt: existingPost.createdAt,
-                authorNickname: existingPost.authorNickname,
+                content: (updateData.content || existingPost.content).substring(0, 200),
+                authorNickname: existingPost.authorNickname, // 수정 불가 항목
+                createdAt: existingPost.createdAt, // 수정 불가 항목
                 status: updateData.status || existingPost.status,
                 visibility: updateData.visibility || existingPost.visibility,
+                thumbnailUrl: updateData.thumbnailUrl || existingPost.thumbnailUrl,
+                viewCount: existingPost.viewCount, // 조회수는 별도 관리
+                tags: updateData.tags || existingPost.tags,
               }
             },
           });

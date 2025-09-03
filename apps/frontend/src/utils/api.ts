@@ -7,7 +7,6 @@ export interface Post {
   SK: string;
   postId: string;
   title: string;
-  content: string;
   authorId: string;
   authorEmail: string;
   createdAt: string;
@@ -20,6 +19,8 @@ export interface Post {
   tags?: string[];
   thumbnailUrl?: string;
   isDeleted?: boolean;
+  summary?: string;
+  content?: string;
 }
 
 const getApiBaseUrl = () => {

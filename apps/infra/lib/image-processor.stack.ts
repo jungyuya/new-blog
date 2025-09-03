@@ -56,14 +56,14 @@ export class ImageProcessorStack extends Stack {
             entry: path.join(projectRoot, 'image-processor-service', 'src', 'index.ts'),
             handler: 'handler',
 
-            memorySize: 1024,
-            timeout: cdk.Duration.seconds(30),
+            memorySize: 2048,
+            timeout: cdk.Duration.seconds(120),
 
             bundling: {
                 externalModules: ['sharp', '@aws-sdk/*'],
             },
 
-            // [수정] 이제 우리가 직접 만든 'sharpLayer'를 참조합니다.
+            // [수정] 직접 만든 'sharpLayer'를 참조합니다.
             layers: [sharpLayer],
         });
         // =================================================================
