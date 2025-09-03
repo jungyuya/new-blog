@@ -217,7 +217,7 @@ postsRouter.post(
   }
 );
 
-// --- [4] PUT /:postId - 게시물 수정 (v2.2 - 타입 안전성 강화 최종본) ---
+// --- [4] PUT /:postId - 게시물 수정 (v2.3 - 데이터 완전 동기화 최종본) ---
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
@@ -225,7 +225,6 @@ postsRouter.put(
   zValidator('json', UpdatePostSchema),
   async (c) => {
     const postId = c.req.param('postId');
-    // [수정] updateData의 타입을 명시적으로 확장 가능한 형태로 받습니다.
     const updateData: Record<string, any> = { ...c.req.valid('json') };
     const userId = c.get('userId');
     const now = new Date().toISOString();
@@ -240,11 +239,14 @@ postsRouter.put(
       if (!existingPost || existingPost.isDeleted) return c.json({ message: 'Post not found.' }, 404);
       if (existingPost.authorId !== userId) return c.json({ message: 'Forbidden.' }, 403);
 
-      // 1. content가 수정되었다면, summary와 섬네일 정보를 다시 계산합니다.
+      // 1. 수정될 최종 게시물의 상태를 미리 계산합니다.
+      //    updateData에 있는 값으로 existingPost의 값을 덮어씁니다.
+      const finalPostState = { ...existingPost, ...updateData };
+
+      // 2. content가 수정되었다면, summary와 섬네일 정보를 다시 계산하여 finalPostState에 반영합니다.
       if (updateData.content) {
         const content = updateData.content;
-        // summary 생성
-        updateData.summary = content
+        finalPostState.summary = content
           .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
           .replace(/<[^>]*>?/gm, ' ')
           .replace(/[#*`_~=\->|]/g, '')
@@ -252,73 +254,76 @@ postsRouter.put(
           .trim()
           .substring(0, 150) + (content.length > 150 ? '...' : '');
 
-        // 섬네일 URL 추출
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
         const firstImageMatch = content.match(imageUrlRegex);
         if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-          updateData.imageUrl = firstImageMatch[1];
-          updateData.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
+          finalPostState.imageUrl = firstImageMatch[1];
+          finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
         } else {
-          updateData.imageUrl = '';
-          updateData.thumbnailUrl = '';
+          finalPostState.imageUrl = '';
+          finalPostState.thumbnailUrl = '';
         }
       }
 
-      // 3. 태그가 변경된 경우, DynamoDB의 Tag 아이템들을 동기화합니다.
-      if (updateData.tags) {
-        const oldTags: string[] = existingPost.tags || [];
-        const newTags: string[] = updateData.tags;
-        const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
-        const tagsToAdd = newTags.filter(t => !oldTags.includes(t));
-        const writeRequests: any[] = [];
+      // 3. [핵심 수정] 태그 동기화 로직을 '항상' 실행하도록 변경합니다.
+      //    title, summary 등이 변경되었을 때도 Tag 아이템을 업데이트해야 하기 때문입니다.
+      const oldTags: string[] = existingPost.tags || [];
+      const newTags: string[] = finalPostState.tags || [];
+      const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
+      // [수정] 추가할 태그뿐만 아니라, 유지되는 태그도 업데이트 대상에 포함될 수 있습니다.
+      // 여기서는 삭제할 태그와 새로 생성/업데이트할 태그 목록을 관리합니다.
+      const tagsToUpsert = newTags; // 'Upsert' = Update or Insert
 
-        tagsToDelete.forEach(tagName => writeRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
+      const tagWriteRequests: any[] = [];
 
-        tagsToAdd.forEach(tagName => {
-          const tagItem = {
-            PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
-            postId: postId,
-            title: updateData.title || existingPost.title,
-            // [수정] 이제 updateData.summary가 존재하므로 오류가 발생하지 않습니다.
-            summary: updateData.summary || existingPost.summary,
-            authorNickname: existingPost.authorNickname,
-            createdAt: existingPost.createdAt,
-            status: updateData.status || existingPost.status,
-            visibility: updateData.visibility || existingPost.visibility,
-            thumbnailUrl: updateData.thumbnailUrl === undefined ? existingPost.thumbnailUrl : updateData.thumbnailUrl,
-            viewCount: existingPost.viewCount,
-            tags: newTags,
-          };
-          writeRequests.push({ PutRequest: { Item: tagItem } });
-        });
+      tagsToDelete.forEach(tagName => tagWriteRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
 
-        if (writeRequests.length > 0) {
-          await ddbDocClient.send(new BatchWriteCommand({
-            RequestItems: { [TABLE_NAME]: writeRequests },
-          }));
-        }
+      // [핵심] 새로운 태그 목록 전체에 대해 PutRequest를 생성합니다.
+      // Put은 덮어쓰기이므로, 기존 태그는 내용이 업데이트되고 새 태그는 생성됩니다.
+      tagsToUpsert.forEach(tagName => {
+        const tagItem = {
+          PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
+          postId: postId,
+          title: finalPostState.title,
+          summary: finalPostState.summary,
+          authorNickname: finalPostState.authorNickname,
+          createdAt: finalPostState.createdAt,
+          status: finalPostState.status,
+          visibility: finalPostState.visibility,
+          thumbnailUrl: finalPostState.thumbnailUrl,
+          viewCount: finalPostState.viewCount,
+          tags: finalPostState.tags,
+        };
+        tagWriteRequests.push({ PutRequest: { Item: tagItem } });
+      });
+
+      if (tagWriteRequests.length > 0) {
+        await ddbDocClient.send(new BatchWriteCommand({
+          RequestItems: { [TABLE_NAME]: tagWriteRequests },
+        }));
       }
 
-      // 4. DynamoDB UpdateExpression을 동적으로 생성하여 Post 아이템을 업데이트합니다.
+      // 4. Post 아이템 자체를 업데이트합니다.
       const updateExpressionParts: string[] = [];
       const expressionAttributeValues: Record<string, any> = { ':u': now };
       const expressionAttributeNames: Record<string, string> = {};
 
-      for (const [key, value] of Object.entries(updateData)) {
-        if (value !== undefined) {
-          const attrName = `#${key}`;
-          const attrValue = `:${key}`;
-          updateExpressionParts.push(`${attrName} = ${attrValue}`);
-          expressionAttributeNames[attrName] = key;
-          expressionAttributeValues[attrValue] = value;
+      // [수정] updateData 대신, 계산이 완료된 finalPostState의 변경된 부분만 업데이트합니다.
+      //    이렇게 하면 summary, thumbnailUrl 등 계산된 필드도 함께 업데이트됩니다.
+      const dataToUpdate = { ...updateData, summary: finalPostState.summary, thumbnailUrl: finalPostState.thumbnailUrl, imageUrl: finalPostState.imageUrl };
+
+      for (const [key, value] of Object.entries(dataToUpdate)) {
+        if (value !== undefined && existingPost[key] !== value) { // 변경된 값만 업데이트
+          updateExpressionParts.push(`#${key} = :${key}`);
+          expressionAttributeNames[`#${key}`] = key;
+          expressionAttributeValues[`:${key}`] = value;
         }
       }
 
       if (updateExpressionParts.length > 0) {
         const updateExpression = `SET updatedAt = :u, ${updateExpressionParts.join(', ')}`;
         const { Attributes } = await ddbDocClient.send(new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+          TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
           UpdateExpression: updateExpression,
           ExpressionAttributeNames: expressionAttributeNames,
           ExpressionAttributeValues: expressionAttributeValues,
