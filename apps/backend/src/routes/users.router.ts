@@ -11,8 +11,9 @@ import type { ZodError } from 'zod';
 const UpdateProfileSchema = z.object({
   nickname: z.string().min(2, '닉네임은 2자 이상이어야 합니다.').max(20, '닉네임은 20자를 초과할 수 없습니다.'),
   bio: z.string().max(160, '자기소개는 160자를 초과할 수 없습니다.').optional(),
+  // [추가] avatarUrl은 선택 사항이며, 유효한 URL 형식이어야 합니다.
+  avatarUrl: z.string().url({ message: "유효한 URL 형식이 아닙니다." }).optional(),
 });
-
 const usersRouter = new Hono<AppEnv>();
 
 // --- [핵심 추가 1] 더 구체적인 '/me/profile' 경로를 '/me'보다 먼저 정의합니다. ---
@@ -42,30 +43,16 @@ usersRouter.get('/me/profile', cookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- PUT /me/profile - DynamoDB 프로필 수정 ---
+// --- PUT /me/profile - DynamoDB 프로필 수정/생성 (Upsert) ---
 usersRouter.put(
   '/me/profile',
   cookieAuthMiddleware,
-  // [핵심 수정] zValidator에 두 번째 인자로 errorHandler 함수를 추가합니다.
-  zValidator('json', UpdateProfileSchema, (result, c) => {
-    if (!result.success) {
-      // 유효성 검사 실패 시, 이 블록이 실행됩니다.
-      // 우리 앱의 표준 에러 형식에 맞춰 400 응답을 반환합니다.
-      return c.json(
-        {
-          message: 'Validation Error',
-          errors: (result.error as ZodError).issues,
-        },
-        400
-      );
-    }
-  }),
-  // errorHandler에서 아무것도 반환하지 않으면 (성공 시),
-  // Hono는 자동으로 이어서 아래의 최종 핸들러를 실행합니다.
+  zValidator('json', UpdateProfileSchema),
   async (c) => {
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
-    const { nickname, bio } = c.req.valid('json');
+    // [수정] avatarUrl을 요청 본문에서 가져옵니다.
+    const { nickname, bio, avatarUrl } = c.req.valid('json');
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
 
@@ -80,12 +67,22 @@ usersRouter.put(
       }));
 
       const profileItem = {
-        PK: `USER#${userId}`, SK: 'PROFILE', userId, email: userEmail,
-        nickname, bio: bio || '', updatedAt: now,
+        PK: `USER#${userId}`,
+        SK: 'PROFILE',
+        userId,
+        email: userEmail,
+        nickname,
+        bio: bio || '',
+        // [추가] avatarUrl이 제공되지 않은 경우, 기존 값을 유지하거나 빈 문자열을 사용합니다.
+        avatarUrl: avatarUrl === undefined ? existingProfile?.avatarUrl || '' : avatarUrl,
+        updatedAt: now,
         createdAt: existingProfile?.createdAt || now,
       };
 
-      const command = new PutCommand({ TableName: TABLE_NAME, Item: profileItem });
+      const command = new PutCommand({
+        TableName: TABLE_NAME,
+        Item: profileItem,
+      });
       await ddbDocClient.send(command);
 
       return c.json({ message: 'Profile updated successfully.', profile: profileItem }, 200);

@@ -44,6 +44,7 @@ export default function PostCard({ post }: PostCardProps) {
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              unoptimized={true} // [임시 추가 : 섬네일 간혹 로딩되지 않는 경우]
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-gray-200">
@@ -55,7 +56,7 @@ export default function PostCard({ post }: PostCardProps) {
         {/* --- 2. 콘텐츠 정보 영역 --- */}
         <div className="flex flex-col flex-1 p-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{post.title}</h3>
-          
+
           {/* [수정] 이제 백엔드에서 제공하는 post.summary를 직접 사용합니다. */}
           <p className="text-gray-500 text-sm flex-1 mb-4">{post.summary || ''}</p>
 
