@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function Header() {
   // [유지] 기존의 useAuth 훅 호출은 그대로 사용합니다.
   const { user, isLoading, logout } = useAuth();
-  
+
   // [추가] user 객체가 존재할 때, 그의 groups 배열에 'Admins'가 포함되어 있는지 확인합니다.
   const isAdmin = user?.groups?.includes('Admins');
 
@@ -37,7 +37,7 @@ export default function Header() {
           ) : user ? (
             // [유지] 로그인 상태 UI는 그대로 유지합니다.
             <>
-              <span className="text-gray-600">환영합니다~! {user.email} 님!</span>
+              <span className="text-gray-600">환영합니다, {user.nickname || user.email} 님!</span>
               
               {/* [핵심 수정] '새 글 작성' 버튼을 isAdmin이 true일 때만 렌더링하도록 <></>로 감싸고 조건을 추가합니다. */}
               {isAdmin && (

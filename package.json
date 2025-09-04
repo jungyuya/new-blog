@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build --filter=frontend --filter=backend",
-    "dev": "pnpm --filter backend db:setup && cross-env NODE_ENV=development concurrently -k --names \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgMagenta.bold\" \"pnpm --filter frontend dev\" \"pnpm --filter backend dev\"",
+    "dev": "cross-env NODE_ENV=development concurrently -k --names \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgMagenta.bold\" \"pnpm --filter frontend dev\" \"pnpm --filter backend dev\"",
     "lint": "turbo run lint",
     "clean": "turbo run clean"
   },

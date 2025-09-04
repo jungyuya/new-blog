@@ -7,7 +7,17 @@
         ],
         "Projection": {
             "ProjectionType": "INCLUDE",
-            "NonKeyAttributes": ["postId", "title", "authorNickname", "status", "visibility"]
+            "NonKeyAttributes": [
+                "postId", 
+                "title", 
+                "authorNickname", 
+                "status", 
+                "visibility",
+                "thumbnailUrl",
+                "summary",
+                "viewCount",
+                "tags"
+            ]
         }
     },
     {

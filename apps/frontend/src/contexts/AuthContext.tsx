@@ -11,7 +11,11 @@ import { useRouter } from 'next/navigation';
 interface User {
   id: string;
   email: string;
-  groups?: string[]; // 사용자가 속한 그룹 목록 (예: ['Admins'])
+  groups?: string[];
+  // [신규 추가] DynamoDB 프로필 정보
+  nickname?: string;
+  bio?: string;
+  avatarUrl?: string;
 }
 // [개선] Context가 제공할 값들의 타입을 확장합니다.
 // 로그인/로그아웃 함수를 추가하여 외부 컴포넌트에서 호출할 수 있도록 합니다.

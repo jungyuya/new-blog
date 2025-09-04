@@ -10,13 +10,13 @@ import type { AppEnv } from '../lib/types';
 // 📐 [SCHEMAS] - 인증 라우터에서 사용할 데이터 유효성 검사 스키마
 // =================================================================
 const SignUpSchema = z.object({
-  email: z.string().email('유효한 이메일 형식이 아닙니다.'),
-  password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
+    email: z.string().email('유효한 이메일 형식이 아닙니다.'),
+    password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
 });
 
 const LoginSchema = z.object({
-  email: z.string().email('유효한 이메일 형식이 아닙니다.'),
-  password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
+    email: z.string().email('유효한 이메일 형식이 아닙니다.'),
+    password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다.'),
 });
 
 // =================================================================
@@ -46,14 +46,14 @@ authRouter.post('/signup', zValidator('json', SignUpSchema), async c => {
 authRouter.post('/login', zValidator('json', LoginSchema), async c => {
     const { email, password } = c.req.valid('json');
     try {
-        const resp = await cognitoClient.send(new InitiateAuthCommand({ 
-            AuthFlow: AuthFlowType.USER_PASSWORD_AUTH, 
-            ClientId: USER_POOL_CLIENT_ID, 
-            AuthParameters: { USERNAME: email, PASSWORD: password } 
+        const resp = await cognitoClient.send(new InitiateAuthCommand({
+            AuthFlow: AuthFlowType.USER_PASSWORD_AUTH,
+            ClientId: USER_POOL_CLIENT_ID,
+            AuthParameters: { USERNAME: email, PASSWORD: password }
         }));
-        
+
         if (resp.AuthenticationResult) {
-            const { AccessToken, RefreshToken } = resp.AuthenticationResult;
+            const { AccessToken, RefreshToken, IdToken } = resp.AuthenticationResult; // IdToken 추가
             const IS_PROD = process.env.NODE_ENV === 'production';
             const cookieOptions = { httpOnly: true, secure: IS_PROD, sameSite: 'Strict' as const, path: '/' };
 
@@ -63,6 +63,7 @@ authRouter.post('/login', zValidator('json', LoginSchema), async c => {
             if (RefreshToken) {
                 setCookie(c, 'refreshToken', RefreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 });
             }
+            if (IdToken) setCookie(c, 'idToken', IdToken, { ...cookieOptions, maxAge: 15 * 60 });
             return c.json({ message: 'Authentication successful' });
         }
         return c.json({ message: 'Authentication failed, no tokens returned.' }, 401);

@@ -6,8 +6,8 @@ const REGION = process.env.REGION || 'ap-northeast-2';
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 const ddbClientOptions: { region: string; endpoint?: string } = { region: REGION };
-if (!IS_PROD) {
-  ddbClientOptions.endpoint = process.env.DYNAMODB_ENDPOINT || 'http://localhost:8000';
+if (process.env.DYNAMODB_ENDPOINT) {
+  ddbClientOptions.endpoint = process.env.DYNAMODB_ENDPOINT;
 }
 
 const ddbClient = new DynamoDBClient(ddbClientOptions);

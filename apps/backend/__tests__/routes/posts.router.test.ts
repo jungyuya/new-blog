@@ -68,7 +68,7 @@ describe('Posts API (/api/posts)', () => {
     it('should return all posts for admins', async () => {
       mockVerify.mockResolvedValue({ 'cognito:groups': ['Admins'] });
       (ddbDocClient.send as any).mockResolvedValue({ Items: [] });
-      const response = await request(server).get('/api/posts').set('Cookie', 'accessToken=fake-admin-token');
+      const response = await request(server).get('/api/posts').set('Cookie', 'idToken=fake-admin-token');
       expect(response.status).toBe(200);
       const queryArgs = (ddbDocClient.send as any).mock.calls[0][0].input;
       expect(queryArgs.FilterExpression).toBeUndefined();
@@ -83,7 +83,7 @@ describe('Posts API (/api/posts)', () => {
       mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
       const response = await request(server)
         .post('/api/posts')
-        .set('Cookie', 'accessToken=fake-user-token')
+        .set('Cookie', 'idToken=fake-user-token')
         .send(newPostData);
       expect(response.status).toBe(403);
     });
@@ -93,7 +93,7 @@ describe('Posts API (/api/posts)', () => {
       (ddbDocClient.send as any).mockResolvedValue({});
       const response = await request(server)
         .post('/api/posts')
-        .set('Cookie', 'accessToken=fake-admin-token')
+        .set('Cookie', 'idToken=fake-admin-token')
         .send(newPostData);
       expect(response.status).toBe(201);
       const sendCall = (ddbDocClient.send as any).mock.calls[0][0];
@@ -111,7 +111,7 @@ describe('Posts API (/api/posts)', () => {
       mockVerify.mockResolvedValue({ sub: 'another-user-id' }); // 작성자가 아닌 다른 사용자
       const response = await request(server)
         .get('/api/posts/private-1')
-        .set('Cookie', 'accessToken=another-user-token');
+        .set('Cookie', 'idToken=another-user-token');
       expect(response.status).toBe(403);
     });
 
@@ -121,7 +121,7 @@ describe('Posts API (/api/posts)', () => {
       mockVerify.mockResolvedValue({ sub: 'author-1' }); // 작성자 본인
       const response = await request(server)
         .get('/api/posts/private-1')
-        .set('Cookie', 'accessToken=author-token');
+        .set('Cookie', 'idToken=author-token');
       expect(response.status).toBe(200);
       expect(response.body.post.postId).toBe('private-1');
       // GetCommand, UpdateCommand(viewCount) 총 2번 호출되었는지 확인
@@ -135,7 +135,7 @@ describe('Posts API (/api/posts)', () => {
       mockVerify.mockResolvedValue({ sub: 'user-id', 'cognito:groups': ['Users'] });
       const response = await request(server)
         .put('/api/posts/1')
-        .set('Cookie', 'accessToken=user-token')
+        .set('Cookie', 'idToken=user-token')
         .send({ title: 'Updated Title' });
       expect(response.status).toBe(403);
     });
@@ -150,7 +150,7 @@ describe('Posts API (/api/posts)', () => {
         .mockResolvedValueOnce({ Attributes: { title: 'Updated Title' } });
       const response = await request(server)
         .put('/api/posts/1')
-        .set('Cookie', 'accessToken=admin-token')
+        .set('Cookie', 'idToken=admin-token')
         .send({ title: 'Updated Title', tags: ['updated'] });
       expect(response.status).toBe(200);
       expect(response.body.post.title).toBe('Updated Title');
@@ -178,7 +178,7 @@ describe('Posts API (/api/posts)', () => {
         // [2] When (실행) - 이전과 동일
         const response = await request(server)
           .delete('/api/posts/post-to-delete')
-          .set('Cookie', 'accessToken=fake-admin-token');
+          .set('Cookie', 'idToken=fake-admin-token');
 
         // [3] Then (검증)
         expect(response.status).toBe(200);

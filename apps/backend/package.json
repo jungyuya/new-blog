@@ -9,7 +9,6 @@
     "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:setup": "bash ../../scripts/local-db-setup.sh",
     "clean": "rm -rf dist"
   },
   "keywords": [],

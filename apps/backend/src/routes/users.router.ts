@@ -1,44 +1,134 @@
+// 파일 위치: apps/backend/src/routes/users.router.ts (v2.2 - GET /me/profile 추가 및 순서 정리)
 import { Hono } from 'hono';
-import { getCookie } from 'hono/cookie';
-import { CognitoIdentityProviderClient, GetUserCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { cookieAuthMiddleware } from '../middlewares/auth.middleware';
 import type { AppEnv } from '../lib/types';
+import { ddbDocClient } from '../lib/dynamodb';
+import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { z } from 'zod';
+import { zValidator } from '@hono/zod-validator';
+import type { ZodError } from 'zod';
+
+const UpdateProfileSchema = z.object({
+  nickname: z.string().min(2, '닉네임은 2자 이상이어야 합니다.').max(20, '닉네임은 20자를 초과할 수 없습니다.'),
+  bio: z.string().max(160, '자기소개는 160자를 초과할 수 없습니다.').optional(),
+});
 
 const usersRouter = new Hono<AppEnv>();
 
-const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.REGION });
+// --- [핵심 추가 1] 더 구체적인 '/me/profile' 경로를 '/me'보다 먼저 정의합니다. ---
 
-// --- GET /me - 현재 로그인한 사용자 정보 조회 ---
-usersRouter.get('/me', cookieAuthMiddleware, async (c) => {
+// --- GET /me/profile - DynamoDB 프로필 조회 ---
+usersRouter.get('/me/profile', cookieAuthMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const TABLE_NAME = process.env.TABLE_NAME!;
+
+  if (!userId) {
+    return c.json({ message: 'User identity not found in context.' }, 500);
+  }
+
+  try {
+    const { Item } = await ddbDocClient.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+    }));
+
+    if (!Item) {
+      return c.json({ message: 'Profile not found.' }, 404);
+    }
+    return c.json({ profile: Item });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    return c.json({ message: 'Failed to get user profile.' }, 500);
+  }
+});
+
+// --- PUT /me/profile - DynamoDB 프로필 수정 ---
+usersRouter.put(
+  '/me/profile',
+  cookieAuthMiddleware,
+  // [핵심 수정] zValidator에 두 번째 인자로 errorHandler 함수를 추가합니다.
+  zValidator('json', UpdateProfileSchema, (result, c) => {
+    if (!result.success) {
+      // 유효성 검사 실패 시, 이 블록이 실행됩니다.
+      // 우리 앱의 표준 에러 형식에 맞춰 400 응답을 반환합니다.
+      return c.json(
+        {
+          message: 'Validation Error',
+          errors: (result.error as ZodError).issues,
+        },
+        400
+      );
+    }
+  }),
+  // errorHandler에서 아무것도 반환하지 않으면 (성공 시),
+  // Hono는 자동으로 이어서 아래의 최종 핸들러를 실행합니다.
+  async (c) => {
     const userId = c.get('userId');
-    const accessToken = getCookie(c, 'accessToken');
+    const userEmail = c.get('userEmail');
+    const { nickname, bio } = c.req.valid('json');
+    const now = new Date().toISOString();
+    const TABLE_NAME = process.env.TABLE_NAME!;
 
-    if (!userId || !accessToken) {
-        return c.json({ message: 'User ID or Access Token not found in context.' }, 400);
+    if (!userId || !userEmail) {
+      return c.json({ message: 'User identity not found in context.' }, 500);
     }
 
     try {
-        const getUserResponse = await cognitoClient.send(new GetUserCommand({
-            AccessToken: accessToken,
-        }));
+      const { Item: existingProfile } = await ddbDocClient.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+      }));
 
-        const emailAttribute = getUserResponse.UserAttributes?.find(
-            attr => attr.Name === 'email'
-        );
-        const email = emailAttribute?.Value;
+      const profileItem = {
+        PK: `USER#${userId}`, SK: 'PROFILE', userId, email: userEmail,
+        nickname, bio: bio || '', updatedAt: now,
+        createdAt: existingProfile?.createdAt || now,
+      };
 
-        if (!email) {
-            return c.json({ message: 'User email not found in Cognito attributes.' }, 404);
-        }
-        
-        const userGroups = c.get('userGroups');
+      const command = new PutCommand({ TableName: TABLE_NAME, Item: profileItem });
+      await ddbDocClient.send(command);
 
-        // 최종 반환 객체에 groups 속성을 추가합니다.
-        return c.json({ user: { id: userId, email: email, groups: userGroups } });
+      return c.json({ message: 'Profile updated successfully.', profile: profileItem }, 200);
     } catch (error: any) {
-        console.error('GetUser API call failed:', error);
-        return c.json({ message: 'Failed to retrieve user information from Cognito.', error: error.message }, 500);
+      console.error('Update profile error:', error);
+      return c.json({ message: 'Failed to update user profile.' }, 500);
     }
+  }
+);
+
+// --- [핵심 추가 2] 덜 구체적인 '/me' 경로는 마지막에 정의합니다. ---
+usersRouter.get('/me', cookieAuthMiddleware, async (c) => {
+  // ... (JUNGYU 님의 기존 GET /me 핸들러 코드는 완벽하므로 그대로 유지)
+  const userId = c.get('userId');
+  const userEmail = c.get('userEmail');
+  const userGroups = c.get('userGroups');
+  const TABLE_NAME = process.env.TABLE_NAME!;
+
+  if (!userId || !userEmail) {
+    console.error('[GET /me] Critical error: userId or userEmail not found in context after auth middleware.');
+    return c.json({ message: 'User identity not found in context after authentication.' }, 500);
+  }
+
+  try {
+    const { Item: profile } = await ddbDocClient.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+    }));
+
+    const userPayload = {
+      id: userId,
+      email: userEmail,
+      groups: userGroups || [],
+      nickname: profile?.nickname || userEmail.split('@')[0],
+      bio: profile?.bio || '',
+      avatarUrl: profile?.avatarUrl || '',
+    };
+
+    return c.json({ user: userPayload });
+  } catch (error) {
+    console.error('Get user profile error in /me:', error);
+    return c.json({ message: 'Failed to retrieve user profile.' }, 500);
+  }
 });
 
 export default usersRouter;

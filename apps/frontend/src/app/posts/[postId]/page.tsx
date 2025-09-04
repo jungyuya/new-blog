@@ -7,7 +7,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function PostDetailPage({ params }: { params: { postId: string } }) {
   // [핵심 수정] Next.js 15의 변경 사항에 따라, params를 사용하기 전에 await 합니다.
-  // JUNGYU 님의 원래 코드가 정확했습니다.
   const awaitedParams = await params;
   const { postId } = awaitedParams;
 
