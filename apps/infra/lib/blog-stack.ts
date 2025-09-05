@@ -25,6 +25,8 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 
+const domainName = 'jungyu.store';
+const siteDomain = `blog.${domainName}`;
 
 
 export class BlogStack extends Stack {
@@ -102,15 +104,14 @@ export class BlogStack extends Stack {
     // --- 1.3. 이미지 S3저장소 리소스 ---
     this.imageBucket = new s3.Bucket(this, 'BlogImageBucket', {
       bucketName: `blog-image-bucket-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
-      blockPublicAccess: new s3.BlockPublicAccess({
-        blockPublicAcls: false,
-        blockPublicPolicy: false,
-        ignorePublicAcls: false,
-        restrictPublicBuckets: false,
-      }),
-      publicReadAccess: true,
+
+      // [핵심] 모든 퍼블릭 액세스를 차단하여 버킷을 Private으로 전환합니다.
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+
+      encryption: s3.BucketEncryption.S3_MANAGED,
       autoDeleteObjects: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+
       cors: [
         {
           allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.POST, s3.HttpMethods.GET],
@@ -161,6 +162,7 @@ export class BlogStack extends Stack {
         REGION: this.region,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
         IMAGE_BUCKET_NAME: this.imageBucket.bucketName,
+        SITE_DOMAIN: siteDomain,
       },
       tracing: lambda.Tracing.ACTIVE,
 
@@ -206,8 +208,6 @@ export class BlogStack extends Stack {
     // ===================================================================================
     // SECTION 3: 프론트엔드 리소스 정의 (정화된 최종 완성본)
     // ===================================================================================
-    const domainName = 'jungyu.store';
-    const siteDomain = `blog.${domainName}`;
     const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', { hostedZoneId: 'Z0802600EUJ1KX823IZ7', zoneName: domainName });
     const certificate = acm.Certificate.fromCertificateArn(this, 'SiteCertificate', 'arn:aws:acm:us-east-1:786382940028:certificate/d8aa46d8-b8dc-4d1b-b590-c5d4a52b7081');
 
@@ -237,6 +237,8 @@ export class BlogStack extends Stack {
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
+    this.imageBucket.grantRead(serverLambda);
+
     cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(serverLambda).add('Tier', 'Frontend');
     assetsBucket.grantRead(serverLambda);
@@ -245,6 +247,16 @@ export class BlogStack extends Stack {
     const s3Oac = new cloudfront.CfnOriginAccessControl(this, 'S3OAC', {
       originAccessControlConfig: {
         name: `OAC-for-S3-${this.stackName}`,
+        originAccessControlOriginType: 's3',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+    });
+
+    // [신규 추가] ImageBucket을 위한 새로운 Origin Access Control 생성
+    const imageBucketOac = new cloudfront.CfnOriginAccessControl(this, 'ImageBucketOAC', {
+      originAccessControlConfig: {
+        name: `ImageBucketOAC-${this.stackName}`,
         originAccessControlOriginType: 's3',
         signingBehavior: 'always',
         signingProtocol: 'sigv4',
@@ -275,6 +287,12 @@ export class BlogStack extends Stack {
             id: 'BackendApiOrigin',
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
+          },
+          {
+            id: 'ImageBucketOrigin',
+            domainName: this.imageBucket.bucketRegionalDomainName,
+            originAccessControlId: imageBucketOac.attrId,
+            s3OriginConfig: {},
           },
         ],
         defaultCacheBehavior: {
@@ -325,9 +343,42 @@ export class BlogStack extends Stack {
             cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
             originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
+          // [신규 추가] 이미지 경로를 처리할 새로운 동작들
+          {
+            pathPattern: '/images/*',
+            targetOriginId: 'ImageBucketOrigin', // ImageBucketOrigin을 목적지로 지정
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+          {
+            pathPattern: '/thumbnails/*',
+            targetOriginId: 'ImageBucketOrigin', // ImageBucketOrigin을 목적지로 지정
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
         ],
       },
     });
+
+
+    // --- [신규 추가] ImageBucket에 CloudFront OAC 접근을 허용하는 정책 추가 ---
+    const imageBucketPolicyStatement = new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [this.imageBucket.arnForObjects('*')],
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      conditions: {
+        StringEquals: {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.attrId}`,
+        },
+      },
+    });
+    this.imageBucket.addToResourcePolicy(imageBucketPolicyStatement);
 
     assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,

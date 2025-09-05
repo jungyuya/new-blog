@@ -93,6 +93,19 @@ export const api = {
   signup: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
     return fetchWrapper('/auth/signup', { method: 'POST', body: JSON.stringify(credentials) });
   },
+
+  // --- [신규 추가] User APIs ---
+  updateUserProfile: (profileData: {
+    nickname: string;
+    bio?: string;
+    avatarUrl?: string;
+  }): Promise<{ message: string; profile: any }> => { // profile 타입은 나중에 더 구체화 가능
+    return fetchWrapper('/users/me/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
+
   // --- Post APIs ---
   fetchPosts: (): Promise<{ posts: Post[] }> => {
     return fetchWrapper('/posts', { method: 'GET' });

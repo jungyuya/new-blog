@@ -18,7 +18,7 @@ interface PostDetailViewProps {
  * PostHeader, PostContent, PostFooter 등 세부 컴포넌트들을 조립하는 역할을 합니다.
  */
 export default function PostDetailView({ post }: PostDetailViewProps) {
-  
+
   // 게시물이 없는 경우를 위한 방어 코드 (Graceful Degradation)
   if (!post) {
     return (
@@ -34,7 +34,7 @@ export default function PostDetailView({ post }: PostDetailViewProps) {
   return (
     <div>
       <PostHeader post={post} />
-      <PostContent content={post.content} />
+      <PostContent content={post.content || ''} />
       <PostFooter postId={post.postId} />
     </div>
   );

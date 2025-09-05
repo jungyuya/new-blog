@@ -146,6 +146,8 @@ postsRouter.post(
       const now = new Date().toISOString();
       const TABLE_NAME = process.env.TABLE_NAME!;
       const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+      const SITE_DOMAIN = process.env.SITE_DOMAIN!;
+
 
       // 1. content에서 첫 번째 이미지 URL을 찾아 thumbnailUrl과 imageUrl을 설정합니다.
       const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
@@ -153,7 +155,11 @@ postsRouter.post(
       let thumbnailUrl = '';
       let imageUrl = '';
       if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-        imageUrl = firstImageMatch[1];
+        // [수정] 정규표현식으로 S3 URL에서 객체 키만 추출합니다.
+        const s3Url = new URL(firstImageMatch[1]);
+        const imageKey = s3Url.pathname.substring(1); // 맨 앞의 '/' 제거 (예: images/uuid.webp)
+
+        imageUrl = `https://${SITE_DOMAIN}/${imageKey}`;
         thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
       }
 

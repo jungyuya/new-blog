@@ -13,6 +13,8 @@ const imagesRouter = new Hono<AppEnv>();
 // S3 클라이언트는 이 라우터 내에서만 사용됩니다.
 const s3 = new S3Client({ region: process.env.REGION });
 const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+const SITE_DOMAIN = process.env.SITE_DOMAIN!;
+
 
 // 쿼리 파라미터 유효성 검사를 위한 Zod 스키마
 const PresignedUrlQuerySchema = z.object({
@@ -45,8 +47,7 @@ imagesRouter.get(
 
             const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
 
-            // [핵심 수정] publicUrl을 생성할 때, 동적으로 결정된 최종 파일 이름을 사용합니다.
-            const publicUrl = `https://${BUCKET_NAME}.s3.${process.env.REGION}.amazonaws.com/images/${finalFileName}`;
+            const publicUrl = `https://${SITE_DOMAIN}/images/${finalFileName}`;
 
             return c.json({
                 presignedUrl,
