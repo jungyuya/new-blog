@@ -27,7 +27,7 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
     console.log('Uploading image...', blob);
     try {
       const fileName = blob instanceof File ? blob.name : 'image.png';
-      // [수정] 이제 api.getPresignedUrl이 존재하므로 오류가 발생하지 않습니다.
+      // [수정] 이제 api.getPresignedUrl이 존재하므로 오류가 발생하지 않습니다. 
       const { presignedUrl, publicUrl } = await api.getPresignedUrl(fileName);
 
       console.log('Got presigned URL:', presignedUrl);
