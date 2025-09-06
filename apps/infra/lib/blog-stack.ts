@@ -265,7 +265,7 @@ export class BlogStack extends Stack {
 
     const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
       distributionConfig: {
-        comment: `Distribution for ${siteDomain}`,
+        comment: `Distribution for ${siteDomain} - v1.1`, 
         enabled: true,
         httpVersion: 'http2',
         priceClass: 'PriceClass_200',
@@ -305,7 +305,7 @@ export class BlogStack extends Stack {
         },
 
         cacheBehaviors: [
-          // --- 0. 버전화된 정적 에셋을 위한 최우선 규칙 ---
+          // --- 0.버전화된 정적 에셋을 위한 최우선 규칙 ---
           {
             // 경로가 '/<어떤문자열>/_next/static/*' 패턴과 일치하는 모든 요청
             pathPattern: '/*/_next/static/*',
