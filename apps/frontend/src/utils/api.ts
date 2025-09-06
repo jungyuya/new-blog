@@ -76,6 +76,20 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   return Promise.resolve({} as T);
 }
 
+// [신규 추가] 사용자 프로필을 위한 타입 정의
+export interface UserProfile {
+  PK: string;
+  SK: string;
+  userId: string;
+  email: string;
+  nickname: string;
+  bio?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 export const api = {
   // --- Auth APIs ---
   login: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
@@ -99,7 +113,7 @@ export const api = {
     nickname: string;
     bio?: string;
     avatarUrl?: string;
-  }): Promise<{ message: string; profile: any }> => { // profile 타입은 나중에 더 구체화 가능
+  }): Promise<{ message: string; profile: UserProfile }> => { // [수정] any -> UserProfile
     return fetchWrapper('/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
