@@ -265,34 +265,46 @@ export class BlogStack extends Stack {
 
     const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
       distributionConfig: {
-        comment: `Distribution for ${siteDomain} - v1.1`, 
+        comment: `Distribution for ${siteDomain} - v1.1`,
         enabled: true,
         httpVersion: 'http2',
         priceClass: 'PriceClass_200',
         aliases: [siteDomain],
         viewerCertificate: { acmCertificateArn: certificate.certificateArn, sslSupportMethod: 'sni-only', minimumProtocolVersion: 'TLSv1.2_2021' },
         origins: [
+          // FrontendServerOrigin (Lambda) - 변경 없음
           {
             id: 'FrontendServerOrigin',
             domainName: cdk.Fn.select(2, cdk.Fn.split('/', serverLambdaUrl.url)),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
+          // FrontendAssetsOrigin (S3) - [핵심 수정]
           {
             id: 'FrontendAssetsOrigin',
             domainName: assetsBucket.bucketRegionalDomainName,
+            // [추가] 이 오리진이 사용할 OAC의 ID를 명시적으로 연결합니다.
             originAccessControlId: s3Oac.attrId,
-            s3OriginConfig: {},
+            // [수정] OAC를 사용할 때는 s3OriginConfig가 필요하지만, originAccessIdentity는 비워야 합니다.
+            s3OriginConfig: {
+              originAccessIdentity: '',
+            },
           },
+          // BackendApiOrigin (API GW) - 변경 없음
           {
             id: 'BackendApiOrigin',
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
+          // ImageBucketOrigin (S3) - [핵심 수정]
           {
             id: 'ImageBucketOrigin',
             domainName: this.imageBucket.bucketRegionalDomainName,
+            // [추가] 이 오리진이 사용할 OAC의 ID를 명시적으로 연결합니다.
             originAccessControlId: imageBucketOac.attrId,
-            s3OriginConfig: {},
+            // [수정] OAC를 사용할 때는 s3OriginConfig가 필요하지만, originAccessIdentity는 비워야 합니다.
+            s3OriginConfig: {
+              originAccessIdentity: '',
+            },
           },
         ],
         defaultCacheBehavior: {
