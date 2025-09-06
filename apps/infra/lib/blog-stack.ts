@@ -303,20 +303,20 @@ export class BlogStack extends Stack {
           cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
+
         cacheBehaviors: [
-          // [수정] 버전화된 에셋 경로를 처리하기 위한 새로운 최우선 규칙 추가
-          // 와일드카드(*)를 사용하여 모든 릴리스 ID를 포괄합니다.
+          // --- 0. 버전화된 정적 에셋을 위한 최우선 규칙 ---
           {
+            // 경로가 '/<어떤문자열>/_next/static/*' 패턴과 일치하는 모든 요청
             pathPattern: '/*/_next/static/*',
-            targetOriginId: 'FrontendAssetsOrigin',
+            targetOriginId: 'FrontendAssetsOrigin', // S3 에셋 버킷으로 보냄
             viewerProtocolPolicy: 'redirect-to-https',
             allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
           },
-          // 기존 규칙들은 만약을 위해 유지하거나, 위 규칙으로 통합 후 삭제할 수 있습니다.
-          // 여기서는 안정성을 위해 유지합니다.
+          // --- 1. 정적 에셋 (가장 높은 우선순위) ---
           {
             pathPattern: '/_next/static/*',
             targetOriginId: 'FrontendAssetsOrigin',
@@ -335,18 +335,30 @@ export class BlogStack extends Stack {
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
           },
+          // [신규 추가] public 폴더 루트의 파일들을 위한 규칙
           {
-            pathPattern: '/api/*',
-            targetOriginId: 'BackendApiOrigin',
+            pathPattern: '/favicon.ico',
+            targetOriginId: 'FrontendAssetsOrigin',
             viewerProtocolPolicy: 'redirect-to-https',
-            allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
-            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
-            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
           },
-          // [신규 추가] 이미지 경로를 처리할 새로운 동작들
+          {
+            pathPattern: '/default-avatar.png',
+            targetOriginId: 'FrontendAssetsOrigin',
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+
+          // --- 2. 이미지 버킷 경로 ---
           {
             pathPattern: '/images/*',
-            targetOriginId: 'ImageBucketOrigin', // ImageBucketOrigin을 목적지로 지정
+            targetOriginId: 'ImageBucketOrigin',
             viewerProtocolPolicy: 'redirect-to-https',
             allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
             cachedMethods: ['GET', 'HEAD'],
@@ -355,12 +367,22 @@ export class BlogStack extends Stack {
           },
           {
             pathPattern: '/thumbnails/*',
-            targetOriginId: 'ImageBucketOrigin', // ImageBucketOrigin을 목적지로 지정
+            targetOriginId: 'ImageBucketOrigin',
             viewerProtocolPolicy: 'redirect-to-https',
             allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
+
+          // --- 3. API 경로 ---
+          {
+            pathPattern: '/api/*',
+            targetOriginId: 'BackendApiOrigin',
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
         ],
       },
