@@ -34,6 +34,8 @@ const UpdatePostSchema = z.object({
   { message: '수정할 내용을 하나 이상 제공해야 합니다.' }
 );
 
+const SITE_DOMAIN = process.env.SITE_DOMAIN!;
+
 const postsRouter = new Hono<AppEnv>();
 
 // --- [1] GET / - 모든 게시물 조회 (v2.0 - 역할 기반 동적 필터링) ---
@@ -155,9 +157,8 @@ postsRouter.post(
       let thumbnailUrl = '';
       let imageUrl = '';
       if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-        // [수정] 정규표현식으로 S3 URL에서 객체 키만 추출합니다.
         const s3Url = new URL(firstImageMatch[1]);
-        const imageKey = s3Url.pathname.substring(1); // 맨 앞의 '/' 제거 (예: images/uuid.webp)
+        const imageKey = s3Url.pathname.substring(1); // 예: images/uuid.webp
 
         imageUrl = `https://${SITE_DOMAIN}/${imageKey}`;
         thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
@@ -262,9 +263,14 @@ postsRouter.put(
 
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
         const firstImageMatch = content.match(imageUrlRegex);
+
+        // [핵심 수정] S3 URL을 CloudFront URL로 변환하는 로직
         if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-          finalPostState.imageUrl = firstImageMatch[1];
-          finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
+          const s3Url = new URL(firstImageMatch[1]);
+          const imageKey = s3Url.pathname.substring(1); // 예: images/uuid.webp
+
+          finalPostState.imageUrl = `https://${SITE_DOMAIN}/${imageKey}`;
+          finalPostState.thumbnailUrl = finalPostState.imageUrl.replace('/images/', '/thumbnails/');
         } else {
           finalPostState.imageUrl = '';
           finalPostState.thumbnailUrl = '';
