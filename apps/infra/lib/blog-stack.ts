@@ -95,7 +95,7 @@ export class BlogStack extends Stack {
       projectionType: dynamodb.ProjectionType.INCLUDE,
       nonKeyAttributes: [
         'postId', 'title', 'authorNickname', 'status', 'visibility',
-        'thumbnailUrl', 'summary', 'viewCount', 'tags'
+        'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio'
       ],
     });
 

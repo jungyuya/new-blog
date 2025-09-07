@@ -7,6 +7,8 @@ import { Post } from '@/utils/api';
 import PostHeader from './PostHeader';
 import PostContent from './PostContent';
 import PostFooter from './PostFooter';
+import PostAuthorProfile from './PostAuthorProfile'; // [추가]
+
 
 // 이 컴포넌트가 받을 props 타입은 변경되지 않습니다.
 interface PostDetailViewProps {
@@ -18,7 +20,7 @@ interface PostDetailViewProps {
  * PostHeader, PostContent, PostFooter 등 세부 컴포넌트들을 조립하는 역할을 합니다.
  */
 export default function PostDetailView({ post }: PostDetailViewProps) {
-  
+
   // 게시물이 없는 경우를 위한 방어 코드 (Graceful Degradation)
   if (!post) {
     return (
@@ -34,7 +36,11 @@ export default function PostDetailView({ post }: PostDetailViewProps) {
   return (
     <div>
       <PostHeader post={post} />
-      <PostContent content={post.content} />
+      <PostContent content={post.content!} /> {/* content가 없을 경우를 대비해 non-null assertion(!) 추가 */}
+
+      {/* [핵심 추가] 본문과 푸터 사이에 작성자 프로필 컴포넌트를 삽입합니다. */}
+      <PostAuthorProfile post={post} />
+
       <PostFooter postId={post.postId} />
     </div>
   );

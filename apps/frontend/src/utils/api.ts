@@ -16,6 +16,8 @@ export interface Post {
   status?: 'published' | 'draft';
   visibility?: 'public' | 'private';
   authorNickname?: string;
+  authorAvatarUrl?: string;
+  authorBio?: string; 
   tags?: string[];
   thumbnailUrl?: string;
   isDeleted?: boolean;

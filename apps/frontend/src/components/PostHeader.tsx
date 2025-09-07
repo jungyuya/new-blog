@@ -48,7 +48,7 @@ export default function PostHeader({ post }: PostHeaderProps) {
 
       {/* 메타 정보 (작성자, 작성일, 조회수) */}
       <div className="flex items-center space-x-4 text-sm text-gray-500 mb-6">
-        <span>작성자: {post.authorNickname || post.authorEmail.split('@')[0]}</span>
+        <span className="font-semibold">{post.authorNickname || post.authorEmail.split('@')[0]}</span>
         <span>|</span>
         <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
         <span>|</span>

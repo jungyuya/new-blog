@@ -131,7 +131,7 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [3] POST / - 새 게시물 생성 (인증 필요) ---
+// --- [3] POST / - 새 게시물 생성 (v2.2 - 작성자 프로필 연동) ---
 postsRouter.post(
   '/',
   cookieAuthMiddleware,
@@ -147,7 +147,17 @@ postsRouter.post(
       const TABLE_NAME = process.env.TABLE_NAME!;
       const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
-      // 1. content에서 첫 번째 이미지 URL을 찾아 thumbnailUrl과 imageUrl을 설정합니다.
+      // 1. [핵심 추가] 글 작성자의 최신 프로필 정보를 DB에서 조회합니다.
+      const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+      }));
+
+      // 2. [핵심 수정] 조회한 프로필을 기반으로 최종 닉네임을 결정합니다.
+      const authorNickname = authorProfile?.nickname || userEmail?.split('@')[0] || '익명';
+      const authorBio = authorProfile?.bio || '';
+
+      // 3. content에서 첫 번째 이미지 URL을 찾아 thumbnailUrl과 imageUrl을 설정합니다.
       const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
       const firstImageMatch = content.match(imageUrlRegex);
       let thumbnailUrl = '';
@@ -157,21 +167,23 @@ postsRouter.post(
         thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
       }
 
-      // 2. content를 기반으로 summary를 생성합니다.
-      const summary = content
+      // 4. content를 기반으로 summary를 생성합니다.
+      const summary = (content ?? '')
         .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
         .replace(/<[^>]*>?/gm, ' ')
         .replace(/[#*`_~=\->|]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
-        .substring(0, 150) + (content.length > 150 ? '...' : '');
+        .substring(0, 150) + ((content?.length ?? 0) > 150 ? '...' : '');
 
-      // 3. Post 아이템 객체를 완전한 형태로 정의합니다.
+      // 5. Post 아이템 객체를 완전한 형태로 정의합니다.
       const postItem = {
         PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post',
         postId, title, content, summary, authorId: userId, authorEmail: userEmail,
         createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0,
-        status: status, visibility: visibility, authorNickname: userEmail?.split('@')[0] || '익명',
+        status: status, visibility: visibility,
+        authorNickname: authorNickname, // [수정] 조회한 최신 닉네임 사용
+        authorBio: authorBio, // <-- 신규 추가
         tags: tags, thumbnailUrl: thumbnailUrl, imageUrl: imageUrl,
         GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
         GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
@@ -180,24 +192,18 @@ postsRouter.post(
       const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
       writeRequests.push({ PutRequest: { Item: postItem } });
 
-      // 4. [핵심] Tag 아이템을 생성할 때, PostCard가 필요한 모든 데이터를 postItem에서 복제합니다.
+      // 6. Tag 아이템을 생성할 때, PostCard가 필요한 모든 데이터를 postItem에서 복제합니다.
       for (const tagName of tags) {
         const normalizedTagName = tagName.trim().toLowerCase();
         if (normalizedTagName) {
           const tagItem = {
-            PK: `TAG#${normalizedTagName}`,
-            SK: `POST#${postId}`,
-            // --- 복제되는 속성들 ---
-            postId: postItem.postId,
-            title: postItem.title,
-            summary: postItem.summary,
-            authorNickname: postItem.authorNickname,
-            createdAt: postItem.createdAt,
-            status: postItem.status,
-            visibility: postItem.visibility,
-            thumbnailUrl: postItem.thumbnailUrl,
-            viewCount: postItem.viewCount,
-            tags: postItem.tags,
+            PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}`,
+            postId: postItem.postId, title: postItem.title, summary: postItem.summary,
+            authorNickname: postItem.authorNickname, // [수정] 최신 닉네임 반영
+            authorBio: postItem.authorBio, // <-- 신규 추가
+            createdAt: postItem.createdAt, status: postItem.status,
+            visibility: postItem.visibility, thumbnailUrl: postItem.thumbnailUrl,
+            viewCount: postItem.viewCount, tags: postItem.tags,
           };
           writeRequests.push({ PutRequest: { Item: tagItem } });
         }
@@ -217,7 +223,7 @@ postsRouter.post(
   }
 );
 
-// --- [4] PUT /:postId - 게시물 수정 (v2.3 - 데이터 완전 동기화 최종본) ---
+// --- [4] PUT /:postId - 게시물 수정 (v2.2 - 작성자 프로필 연동) ---
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
@@ -225,13 +231,14 @@ postsRouter.put(
   zValidator('json', UpdatePostSchema),
   async (c) => {
     const postId = c.req.param('postId');
-    const updateData: Record<string, any> = { ...c.req.valid('json') };
+    const updateData = c.req.valid('json') as Record<string, any>;
     const userId = c.get('userId');
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
     const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
     try {
+      // 1. 수정 전 원본 게시물을 가져와 소유권을 확인합니다.
       const { Item: existingPost } = await ddbDocClient.send(new GetCommand({
         TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
       }));
@@ -239,87 +246,81 @@ postsRouter.put(
       if (!existingPost || existingPost.isDeleted) return c.json({ message: 'Post not found.' }, 404);
       if (existingPost.authorId !== userId) return c.json({ message: 'Forbidden.' }, 403);
 
-      // 1. 수정될 최종 게시물의 상태를 미리 계산합니다.
-      //    updateData에 있는 값으로 existingPost의 값을 덮어씁니다.
-      const finalPostState = { ...existingPost, ...updateData };
+      // 2. [핵심 추가] 작성자의 최신 프로필 정보를 DB에서 조회합니다.
+      const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+      }));
+      const authorNickname = authorProfile?.nickname || existingPost.authorEmail.split('@')[0] || '익명';
 
-      // 2. content가 수정되었다면, summary와 섬네일 정보를 다시 계산하여 finalPostState에 반영합니다.
+      // 3. content가 수정되었다면, summary와 섬네일 정보를 다시 계산합니다.
       if (updateData.content) {
-        const content = updateData.content;
-        finalPostState.summary = content
+        updateData.summary = (updateData.content)
           .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
           .replace(/<[^>]*>?/gm, ' ')
           .replace(/[#*`_~=\->|]/g, '')
           .replace(/\s+/g, ' ')
           .trim()
-          .substring(0, 150) + (content.length > 150 ? '...' : '');
+          .substring(0, 150) + (updateData.content.length > 150 ? '...' : '');
 
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-        const firstImageMatch = content.match(imageUrlRegex);
+        const firstImageMatch = updateData.content.match(imageUrlRegex);
         if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-          finalPostState.imageUrl = firstImageMatch[1];
-          finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
+          updateData.imageUrl = firstImageMatch[1];
+          updateData.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
         } else {
-          finalPostState.imageUrl = '';
-          finalPostState.thumbnailUrl = '';
+          updateData.imageUrl = '';
+          updateData.thumbnailUrl = '';
         }
       }
 
-      // 3. [핵심 수정] 태그 동기화 로직을 '항상' 실행하도록 변경합니다.
-      //    title, summary 등이 변경되었을 때도 Tag 아이템을 업데이트해야 하기 때문입니다.
-      const oldTags: string[] = existingPost.tags || [];
-      const newTags: string[] = finalPostState.tags || [];
-      const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
-      // [수정] 추가할 태그뿐만 아니라, 유지되는 태그도 업데이트 대상에 포함될 수 있습니다.
-      // 여기서는 삭제할 태그와 새로 생성/업데이트할 태그 목록을 관리합니다.
-      const tagsToUpsert = newTags; // 'Upsert' = Update or Insert
+      // [수정] updateData 객체에 authorNickname을 추가합니다.
+      updateData.authorNickname = authorNickname;
 
-      const tagWriteRequests: any[] = [];
+      // 4. 태그가 변경된 경우, Tag 아이템들을 동기화합니다.
+      if (updateData.tags) {
+        const oldTags: string[] = existingPost.tags || [];
+        const newTags: string[] = updateData.tags;
+        const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
+        const tagsToAdd = newTags.filter(t => !oldTags.includes(t));
+        const writeRequests: any[] = [];
 
-      tagsToDelete.forEach(tagName => tagWriteRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
+        tagsToDelete.forEach(tagName => writeRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
 
-      // [핵심] 새로운 태그 목록 전체에 대해 PutRequest를 생성합니다.
-      // Put은 덮어쓰기이므로, 기존 태그는 내용이 업데이트되고 새 태그는 생성됩니다.
-      tagsToUpsert.forEach(tagName => {
-        const tagItem = {
-          PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
-          postId: postId,
-          title: finalPostState.title,
-          summary: finalPostState.summary,
-          authorNickname: finalPostState.authorNickname,
-          createdAt: finalPostState.createdAt,
-          status: finalPostState.status,
-          visibility: finalPostState.visibility,
-          thumbnailUrl: finalPostState.thumbnailUrl,
-          viewCount: finalPostState.viewCount,
-          tags: finalPostState.tags,
-        };
-        tagWriteRequests.push({ PutRequest: { Item: tagItem } });
-      });
+        tagsToAdd.forEach(tagName => {
+          const tagItem = {
+            PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
+            postId: postId,
+            title: updateData.title || existingPost.title,
+            summary: updateData.summary || existingPost.summary,
+            authorNickname: authorNickname, // [수정] 최신 닉네임 반영
+            authorBio: existingPost.authorBio || '',
+            createdAt: existingPost.createdAt,
+            status: updateData.status || existingPost.status,
+            visibility: updateData.visibility || existingPost.visibility,
+            thumbnailUrl: updateData.thumbnailUrl === undefined ? existingPost.thumbnailUrl : updateData.thumbnailUrl,
+            viewCount: existingPost.viewCount,
+            tags: newTags,
+          };
+          writeRequests.push({ PutRequest: { Item: tagItem } });
+        });
 
-      if (tagWriteRequests.length > 0) {
-        await ddbDocClient.send(new BatchWriteCommand({
-          RequestItems: { [TABLE_NAME]: tagWriteRequests },
-        }));
+        if (writeRequests.length > 0) {
+          await ddbDocClient.send(new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: writeRequests } }));
+        }
       }
 
-      // 4. Post 아이템 자체를 업데이트합니다.
+      // 5. Post 아이템을 업데이트합니다.
       const updateExpressionParts: string[] = [];
       const expressionAttributeValues: Record<string, any> = { ':u': now };
       const expressionAttributeNames: Record<string, string> = {};
-
-      // [수정] updateData 대신, 계산이 완료된 finalPostState의 변경된 부분만 업데이트합니다.
-      //    이렇게 하면 summary, thumbnailUrl 등 계산된 필드도 함께 업데이트됩니다.
-      const dataToUpdate = { ...updateData, summary: finalPostState.summary, thumbnailUrl: finalPostState.thumbnailUrl, imageUrl: finalPostState.imageUrl };
-
-      for (const [key, value] of Object.entries(dataToUpdate)) {
-        if (value !== undefined && existingPost[key] !== value) { // 변경된 값만 업데이트
+      for (const [key, value] of Object.entries(updateData)) {
+        if (value !== undefined) {
           updateExpressionParts.push(`#${key} = :${key}`);
           expressionAttributeNames[`#${key}`] = key;
           expressionAttributeValues[`:${key}`] = value;
         }
       }
-
       if (updateExpressionParts.length > 0) {
         const updateExpression = `SET updatedAt = :u, ${updateExpressionParts.join(', ')}`;
         const { Attributes } = await ddbDocClient.send(new UpdateCommand({
@@ -333,7 +334,6 @@ postsRouter.put(
       } else {
         return c.json({ message: 'No changes detected.', post: existingPost }, 200);
       }
-
     } catch (error: any) {
       console.error('Update Post Error:', error);
       return c.json({ message: 'Internal Server Error updating post.', error: error.message }, 500);

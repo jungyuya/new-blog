@@ -19,7 +19,7 @@ export default function PostFooter({ postId: _postId }: PostFooterProps) {
       */}
       <div className="text-center text-gray-500">
         {/* 임시 플레이스홀더 */}
-        <p>🛠️소셜 기능이 추가될 공간입니다.🛠️</p>
+        <p>🛠️댓글 기능이 추가될 공간입니다.🛠️</p>
       </div>
     </footer>
   );
