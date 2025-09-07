@@ -128,6 +128,18 @@ export const api = {
     return fetchWrapper(`/posts/${postId}`, { method: 'PUT', body: JSON.stringify(postData) });
   },
 
+  // [신규 추가] 현재 로그인한 사용자의 프로필을 업데이트하는 함수
+  updateMyProfile: (profileData: {
+    nickname: string;
+    bio?: string;
+    avatarUrl?: string;
+  }): Promise<{ message: string; profile: any }> => { // profile 타입을 더 구체적으로 지정할 수도 있습니다.
+    return fetchWrapper('/users/me/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
+
   deletePost: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'DELETE' });
   },

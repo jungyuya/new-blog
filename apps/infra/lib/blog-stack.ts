@@ -237,6 +237,8 @@ export class BlogStack extends Stack {
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
     });
+    this.imageBucket.grantRead(serverLambda);
+
     cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(serverLambda).add('Tier', 'Frontend');
     assetsBucket.grantRead(serverLambda);
