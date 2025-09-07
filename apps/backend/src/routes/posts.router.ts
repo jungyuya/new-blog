@@ -264,7 +264,7 @@ postsRouter.put(
 
       // 3. 수정될 최종 게시물 상태를 미리 계산합니다.
       const finalPostState: Partial<Post> = { ...updateData, updatedAt: now, authorNickname };
-      
+
       if (updateData.content) {
         finalPostState.summary = updateData.content.replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ').replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 150) + (updateData.content.length > 150 ? '...' : '');
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
@@ -315,7 +315,7 @@ postsRouter.put(
 
       // 5. Post 아이템을 업데이트합니다.
       const updateExpressionParts: string[] = [];
-      const expressionAttributeValues: Record<string, any> = { ':u': now };
+      const expressionAttributeValues: Record<string, any> = {};   // <-- ':u' 제거
       const expressionAttributeNames: Record<string, string> = {};
       for (const [key, value] of Object.entries(finalPostState)) {
         if (value !== undefined) {
