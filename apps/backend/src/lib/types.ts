@@ -12,3 +12,26 @@ export type AppEnv = {
     userGroups?: string[];
   };
 };
+
+export interface Post {
+  PK: string;
+  SK: string;
+  postId: string;
+  title: string;
+  content: string;
+  summary: string;
+  authorId: string;
+  authorEmail: string;
+  authorNickname: string;
+  authorBio?: string;
+  authorAvatarUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  viewCount: number;
+  status: 'published' | 'draft';
+  visibility: 'public' | 'private';
+  tags: string[];
+  thumbnailUrl: string;
+  imageUrl: string;
+  isDeleted: boolean;
+};

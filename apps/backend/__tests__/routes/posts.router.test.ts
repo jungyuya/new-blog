@@ -89,17 +89,22 @@ describe('Posts API (/api/posts)', () => {
     });
 
     it('should return 201 Created if user is an admin', async () => {
-      mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
-      (ddbDocClient.send as any).mockResolvedValue({});
-      const response = await request(server)
-        .post('/api/posts')
-        .set('Cookie', 'idToken=fake-admin-token')
-        .send(newPostData);
+      // [핵심 추가] 이 테스트는 인증이 성공해야 하므로, mockVerify가 유효한 payload를 반환하도록 설정합니다.
+      mockVerify.mockResolvedValue({ sub: 'admin-id', email: 'admin@a.com', 'cognito:groups': ['Admins'] });
+
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: { nickname: 'AdminUser' } })
+        .mockResolvedValueOnce({});
+
+      const response = await request(server).post('/api/posts').set('Cookie', 'idToken=fake-admin-token').send(newPostData);
+
       expect(response.status).toBe(201);
-      const sendCall = (ddbDocClient.send as any).mock.calls[0][0];
+
+      // [수정] 이제 첫 번째 호출은 GetCommand, 두 번째 호출이 BatchWriteCommand입니다.
+      const sendCall = (ddbDocClient.send as any).mock.calls[1][0];
       expect(sendCall.constructor.name).toBe('BatchWriteCommand');
       const writeRequests = sendCall.input.RequestItems[process.env.TABLE_NAME!];
-      expect(writeRequests.length).toBe(3); // Post 1개 + Tag 2개
+      expect(writeRequests.length).toBe(3);
     });
   });
 
@@ -142,16 +147,17 @@ describe('Posts API (/api/posts)', () => {
 
 
     it('should update a post successfully if user is an admin', async () => {
+      // [핵심 추가] 이 테스트도 인증이 성공해야 합니다.
       mockVerify.mockResolvedValue({ sub: 'admin-id', 'cognito:groups': ['Admins'] });
-      // 순서대로 Get(소유권), Batch(태그), Update(게시물)의 mock 응답을 설정
+
       (ddbDocClient.send as any)
-        .mockResolvedValueOnce({ Item: { postId: '1', authorId: 'admin-id', tags: [] } })
+        .mockResolvedValueOnce({ Item: { postId: '1', authorId: 'admin-id', authorEmail: 'a@a.com', tags: [] } })
+        .mockResolvedValueOnce({ Item: { nickname: 'AdminUser' } })
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({ Attributes: { title: 'Updated Title' } });
-      const response = await request(server)
-        .put('/api/posts/1')
-        .set('Cookie', 'idToken=admin-token')
-        .send({ title: 'Updated Title', tags: ['updated'] });
+
+      const response = await request(server).put('/api/posts/1').set('Cookie', 'idToken=admin-token').send({ title: 'Updated Title', tags: ['updated'] });
+
       expect(response.status).toBe(200);
       expect(response.body.post.title).toBe('Updated Title');
     });

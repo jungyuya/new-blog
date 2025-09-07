@@ -47,7 +47,12 @@ usersRouter.get('/me/profile', cookieAuthMiddleware, async (c) => {
 usersRouter.put(
   '/me/profile',
   cookieAuthMiddleware,
-  zValidator('json', UpdateProfileSchema),
+  // [핵심 수정] zValidator에 errorHandler를 추가합니다.
+  zValidator('json', UpdateProfileSchema, (result, c) => {
+    if (!result.success) {
+      return c.json({ message: 'Validation Error', errors: (result.error as ZodError).issues }, 400);
+    }
+  }),
   async (c) => {
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
