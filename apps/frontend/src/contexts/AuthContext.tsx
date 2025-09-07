@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/contexts/AuthContext.tsx (v2.1 - 상태 갱신 기능 추가)
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, Dispatch, SetStateAction } from 'react';
 import { api } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 
@@ -18,11 +18,12 @@ interface User {
 // [핵심 수정 1] Context가 제공할 값의 타입(설계도)에 상태 갱신 함수를 추가합니다.
 interface AuthContextType {
   user: User | null;
+  // [추가] setUser 함수의 타입을 명시적으로 정의합니다.
+  // User 또는 null 값을 받을 수 있는 상태 설정 함수라는 의미입니다.
+  setUser: Dispatch<SetStateAction<User | null>>;
   isLoading: boolean;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
-  // 'checkUserStatus'는 외부에서 직접 호출할 필요가 없는 내부 함수이므로,
-  // 더 명확한 이름의 'refreshUser' 함수를 외부에 제공하는 것이 좋은 설계입니다.
   refreshUser: () => Promise<void>;
 }
 
@@ -78,8 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // [핵심 수정 2] 외부에 제공할 실제 값(제품)에 refreshUser 함수를 포함합니다.
-  const value = { user, isLoading, login, logout, refreshUser };
 
+  const value = { user, setUser, isLoading, login, logout, refreshUser };
+  
   return (
     <AuthContext.Provider value={value}>
       {children}

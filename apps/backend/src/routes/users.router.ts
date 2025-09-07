@@ -11,6 +11,7 @@ import type { ZodError } from 'zod';
 const UpdateProfileSchema = z.object({
   nickname: z.string().min(2, '닉네임은 2자 이상이어야 합니다.').max(20, '닉네임은 20자를 초과할 수 없습니다.'),
   bio: z.string().max(160, '자기소개는 160자를 초과할 수 없습니다.').optional(),
+  avatarUrl: z.string().url({ message: "유효한 URL 형식이 아닙니다." }).or(z.literal("")).optional(),
 });
 
 const usersRouter = new Hono<AppEnv>();
@@ -42,30 +43,15 @@ usersRouter.get('/me/profile', cookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- PUT /me/profile - DynamoDB 프로필 수정 ---
+// --- PUT /me/profile - DynamoDB 프로필 수정/생성 (Upsert) ---
 usersRouter.put(
   '/me/profile',
   cookieAuthMiddleware,
-  // [핵심 수정] zValidator에 두 번째 인자로 errorHandler 함수를 추가합니다.
-  zValidator('json', UpdateProfileSchema, (result, c) => {
-    if (!result.success) {
-      // 유효성 검사 실패 시, 이 블록이 실행됩니다.
-      // 우리 앱의 표준 에러 형식에 맞춰 400 응답을 반환합니다.
-      return c.json(
-        {
-          message: 'Validation Error',
-          errors: (result.error as ZodError).issues,
-        },
-        400
-      );
-    }
-  }),
-  // errorHandler에서 아무것도 반환하지 않으면 (성공 시),
-  // Hono는 자동으로 이어서 아래의 최종 핸들러를 실행합니다.
+  zValidator('json', UpdateProfileSchema),
   async (c) => {
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
-    const { nickname, bio } = c.req.valid('json');
+    const { nickname, bio, avatarUrl } = c.req.valid('json');
     const now = new Date().toISOString();
     const TABLE_NAME = process.env.TABLE_NAME!;
 
@@ -79,13 +65,25 @@ usersRouter.put(
         Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
       }));
 
+      // [핵심 수정] 저장할 profileItem 객체에 avatarUrl을 포함시킵니다.
       const profileItem = {
-        PK: `USER#${userId}`, SK: 'PROFILE', userId, email: userEmail,
-        nickname, bio: bio || '', updatedAt: now,
+        PK: `USER#${userId}`,
+        SK: 'PROFILE',
+        userId,
+        email: userEmail,
+        nickname,
+        bio: bio || '',
+        // avatarUrl이 요청에 포함되지 않았다면(undefined), 기존 값을 유지합니다.
+        // 요청에 빈 문자열('')이 왔다면, 그것은 사진을 삭제하려는 의도이므로 그대로 저장합니다.
+        avatarUrl: avatarUrl === undefined ? existingProfile?.avatarUrl || '' : avatarUrl,
+        updatedAt: now,
         createdAt: existingProfile?.createdAt || now,
       };
 
-      const command = new PutCommand({ TableName: TABLE_NAME, Item: profileItem });
+      const command = new PutCommand({
+        TableName: TABLE_NAME,
+        Item: profileItem,
+      });
       await ddbDocClient.send(command);
 
       return c.json({ message: 'Profile updated successfully.', profile: profileItem }, 200);
