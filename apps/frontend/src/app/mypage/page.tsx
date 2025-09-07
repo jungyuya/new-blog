@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/app/mypage/page.tsx (v1.0 - 최종본)
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Image from 'next/image';

@@ -10,7 +10,7 @@ interface PostFooterProps {
  * 게시물 하단에 위치하며, 좋아요 버튼, 관련 글 목록 등
  * 추가적인 인터랙션이나 정보를 담을 컴포넌트입니다.
  */
-export default function PostFooter({ postId }: PostFooterProps) {
+export default function PostFooter({ postId: _postId }: PostFooterProps) {
   return (
     <footer className="mt-12 pt-8 border-t">
       {/* 

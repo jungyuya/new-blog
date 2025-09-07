@@ -23,6 +23,18 @@ export interface Post {
   content?: string;
 }
 
+export interface UserProfile {
+  PK: string;
+  SK: string;
+  userId: string;
+  email: string;
+  nickname: string;
+  bio?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const getApiBaseUrl = () => {
   if (typeof window === 'undefined') {
     return process.env.INTERNAL_API_ENDPOINT;
@@ -133,7 +145,7 @@ export const api = {
     nickname: string;
     bio?: string;
     avatarUrl?: string;
-  }): Promise<{ message: string; profile: any }> => { // profile 타입을 더 구체적으로 지정할 수도 있습니다.
+  }): Promise<{ message: string; profile: UserProfile }> => {
     return fetchWrapper('/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
