@@ -1,14 +1,12 @@
-// 파일 위치: apps/frontend/src/components/Header.tsx (v1.1 - 권한 관리 로직 병합 최종본)
+// 파일 위치: apps/frontend/src/components/Header.tsx (v1.2 - 프로필 UI 적용)
 'use client';
 
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import Image from 'next/image'; // [추가] Image 컴포넌트 import
 
 export default function Header() {
-  // [유지] 기존의 useAuth 훅 호출은 그대로 사용합니다.
   const { user, isLoading, logout } = useAuth();
-
-  // [추가] user 객체가 존재할 때, 그의 groups 배열에 'Admins'가 포함되어 있는지 확인합니다.
   const isAdmin = user?.groups?.includes('Admins');
 
   const handleLogout = async () => {
@@ -21,40 +19,53 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-md">
-      <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
+    <header className="bg-white shadow-md sticky top-0 z-50">
+      <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
         <Link href="/" className="text-xl font-bold text-gray-800">
           Deep Dive Blog🐬
         </Link>
 
         <div className="flex items-center space-x-4">
-          {/* [유지] 로딩 중 UI는 그대로 유지합니다. */}
           {isLoading ? (
             <div className="animate-pulse flex space-x-4">
-              <div className="h-8 w-16 bg-gray-300 rounded"></div>
-              <div className="h-8 w-16 bg-gray-300 rounded"></div>
+              <div className="h-8 w-24 bg-gray-300 rounded"></div>
+              <div className="h-8 w-8 bg-gray-300 rounded-full"></div>
             </div>
           ) : user ? (
-            // [유지] 로그인 상태 UI는 그대로 유지합니다.
+            // --- [핵심 수정] 로그인 상태 UI ---
             <>
-              <span className="text-gray-600">환영합니다, {user.nickname || user.email} 님!</span>
-              
-              {/* [핵심 수정] '새 글 작성' 버튼을 isAdmin이 true일 때만 렌더링하도록 <></>로 감싸고 조건을 추가합니다. */}
               {isAdmin && (
                 <Link href="/posts/new" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
                   새 글 작성
                 </Link>
               )}
-
+              
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                className="text-sm text-gray-600 hover:text-indigo-600"
               >
                 로그아웃
               </button>
+
+              {/* 프로필 링크 (아바타 + 닉네임) */}
+              <Link href="/mypage" className="flex items-center space-x-2">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gray-200">
+                  <Image
+                    src={user.avatarUrl || '/default-avatar.png'}
+                    alt="프로필 사진"
+                    fill
+                    className="object-cover"
+                    sizes="32px"
+                    key={user.avatarUrl} // URL 변경 시 리렌더링 강제
+                  />
+                </div>
+                <span className="font-semibold text-gray-700 hidden sm:block">
+                  {user.nickname || user.email.split('@')[0]}
+                </span>
+              </Link>
             </>
           ) : (
-            // [유지] 로그아웃 상태 UI는 그대로 유지합니다.
+            // --- 로그아웃 상태 UI (변경 없음) ---
             <>
               <Link href="/login" className="text-gray-600 hover:text-indigo-600">
                 로그인
