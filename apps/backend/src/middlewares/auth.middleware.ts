@@ -1,39 +1,56 @@
-// 파일 위치: apps/backend/src/middlewares/auth.middleware.ts (v2.0 - 최종 정리본)
+// 파일 위치: apps/backend/src/middlewares/auth.middleware.ts (v2.1 - UserContext 주입)
 import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
-import type { AppEnv } from '../lib/types';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+
+import type { AppEnv, UserContext } from '../lib/types'; // [수정] UserContext import
+import { ddbDocClient } from '../lib/dynamodb'; // [신규] ddbDocClient import
 
 const USER_POOL_ID = process.env.USER_POOL_ID!;
 const USER_POOL_CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
 
-// [수정] ID Token 검증기 하나만 생성하여 사용합니다.
-// 대부분의 인증 확인은 사용자 정보가 포함된 ID Token으로 수행하는 것이 효율적입니다.
 const idTokenVerifier = CognitoJwtVerifier.create({
   userPoolId: USER_POOL_ID,
-  tokenUse: 'id', // tokenUse를 'id'로 설정
+  tokenUse: 'id',
   clientId: USER_POOL_CLIENT_ID,
 });
 
 // =================================================================
 // 필수 인증 미들웨어 (Required Auth Middleware)
 // =================================================================
-/**
- * idToken 쿠키를 검증하고, 유효하지 않으면 401 에러를 반환합니다.
- * 성공 시, context(c)에 `userId`, `userEmail`, `userGroups`를 주입합니다.
- */
 export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   try {
-    // [수정] 'idToken' 쿠키를 읽어옵니다.
     const token = getCookie(c, 'idToken');
     if (!token) {
       return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
     }
 
-    // [수정] idTokenVerifier를 사용하여 검증합니다.
     const payload = await idTokenVerifier.verify(token);
 
-    // [수정] 이제 payload에는 email이 반드시 포함되어 있습니다.
+    // --- [핵심 수정] DynamoDB에서 사용자 프로필 정보를 가져옵니다 ---
+    const getUserProfileCommand = new GetCommand({
+      TableName: process.env.TABLE_NAME,
+      Key: {
+        PK: `USER#${payload.sub}`,
+        SK: `PROFILE#${payload.sub}`,
+      },
+    });
+    const userProfileResult = await ddbDocClient.send(getUserProfileCommand);
+    const userProfile = userProfileResult.Item;
+
+    // --- [핵심 수정] UserContext 객체를 생성하여 컨텍스트에 주입합니다 ---
+    const userContext: UserContext = {
+      userId: payload.sub,
+      userEmail: payload.email as string,
+      userGroups: (payload['cognito:groups'] as string[]) || [],
+      // 프로필이 아직 없으면 Cognito의 nickname을, 있으면 DB의 nickname을 사용
+      nickname: userProfile?.nickname || payload['cognito:nickname'] || 'Unnamed User',
+      avatarUrl: userProfile?.avatarUrl,
+    };
+    c.set('user', userContext);
+
+    // [참고] 기존의 개별 정보 주입도 유지하여 하위 호환성을 보장할 수 있습니다.
     c.set('userId', payload.sub);
     c.set('userEmail', payload.email as string);
     c.set('userGroups', (payload['cognito:groups'] as string[]) || []);
@@ -41,6 +58,10 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     await next();
   } catch (error: any) {
     console.error('Cookie Auth Error:', error);
+    // [수정] Postman cURL에 idToken이 없던 문제를 고려하여, 에러 메시지를 더 명확하게 변경
+    if (error.message.includes('not found')) {
+       return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
+    }
     return c.json({ message: 'Unauthorized: Invalid ID token from cookie.' }, 401);
   }
 };
