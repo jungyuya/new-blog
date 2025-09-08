@@ -79,11 +79,12 @@ export default function CommentsSection({ postId }: CommentsSectionProps) {
         isSubmitting={isSubmitting}
       />
       {comments && comments.length > 0 ? (
-        // [수정] CommentList에 새로운 핸들러와 상태를 props로 전달
         <CommentList
           comments={comments}
+          postId={postId} // [신규]
           onReplySubmit={handleReplySubmit}
           isSubmitting={isSubmitting}
+          onUpdate={mutate} // [신규] SWR의 mutate 함수를 onUpdate prop으로 전달
         />
       ) : (
         <div className="py-4 text-center text-gray-500">

@@ -2,26 +2,29 @@
 'use client';
 
 import React from 'react';
+import type { KeyedMutator } from 'swr'; // SWR의 mutate 함수 타입을 가져옵니다.
 import { Comment } from '@/utils/api';
 import CommentItem from './CommentItem';
 
-// [수정] 부모로부터 받을 props 타입을 확장합니다.
 interface CommentListProps {
   comments: Comment[];
+  postId: string; // [신규]
   onReplySubmit: (content: string, parentCommentId: string, parentCreatedAt: string) => Promise<void>;
   isSubmitting: boolean;
+  onUpdate: KeyedMutator<Comment[]>;
 }
 
-export default function CommentList({ comments, onReplySubmit, isSubmitting }: CommentListProps) {
+export default function CommentList({ comments, postId, onReplySubmit, isSubmitting, onUpdate }: CommentListProps) {
   return (
     <div className="mt-6 first:mt-0">
       {comments.map((comment) => (
-        // [수정] 자식 CommentItem에게 props를 그대로 전달합니다.
         <CommentItem 
           key={comment.commentId} 
           comment={comment} 
+          postId={postId} // [신규]
           onReplySubmit={onReplySubmit}
           isSubmitting={isSubmitting}
+          onUpdate={onUpdate} // [신규]
         />
       ))}
     </div>

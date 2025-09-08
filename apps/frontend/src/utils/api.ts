@@ -179,7 +179,7 @@ export const api = {
   fetchCommentsByPostId: (postId: string): Promise<Comment[]> => {
     return fetchWrapper(`/posts/${postId}/comments`, { method: 'GET' });
   },
-  
+
   createComment: (
     postId: string,
     commentData: {
@@ -190,6 +190,31 @@ export const api = {
   ): Promise<Comment> => {
     return fetchWrapper(`/posts/${postId}/comments`, {
       method: 'POST',
+      body: JSON.stringify(commentData),
+    });
+  },
+  // --- [신규] Comment APIs ---
+  updateComment: (
+    commentId: string,
+    commentData: {
+      content: string;
+      postId: string;
+    }
+  ): Promise<Comment> => {
+    return fetchWrapper(`/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(commentData),
+    });
+  },
+
+  deleteComment: (
+    commentId: string,
+    commentData: {
+      postId: string;
+    }
+  ): Promise<null> => {
+    return fetchWrapper(`/comments/${commentId}`, {
+      method: 'DELETE',
       body: JSON.stringify(commentData),
     });
   },

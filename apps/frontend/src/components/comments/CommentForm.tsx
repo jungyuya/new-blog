@@ -1,23 +1,30 @@
-// 파일 위치: apps/frontend/src/components/comments/CommentForm.tsx (v2.0 - 상태 및 핸들러 추가)
+// 파일 위치: apps/frontend/src/components/comments/CommentForm.tsx (v2.1 - 수정 모드 지원)
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // [수정] useEffect import
 
-// [신규] 부모 컴포넌트로부터 받을 props 타입을 정의합니다.
 interface CommentFormProps {
-  onSubmit: (content: string) => Promise<void>; // 댓글 내용을 받아 비동기 작업을 처리할 함수
-  isSubmitting: boolean; // 현재 댓글이 제출 중인지 여부
+  onSubmit: (content: string) => Promise<void>;
+  isSubmitting: boolean;
+  initialContent?: string; // [신규] 수정 시 초기 내용을 받기 위한 prop
 }
 
-export default function CommentForm({ onSubmit, isSubmitting }: CommentFormProps) {
-  const [content, setContent] = useState('');
+export default function CommentForm({ onSubmit, isSubmitting, initialContent = '' }: CommentFormProps) {
+  const [content, setContent] = useState(initialContent);
+
+  // [신규] 수정 모드 취소 시 내용을 원래대로 되돌리기 위한 로직
+  useEffect(() => {
+    setContent(initialContent);
+  }, [initialContent]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // form의 기본 제출 동작(페이지 새로고침)을 막습니다.
-    if (!content.trim()) return; // 내용이 없으면 아무것도 하지 않습니다.
-
+    e.preventDefault();
+    if (!content.trim()) return;
     await onSubmit(content);
-    setContent(''); // 제출 성공 후 입력창을 비웁니다.
+    // [수정] 수정 모드가 아닐 때만 입력창을 비웁니다.
+    if (!initialContent) {
+      setContent('');
+    }
   };
 
   return (
