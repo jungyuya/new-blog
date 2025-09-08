@@ -20,6 +20,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "swr": "^2.3.6",
     "yet-another-react-lightbox": "^3.25.0"
   },
   "devDependencies": {

@@ -17,7 +17,7 @@ export interface Post {
   visibility?: 'public' | 'private';
   authorNickname?: string;
   authorAvatarUrl?: string;
-  authorBio?: string; 
+  authorBio?: string;
   tags?: string[];
   thumbnailUrl?: string;
   isDeleted?: boolean;
@@ -35,6 +35,20 @@ export interface UserProfile {
   avatarUrl?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- [신규] 댓글 타입을 여기에 직접 정의합니다. ---
+export interface Comment {
+  commentId: string;
+  content: string;
+  authorId: string;
+  authorNickname: string;
+  authorAvatarUrl?: string;
+  createdAt: string;
+  isDeleted: boolean;
+  parentCommentId: string | null;
+  // 재귀적인 구조를 표현하기 위해, Comment 타입 자신이 배열로 포함됩니다.
+  replies: Comment[];
 }
 
 const getApiBaseUrl = () => {
@@ -159,5 +173,24 @@ export const api = {
   },
   fetchPostsByTag: (tagName: string): Promise<{ posts: Post[] }> => {
     return fetchWrapper(`/tags/${tagName}/posts`, { method: 'GET' });
+  },
+
+  // --- [신규] Comment APIs ---
+  fetchCommentsByPostId: (postId: string): Promise<Comment[]> => {
+    return fetchWrapper(`/posts/${postId}/comments`, { method: 'GET' });
+  },
+  
+  createComment: (
+    postId: string,
+    commentData: {
+      content: string;
+      parentCommentId?: string;
+      parentCreatedAt?: string;
+    }
+  ): Promise<Comment> => {
+    return fetchWrapper(`/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(commentData),
+    });
   },
 };

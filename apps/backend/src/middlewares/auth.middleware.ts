@@ -33,7 +33,7 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
       TableName: process.env.TABLE_NAME,
       Key: {
         PK: `USER#${payload.sub}`,
-        SK: `PROFILE#${payload.sub}`,
+        SK: `PROFILE`,
       },
     });
     const userProfileResult = await ddbDocClient.send(getUserProfileCommand);
@@ -60,7 +60,7 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     console.error('Cookie Auth Error:', error);
     // [수정] Postman cURL에 idToken이 없던 문제를 고려하여, 에러 메시지를 더 명확하게 변경
     if (error.message.includes('not found')) {
-       return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
+      return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
     }
     return c.json({ message: 'Unauthorized: Invalid ID token from cookie.' }, 401);
   }
@@ -76,7 +76,7 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
 export const tryCookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   try {
     const token = getCookie(c, 'idToken');
-    
+
     if (token) {
       // 토큰이 존재할 경우에만 검증을 시도합니다.
       const payload = await idTokenVerifier.verify(token);
