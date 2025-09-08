@@ -22,7 +22,7 @@ export default async function PostDetailPage({ params }: { params: { postId: str
       <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <PostDetailView post={post} />
       </div>
-    );
+    ); 
 
   } catch (error) {
     console.error(`Failed to fetch post ${postId}:`, error);
