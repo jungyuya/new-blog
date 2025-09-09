@@ -78,8 +78,8 @@ export default function PostCard({ post }: PostCardProps) {
             
             {isAdmin && (
               <div className="ml-auto flex gap-2">
-                {post.status === 'draft' && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-md text-xs">📝 임시저장</span>}
-                {post.visibility === 'private' && <span className="bg-gray-400 text-white px-2 py-0.5 rounded-md text-xs">🔒 비밀글</span>}
+                {post.status === 'draft' && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-md text-xs">📝임시글</span>}
+                {post.visibility === 'private' && <span className="bg-gray-400 text-white px-2 py-0.5 rounded-md text-xs">🔒</span>}
               </div>
             )}
           </div>

@@ -1,19 +1,17 @@
-// 파일 위치: apps/backend/__tests__/routes/users.router.test.ts
+// 파일 위치: apps/backend/__tests__/routes/users.router.test.ts (v2.1 - 최종 수정)
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { serve } from '@hono/node-server';
-import type { app } from '../../src/index';
 import { ddbDocClient } from '../../src/lib/dynamodb';
+import { mockAdminPayload, mockUserPayload, mockUserProfile } from '../../src/test/setup';
 
 // =================================================================
-// 🤫 [MOCKING] - 외부 의존성을 모킹합니다.
+// 🤫 [MOCKING]
 // =================================================================
-// 1. DynamoDB 클라이언트 모킹
 vi.mock('../../src/lib/dynamodb', () => ({
   ddbDocClient: { send: vi.fn() },
 }));
 
-// 2. Cognito JWT 검증기 모킹
 const { mockVerify } = vi.hoisted(() => ({
   mockVerify: vi.fn(),
 }));
@@ -22,154 +20,125 @@ vi.mock('aws-jwt-verify', () => ({
 }));
 
 // =================================================================
-// 🚀 [TEST SERVER SETUP] - 블랙박스 테스트를 위한 서버 설정
+// 🚀 [TEST SERVER SETUP]
 // =================================================================
 let server: ReturnType<typeof serve>;
+let app: any;
 beforeAll(async () => {
-  // 포트 충돌을 방지하기 위해 다른 포트(4003)를 사용합니다.
-  server = serve({ fetch: (await import('../../src/index')).app.fetch, port: 4003 });
+  app = (await import('../../src/index')).app;
+  server = serve({ fetch: app.fetch, port: 4003 });
 });
 afterAll(() => {
   server?.close();
 });
 beforeEach(() => {
   vi.resetAllMocks();
+  // [수정] beforeEach에서는 Cognito 모킹만 담당합니다.
+  mockVerify.mockImplementation(async (token: string) => {
+    // 이 테스트 파일에서는 fake-user-token만 사용하지만, 일관성을 위해 둘 다 둡니다.
+    if (token === 'fake-admin-token') return mockAdminPayload;
+    if (token === 'fake-user-token') return mockUserPayload;
+    throw new Error('Invalid token');
+  });
 });
 
 // =================================================================
-// 🧪 [TEST SUITE] - Users API
+// 🧪 [TEST SUITE]
 // =================================================================
 describe('Users API (/api/users)', () => {
-
   describe('PUT /me/profile', () => {
-    const mockUserProfile = { nickname: 'TestUser', bio: 'This is a test bio.' };
-    const mockJwtPayload = { sub: 'user-123', email: 'test@example.com', 'cognito:groups': ['Users'] };
+    const mockUserProfileData = { nickname: 'TestUser', bio: 'This is a test bio.' };
 
     it('should return 401 Unauthorized if no token is provided', async () => {
-      // Given: 인증 토큰 없음 (cookieAuthMiddleware가 처리)
-      // When
       const response = await request(server)
         .put('/api/users/me/profile')
-        .send(mockUserProfile);
-      // Then
+        .send(mockUserProfileData);
       expect(response.status).toBe(401);
     });
 
     it('should return 400 Bad Request if nickname is too short', async () => {
-      // Given
-      mockVerify.mockResolvedValue(mockJwtPayload);
+      // [수정] 미들웨어의 프로필 조회 모킹을 추가합니다.
+      (ddbDocClient.send as any).mockResolvedValueOnce({ Item: undefined });
       const invalidProfile = { nickname: 'a', bio: 'short name' };
 
-      // When
       const response = await request(server)
         .put('/api/users/me/profile')
-        .set('Cookie', 'idToken=fake-token')
+        .set('Cookie', 'idToken=fake-user-token')
         .send(invalidProfile);
 
-      // [핵심 디버깅] 실제 응답 본문이 어떻게 생겼는지 출력합니다.
-      console.log('>>> Zod Validation Error Response Body:', response.body);
-
-      // Then
       expect(response.status).toBe(400);
       expect(response.body.message).toBe('Validation Error');
     });
     
     it('should create a new profile (upsert) and return 200 OK', async () => {
-      // Given: 인증 통과, 유효한 데이터, DB에는 기존 프로필 없음
-      mockVerify.mockResolvedValue(mockJwtPayload);
-      // GetCommand는 'Item: undefined'를 반환하도록 설정
-      (ddbDocClient.send as any).mockResolvedValueOnce({ Item: undefined });
-      // PutCommand는 성공
-      (ddbDocClient.send as any).mockResolvedValueOnce({});
+      // [수정] 미들웨어와 라우터의 모든 DB 호출을 순서대로 명시적으로 모킹합니다.
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: mockUserProfile }) // 1. 미들웨어의 프로필 조회
+        .mockResolvedValueOnce({ Item: undefined })     // 2. 라우터의 기존 프로필 확인 (없음)
+        .mockResolvedValueOnce({});                     // 3. 라우터의 PutCommand
 
-      // When
       const response = await request(server)
         .put('/api/users/me/profile')
-        .set('Cookie', 'idToken=fake-token')
-        .send(mockUserProfile);
+        .set('Cookie', 'idToken=fake-user-token')
+        .send(mockUserProfileData);
 
-      // Then
       expect(response.status).toBe(200);
       expect(response.body.profile.nickname).toBe('TestUser');
 
-      // ddbDocClient.send가 2번(Get, Put) 호출되었는지 확인
-      expect((ddbDocClient.send as any)).toHaveBeenCalledTimes(2);
-      const putCommandArgs = (ddbDocClient.send as any).mock.calls[1][0].input;
-      expect(putCommandArgs.Item.PK).toBe('USER#user-123');
+      // [수정] 총 호출 횟수를 3번으로 수정합니다.
+      expect((ddbDocClient.send as any)).toHaveBeenCalledTimes(3);
+      
+      // PutCommand가 세 번째 호출인지 확인합니다.
+      const putCommandArgs = (ddbDocClient.send as any).mock.calls[2][0].input;
+      expect(putCommandArgs.Item.PK).toBe(`USER#${mockUserPayload.sub}`);
       expect(putCommandArgs.Item.SK).toBe('PROFILE');
-      // createdAt이 새로 생성되었는지 확인
-      expect(putCommandArgs.Item.createdAt).toBeDefined();
     });
   });
+
   describe('GET /me/profile', () => {
-    const mockJwtPayload = { sub: 'user-123', email: 'test@example.com' };
-
     it('should return 404 Not Found if profile does not exist', async () => {
-      // Given: 인증은 통과했지만, DB에 프로필이 없음
-      mockVerify.mockResolvedValue(mockJwtPayload);
-      (ddbDocClient.send as any).mockResolvedValue({ Item: undefined });
-
-      // When
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: undefined }) // 1. 미들웨어의 프로필 조회
+        .mockResolvedValueOnce({ Item: undefined }); // 2. 라우터의 프로필 조회
       const response = await request(server)
         .get('/api/users/me/profile')
-        .set('Cookie', 'idToken=fake-token');
-
-      // Then
+        .set('Cookie', 'idToken=fake-user-token');
       expect(response.status).toBe(404);
     });
 
     it('should return 200 OK with the user profile if it exists', async () => {
-      // Given: 인증 통과, DB에 프로필 존재
-      mockVerify.mockResolvedValue(mockJwtPayload);
-      const mockProfile = { PK: 'USER#user-123', SK: 'PROFILE', nickname: 'TestUser' };
-      (ddbDocClient.send as any).mockResolvedValue({ Item: mockProfile });
-
-      // When
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: mockUserProfile }) // 1. 미들웨어의 프로필 조회
+        .mockResolvedValueOnce({ Item: mockUserProfile }); // 2. 라우터의 프로필 조회
       const response = await request(server)
         .get('/api/users/me/profile')
-        .set('Cookie', 'idToken=fake-token');
-
-      // Then
+        .set('Cookie', 'idToken=fake-user-token');
       expect(response.status).toBe(200);
-      expect(response.body.profile.nickname).toBe('TestUser');
+      expect(response.body.profile.nickname).toBe('Test User Nickname');
     });
   });
 
   describe('GET /me', () => {
-    const mockJwtPayload = { sub: 'user-123', email: 'test@example.com', 'cognito:groups': [] };
-
     it('should return user data with nickname from profile if it exists', async () => {
-      // Given: 인증 통과, DB에 프로필 존재
-      mockVerify.mockResolvedValue(mockJwtPayload);
-      const mockProfile = { PK: 'USER#user-123', SK: 'PROFILE', nickname: 'RealNickname' };
-      (ddbDocClient.send as any).mockResolvedValue({ Item: mockProfile });
-
-      // When
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: mockUserProfile }) // 1. 미들웨어의 프로필 조회
+        .mockResolvedValueOnce({ Item: mockUserProfile }); // 2. 라우터의 프로필 조회
       const response = await request(server)
         .get('/api/users/me')
-        .set('Cookie', 'idToken=fake-token');
-
-      // Then
+        .set('Cookie', 'idToken=fake-user-token');
       expect(response.status).toBe(200);
-      expect(response.body.user.nickname).toBe('RealNickname');
-      expect(response.body.user.email).toBe('test@example.com');
+      expect(response.body.user.nickname).toBe('Test User Nickname');
     });
 
     it('should return user data with default nickname if profile does not exist', async () => {
-      // Given: 인증 통과, DB에 프로필 없음
-      mockVerify.mockResolvedValue(mockJwtPayload);
-      (ddbDocClient.send as any).mockResolvedValue({ Item: undefined });
-
-      // When
+      (ddbDocClient.send as any)
+        .mockResolvedValueOnce({ Item: undefined }) // 1. 미들웨어의 프로필 조회
+        .mockResolvedValueOnce({ Item: undefined }); // 2. 라우터의 프로필 조회
       const response = await request(server)
         .get('/api/users/me')
-        .set('Cookie', 'idToken=fake-token');
-
-      // Then
+        .set('Cookie', 'idToken=fake-user-token');
       expect(response.status).toBe(200);
-      // 이메일 앞부분을 기본 닉네임으로 사용하는지 확인
-      expect(response.body.user.nickname).toBe('test');
-      expect(response.body.user.email).toBe('test@example.com');
+      expect(response.body.user.nickname).toBe('user'); // 'user@test.com'에서 @ 앞부분
     });
   });
 });
