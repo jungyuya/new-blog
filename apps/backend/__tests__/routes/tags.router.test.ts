@@ -1,3 +1,4 @@
+// 파일 위치: apps/backend/__tests__/routes/tags.router.test.ts (포트 수정)
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { serve } from '@hono/node-server';
@@ -7,7 +8,10 @@ import { ddbDocClient } from '../../src/lib/dynamodb';
 // --- 모킹 및 서버 설정 ---
 vi.mock('../../src/lib/dynamodb', () => ({ ddbDocClient: { send: vi.fn() } }));
 let server: ReturnType<typeof serve>;
-beforeAll(async () => { server = serve({ fetch: (await import('../../src/index')).app.fetch, port: 4002 }); }); // 포트 충돌 방지
+beforeAll(async () => { 
+  // [핵심 수정] 포트 번호를 4004로 변경하여 다른 테스트와의 충돌을 방지합니다.
+  server = serve({ fetch: (await import('../../src/index')).app.fetch, port: 4004 }); 
+});
 afterAll(() => server?.close());
 beforeEach(() => vi.resetAllMocks());
 
