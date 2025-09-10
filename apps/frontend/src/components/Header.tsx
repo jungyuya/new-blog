@@ -30,6 +30,7 @@ export default function Header() {
             width={28} // 로고의 너비 (px)
             height={28} // 로고의 높이 (px)
             priority // 헤더 로고는 중요하므로 우선적으로 로드
+            unoptimized={true}
           />
           {/* 2. 기존 텍스트 유지 */}
           <span className="text-xl font-bold text-gray-800">
