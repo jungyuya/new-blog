@@ -68,7 +68,7 @@ export default function PostUtilButtons() {
         {copyStatus === 'copied' && (
           // --- [핵심 수정] whitespace-nowrap 클래스를 추가합니다. ---
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
-            Copy OK!
+            Copy OK! 
           </div>
         )}
       </div>
