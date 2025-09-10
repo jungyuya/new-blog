@@ -300,7 +300,7 @@ export class BlogStack extends Stack {
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
           },
           // 기존 규칙들은 만약을 위해 유지하거나, 위 규칙으로 통합 후 삭제할 수 있습니다.
-          // 여기서는 안정성을 위해 유지합니다.
+          // 여기서는 안정성을 위해 유지합니다. 
           {
             pathPattern: '/_next/static/*',
             targetOriginId: 'FrontendAssetsOrigin',
