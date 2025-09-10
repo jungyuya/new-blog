@@ -288,8 +288,15 @@ export class BlogStack extends Stack {
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
         cacheBehaviors: [
-          // [수정] 버전화된 에셋 경로를 처리하기 위한 새로운 최우선 규칙 추가
-          // 와일드카드(*)를 사용하여 모든 릴리스 ID를 포괄합니다.
+          {
+            pathPattern: '/*.*', // 점(.)이 포함된 모든 파일 경로 (예: .webp, .ico, .png)
+            targetOriginId: 'FrontendAssetsOrigin', // S3 버킷으로 요청을 보냅니다.
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
           {
             pathPattern: '/*/_next/static/*',
             targetOriginId: 'FrontendAssetsOrigin',
