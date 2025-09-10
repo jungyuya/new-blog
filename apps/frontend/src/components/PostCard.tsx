@@ -1,4 +1,4 @@
-// 파일 위치: apps/frontend/src/components/PostCard.tsx (v1.4 - 닉네임 표시 최종본)
+// 파일 위치: apps/frontend/src/components/PostCard.tsx (v2.0 - 레이아웃 및 메타데이터 개선)
 'use client';
 
 import Link from 'next/link';
@@ -17,72 +17,81 @@ export default function PostCard({ post }: PostCardProps) {
   const isAdmin = user?.groups?.includes('Admins');
   const router = useRouter();
 
-  const handleCardClick = () => {
+  // Link 컴포넌트가 아닌 div 등에서 라우팅이 필요할 때 사용
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // 태그 링크를 클릭한 경우는 페이지 이동을 막습니다.
+    if ((e.target as HTMLElement).closest('a[href^="/tags/"]')) {
+      return;
+    }
     router.push(`/posts/${post.postId}`);
   };
 
   return (
+    // [수정] 카드 전체를 flex-col로 만들어 푸터를 하단에 고정하기 쉽게 합니다.
     <div
       onClick={handleCardClick}
-      className="block group overflow-hidden rounded-lg shadow-lg transition-shadow duration-300 hover:shadow-2xl cursor-pointer"
+      className="flex flex-col h-full bg-white group overflow-hidden rounded-lg shadow-lg transition-shadow duration-300 hover:shadow-2xl cursor-pointer"
       role="link"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') handleCardClick(); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
-      <div className="flex flex-col h-full bg-white">
-        {/* --- 1. 섬네일 이미지 영역 --- */}
-        <div className="relative w-full aspect-video bg-gray-100">
-          {post.thumbnailUrl ? (
+      {/* --- 1. 섬네일 이미지 영역 (변경 없음) --- */}
+      {post.thumbnailUrl && (
+        <div className="relative w-full aspect-video">
+          <Image
+            src={post.thumbnailUrl}
+            alt={post.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+        </div>
+      )}
+
+      {/* --- 2. 콘텐츠 정보 영역 (레이아웃 수정) --- */}
+      <div className="flex flex-col flex-1 p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{post.title}</h3>
+        <p className="text-gray-500 text-sm mb-4">{post.summary || ''}</p>
+
+        {/* [수정] 태그 영역을 콘텐츠와 푸터 사이로 이동 */}
+        {post.tags && post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-auto pt-4">
+            {post.tags.map(tag => (
+              <Link
+                href={`/tags/${encodeURIComponent(tag)}`}
+                key={tag}
+                className="bg-gray-200 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-gray-300 transition-colors z-10 relative"
+              >
+                #{tag}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* --- 3. [신규] 푸터 영역 --- */}
+      <div className="flex items-center justify-between text-xs text-gray-500 px-6 py-4 border-t border-gray-100">
+        {/* 왼쪽: 작성자 정보 (아바타 + 닉네임) */}
+        <div className="flex items-center space-x-2">
+          <div className="relative w-6 h-6 rounded-full overflow-hidden bg-gray-200">
             <Image
-              src={post.thumbnailUrl}
-              alt={post.title}
+              src={post.authorAvatarUrl || '/default-avatar.png'}
+              alt={`${post.authorNickname || '익명'}의 프로필 사진`}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              sizes="24px"
             />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gray-200">
-              <span className="text-gray-500">이미지가 포함되지 않은 글 입니다.</span>
-            </div>
-          )}
+          </div>
+          <span className="font-semibold">{post.authorNickname || '익명'}</span>
         </div>
 
-        {/* --- 2. 콘텐츠 정보 영역 --- */}
-        <div className="flex flex-col flex-1 p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{post.title}</h3>
-          <p className="text-gray-500 text-sm flex-1 mb-4">{post.summary || ''}</p>
-
-          {post.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {post.tags.map(tag => (
-                <Link
-                  href={`/tags/${encodeURIComponent(tag)}`}
-                  key={tag}
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-gray-200 text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-gray-300 transition-colors z-10 relative"
-                >
-                  #{tag}
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {/* --- 메타 정보 --- */}
-          <div className="flex items-center text-xs text-gray-500 mt-auto pt-4 border-t border-gray-100">
-            {/* [핵심 수정] 작성자 정보를 authorNickname으로 표시합니다. */}
-            <span className="font-semibold">{post.authorNickname || '익명'}</span>
-            <span className="mx-2">·</span>
-            <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
-            <span className="mx-2">·</span>
-            <span>조회수 {post.viewCount || 0}</span>
-            
-            {isAdmin && (
-              <div className="ml-auto flex gap-2">
-                {post.status === 'draft' && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-md text-xs">📝임시글</span>}
-                {post.visibility === 'private' && <span className="bg-gray-400 text-white px-2 py-0.5 rounded-md text-xs">🔒</span>}
-              </div>
-            )}
-          </div>
+        {/* 오른쪽: 메타데이터 (작성일 + 댓글 수) */}
+        <div className="flex items-center space-x-2">
+          <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
+          <span className="mx-1">·</span>
+          <span>💬 {post.commentCount || 0}</span>
+          <span className="mx-1">·</span>
+          <span>👀 {post.viewCount || 0}</span>
         </div>
       </div>
     </div>

@@ -38,26 +38,22 @@ const UpdatePostSchema = z.object({
 
 const postsRouter = new Hono<AppEnv>();
 
-// --- [1] GET / - 모든 게시물 조회 (v2.0 - 역할 기반 동적 필터링) ---
+// --- [1] GET / - 모든 게시물 조회 (v2.1 - 아바타 및 댓글 수 추가) ---
 postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   const TABLE_NAME = process.env.TABLE_NAME!;
-
-  // 1. 선택적 인증을 통해 사용자 정보를 가져옵니다.
   const userGroups = c.get('userGroups');
   const isAdmin = userGroups?.includes('Admins');
 
   try {
+    // 1. 기존 로직: GSI를 사용하여 모든 게시물의 기본 정보를 가져옵니다.
     const commandParams: QueryCommandInput = {
       TableName: TABLE_NAME,
       IndexName: 'GSI3',
       KeyConditionExpression: 'GSI3_PK = :pk',
-      ExpressionAttributeValues: {
-        ':pk': 'POST#ALL',
-      },
+      ExpressionAttributeValues: { ':pk': 'POST#ALL' },
       ScanIndexForward: false,
     };
 
-    // 2. [핵심] 관리자가 아닐 경우에만 필터를 적용합니다.
     if (!isAdmin) {
       commandParams.FilterExpression = '#status = :published AND #visibility = :public';
       commandParams.ExpressionAttributeNames = {
@@ -67,14 +63,51 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
       commandParams.ExpressionAttributeValues![':published'] = 'published';
       commandParams.ExpressionAttributeValues![':public'] = 'public';
     }
-    // 관리자일 경우, FilterExpression이 없으므로 모든 글(isDeleted=false 제외)을 가져옵니다.
 
     const command = new QueryCommand(commandParams);
     const { Items } = await ddbDocClient.send(command);
-
     const activePosts = Items?.filter((i) => !i.isDeleted) || [];
 
-    return c.json({ posts: activePosts });
+    // --- [핵심 수정] 각 게시물에 대한 추가 정보(아바타, 댓글 수)를 병렬로 조회합니다. ---
+    const enrichedPosts = await Promise.all(
+      activePosts.map(async (post) => {
+        // 2. authorAvatarUrl 조회
+        // 게시물 데이터에 authorAvatarUrl이 이미 있다면 그것을 사용하고, 없다면 DB에서 조회합니다.
+        // (참고: Post 생성/수정 시 authorAvatarUrl을 이미 비정규화했으므로, 대부분의 경우 추가 조회가 필요 없습니다.)
+        let authorAvatarUrl = post.authorAvatarUrl;
+        if (!authorAvatarUrl && post.authorId) {
+          const profileCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: { PK: `USER#${post.authorId}`, SK: 'PROFILE' },
+          });
+          const { Item: profile } = await ddbDocClient.send(profileCommand);
+          authorAvatarUrl = profile?.avatarUrl || '';
+        }
+
+        // 3. commentCount 조회
+        const commentCountCommand = new QueryCommand({
+          TableName: TABLE_NAME,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `POST#${post.postId}`,
+            ':sk': 'COMMENT#',
+          },
+          // [성능 최적화] 실제 아이템은 필요 없고, 개수만 필요합니다.
+          Select: 'COUNT',
+        });
+        const { Count: commentCount } = await ddbDocClient.send(commentCountCommand);
+
+        // 4. 기존 post 객체에 새로운 정보를 합쳐서 반환합니다.
+        return {
+          ...post,
+          authorAvatarUrl,
+          commentCount: commentCount || 0,
+        };
+      })
+    );
+
+    return c.json({ posts: enrichedPosts });
+
   } catch (error: any) {
     console.error('Get All Posts Error:', error);
     return c.json({ message: 'Internal Server Error fetching posts.', error: error.message }, 500);

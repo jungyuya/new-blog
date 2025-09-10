@@ -23,6 +23,7 @@ export interface Post {
   isDeleted?: boolean;
   summary?: string;
   content?: string;
+  commentCount?: number;    // [추가]
 }
 
 export interface UserProfile {
