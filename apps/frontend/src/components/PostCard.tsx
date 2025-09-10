@@ -1,4 +1,4 @@
-// 파일 위치: apps/frontend/src/components/PostCard.tsx (v2.0 - 레이아웃 및 메타데이터 개선)
+// 파일 위치: apps/frontend/src/components/PostCard.tsx (v2.2 - 기본 썸네일 적용)
 'use client';
 
 import Link from 'next/link';
@@ -17,17 +17,17 @@ export default function PostCard({ post }: PostCardProps) {
   const isAdmin = user?.groups?.includes('Admins');
   const router = useRouter();
 
-  // Link 컴포넌트가 아닌 div 등에서 라우팅이 필요할 때 사용
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 태그 링크를 클릭한 경우는 페이지 이동을 막습니다.
     if ((e.target as HTMLElement).closest('a[href^="/tags/"]')) {
       return;
     }
     router.push(`/posts/${post.postId}`);
   };
 
+  // --- [핵심 수정] 썸네일 URL을 결정하는 변수를 미리 선언합니다. ---
+  const thumbnailUrl = post.thumbnailUrl || '/default-thumbnail.webp';
+
   return (
-    // [수정] 카드 전체를 flex-col로 만들어 푸터를 하단에 고정하기 쉽게 합니다.
     <div
       onClick={handleCardClick}
       className="flex flex-col h-full bg-white group overflow-hidden rounded-lg shadow-lg transition-shadow duration-300 hover:shadow-2xl cursor-pointer"
@@ -35,19 +35,18 @@ export default function PostCard({ post }: PostCardProps) {
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
-      {/* --- 1. 섬네일 이미지 영역 --- */}
-      {post.thumbnailUrl && (
-        <div className="relative w-full aspect-video">
-          <Image
-            src={post.thumbnailUrl}
-            alt={post.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            unoptimized={true} // --- [핵심 수정] Thumbnails 이미지에 대한 Next.js 최적화 기능을 비활성화
-          />
-        </div>
-      )}
+      {/* --- 1. 섬네일 이미지 영역 (로직 수정) --- */}
+      <div className="relative w-full aspect-video">
+        <Image
+          src={thumbnailUrl} // [수정] 위에서 정의한 변수 사용
+          alt={post.title}
+          fill
+          className="object-cover" // 이미지가 컨테이너를 꽉 채우도록 설정
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          // 기본 이미지에 대해서는 최적화를 끌 수 있습니다.
+          unoptimized={!post.thumbnailUrl}
+        />
+      </div>
 
       {/* --- 2. 콘텐츠 정보 영역 (레이아웃 수정) --- */}
       <div className="flex flex-col flex-1 p-6">
