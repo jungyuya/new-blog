@@ -44,7 +44,7 @@ export default function PostCard({ post }: PostCardProps) {
           className="object-cover" // 이미지가 컨테이너를 꽉 채우도록 설정
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           // 기본 이미지에 대해서는 최적화를 끌 수 있습니다.
-          unoptimized={!post.thumbnailUrl}
+          unoptimized={true}
         />
       </div>
 
@@ -80,6 +80,7 @@ export default function PostCard({ post }: PostCardProps) {
               fill
               className="object-cover"
               sizes="24px"
+              unoptimized={true}
             />
           </div>
           <span className="font-semibold">{post.authorNickname || '익명'}</span>
