@@ -15,7 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   // [수정] 자체 로딩 상태 대신 AuthContext의 로딩 상태를 사용할 수도 있지만,
-  // UI의 즉각적인 피드백을 위해 독립적인 로딩 상태를 유지합니다.
+  // UI의 즉각적인 피드백을 위해 독립적인 로딩 상태를 유지합니다. 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
