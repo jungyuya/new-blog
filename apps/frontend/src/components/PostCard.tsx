@@ -35,7 +35,7 @@ export default function PostCard({ post }: PostCardProps) {
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
-      {/* --- 1. 섬네일 이미지 영역 (변경 없음) --- */}
+      {/* --- 1. 섬네일 이미지 영역 --- */}
       {post.thumbnailUrl && (
         <div className="relative w-full aspect-video">
           <Image
@@ -44,6 +44,7 @@ export default function PostCard({ post }: PostCardProps) {
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            unoptimized={true} // --- [핵심 수정] Thumbnails 이미지에 대한 Next.js 최적화 기능을 비활성화
           />
         </div>
       )}
