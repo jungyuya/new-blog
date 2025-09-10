@@ -204,7 +204,8 @@ jobs:
             --outputs-file "${{ github.workspace }}/apps/infra/outputs.json" \
             --parameters ImageTag=${{ steps.set_release.outputs.release_id }}
 
-      - name: "PART 2: Sync Static Assets to S3 (To Versioned Path)"
+      - name: "PART 2a: Sync Versioned Static Assets to S3"
+        id: sync_next_static
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
@@ -215,6 +216,16 @@ jobs:
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
           echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static"
           aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static --delete
+
+      # --- [핵심 수정] public 디렉토리의 내용을 S3 루트로 동기화하는 스텝 추가 ---
+      - name: "PART 2b: Sync Public Assets to S3 Root"
+        id: sync_public
+        run: |
+          set -euo pipefail
+          ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
+          ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
+          echo "Syncing ./apps/frontend/public -> s3://${ASSET_BUCKET_NAME}/"
+          aws s3 sync ./apps/frontend/public s3://${ASSET_BUCKET_NAME}/ --delete
 
       # --- 4악장: 피날레 (Activation & Verification) ---
       - name: "Invalidate CloudFront Cache (For Root Paths Only)"
