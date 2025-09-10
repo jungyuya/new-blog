@@ -38,7 +38,7 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-// --- [신규] 댓글 타입을 여기에 직접 정의합니다. ---
+// --- 댓글 타입을 여기에 직접 정의합니다. ---
 export interface Comment {
   commentId: string;
   content: string;
@@ -50,6 +50,12 @@ export interface Comment {
   parentCommentId: string | null;
   // 재귀적인 구조를 표현하기 위해, Comment 타입 자신이 배열로 포함됩니다.
   replies: Comment[];
+}
+
+// --- [신규] 이전/다음 글을 위한 간단한 타입 정의 ---
+export interface AdjacentPost {
+  postId: string;
+  title: string;
 }
 
 const getApiBaseUrl = () => {
@@ -126,7 +132,11 @@ export const api = {
   fetchPosts: (): Promise<{ posts: Post[] }> => {
     return fetchWrapper('/posts', { method: 'GET' });
   },
-  fetchPostById: (postId: string): Promise<{ post: Post }> => {
+  fetchPostById: (postId: string): Promise<{ 
+    post: Post;
+    prevPost: AdjacentPost | null;
+    nextPost: AdjacentPost | null;
+  }> => {
     return fetchWrapper(`/posts/${postId}`, { method: 'GET' });
   },
   createNewPost: (postData: {

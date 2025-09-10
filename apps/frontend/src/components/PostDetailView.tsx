@@ -1,20 +1,21 @@
-// 파일 위치: apps/frontend/src/components/PostDetailView.tsx (v2.1 - 유틸리티 버튼 적용)
+// 파일 위치: apps/frontend/src/components/PostDetailView.tsx (v2.2 - props 전달 수정)
 'use client';
 
-import { Post } from '@/utils/api';
-
+import { Post, AdjacentPost } from '@/utils/api'; // [수정] AdjacentPost import
 import PostHeader from './PostHeader';
 import PostContent from './PostContent';
-// [수정] PostFooter 대신 PostUtilButtons를 import 합니다.
 import PostUtilButtons from './PostUtilButtons'; 
 import PostAuthorProfile from './PostAuthorProfile';
 
-
+// [수정] 컴포넌트가 받을 props 타입에 prevPost와 nextPost를 추가합니다.
 interface PostDetailViewProps {
   post: Post | null;
+  prevPost: AdjacentPost | null;
+  nextPost: AdjacentPost | null;
 }
 
-export default function PostDetailView({ post }: PostDetailViewProps) {
+// [수정] props에서 prevPost와 nextPost를 받도록 합니다.
+export default function PostDetailView({ post, prevPost, nextPost }: PostDetailViewProps) {
 
   if (!post) {
     return (
@@ -31,9 +32,8 @@ export default function PostDetailView({ post }: PostDetailViewProps) {
       <PostContent content={post.content!} />
       <PostAuthorProfile post={post} />
 
-      {/* --- [핵심 수정] PostFooter를 PostUtilButtons로 교체합니다. --- */}
-      {/* PostUtilButtons는 postId prop이 필요 없으므로 전달하지 않습니다. */}
-      <PostUtilButtons />
+      {/* --- [핵심 수정] PostUtilButtons에 prevPost와 nextPost를 props로 전달합니다. --- */}
+      <PostUtilButtons prevPost={prevPost} nextPost={nextPost} />
     </div>
   );
 }

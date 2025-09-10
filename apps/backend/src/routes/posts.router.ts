@@ -114,42 +114,78 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [2] GET /:postId - 단일 게시물 조회 ---
+// --- [2] GET /:postId - 단일 게시물 조회 (v1.1 - 이전/다음 글 추가) ---
 postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
-  // 1. URL 경로에서 'postId'를 가져옵니다.
   const postId = c.req.param('postId');
   const TABLE_NAME = process.env.TABLE_NAME!;
-
-  // 2. [핵심] 'tryCookieAuthMiddleware' 덕분에,
-  //    로그인 상태이면 userId가 있고, 비로그인 상태이면 undefined가 됩니다.
   const currentUserId = c.get('userId');
+  const userGroups = c.get('userGroups'); // [신규] 관리자 여부 확인
+  const isAdmin = userGroups?.includes('Admins');
 
   try {
-    // 3. 먼저 데이터베이스에서 해당 postId의 게시물 정보를 가져옵니다.
+    // 1. (기존 로직) 현재 게시물 정보를 가져옵니다.
     const { Item } = await ddbDocClient.send(new GetCommand({
       TableName: TABLE_NAME,
       Key: { PK: `POST#${postId}`, SK: 'METADATA' },
     }));
 
-    // 4. 게시물이 존재하지 않거나, 이미 삭제된 상태이면 404 에러를 반환합니다.
     if (!Item || Item.isDeleted) {
       return c.json({ message: 'Post not found.' }, 404);
     }
 
-    // 5. [핵심] '비밀글'에 대한 접근 권한을 검사합니다.
+    // 2. (기존 로직) 비밀글 접근 권한을 검사합니다.
     if (Item.visibility === 'private') {
-      // 5-1. 글이 '비밀글'인데,
-      // 5-2. 현재 사용자가 비로그인 상태(currentUserId가 없음)이거나,
-      // 5-3. 로그인했지만 글의 작성자(Item.authorId)가 아니라면,
       if (!currentUserId || Item.authorId !== currentUserId) {
-        // "권한 없음" 에러를 반환하고 즉시 처리를 중단합니다.
         return c.json({ message: 'Forbidden: You do not have permission to view this post.' }, 403);
       }
     }
 
-    // 6. [핵심] 위 관문을 모두 통과했다면, 조회수를 1 증가시킵니다.
-    //    사용자에게 응답을 빨리 보내주기 위해, 이 작업은 백그라운드에서 실행되도록
-    //    'await'를 붙이지 않습니다. (Fire and Forget)
+    // --- [핵심 수정] 이전 글 / 다음 글 정보를 조회합니다. ---
+    // 3. GSI3를 사용해 모든 게시물 목록을 시간순으로 가져옵니다. (GET / 와 유사)
+    const listCommandParams: QueryCommandInput = {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI3',
+      KeyConditionExpression: 'GSI3_PK = :pk',
+      ExpressionAttributeValues: { ':pk': 'POST#ALL' },
+      ScanIndexForward: false, // 최신순 정렬
+      // [성능 최적화] postId와 title만 가져옵니다.
+      ProjectionExpression: 'postId, title',
+    };
+
+    // 관리자가 아닐 경우, 공개된 글만 목록에 포함시킵니다.
+    if (!isAdmin) {
+      listCommandParams.FilterExpression = '#status = :published AND #visibility = :public';
+      listCommandParams.ExpressionAttributeNames = {
+        '#status': 'status',
+        '#visibility': 'visibility',
+      };
+      listCommandParams.ExpressionAttributeValues![':published'] = 'published';
+      listCommandParams.ExpressionAttributeValues![':public'] = 'public';
+    }
+
+    const listCommand = new QueryCommand(listCommandParams);
+    const { Items: allPosts } = await ddbDocClient.send(listCommand);
+    const activePosts = allPosts?.filter((p: any) => p.postId) || [];
+
+    // 4. 현재 게시물의 인덱스를 찾습니다.
+    const currentIndex = activePosts.findIndex(p => p.postId === postId);
+
+    let prevPost = null;
+    let nextPost = null;
+
+    if (currentIndex !== -1) {
+      // 이전 글: 현재 인덱스보다 1 큰 항목 (최신순 정렬이므로)
+      if (currentIndex + 1 < activePosts.length) {
+        prevPost = activePosts[currentIndex + 1];
+      }
+      // 다음 글: 현재 인덱스보다 1 작은 항목
+      if (currentIndex - 1 >= 0) {
+        nextPost = activePosts[currentIndex - 1];
+      }
+    }
+    // ---------------------------------------------------------
+
+    // 5. (기존 로직) 조회수를 1 증가시킵니다. (Fire and Forget)
     ddbDocClient.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { PK: `POST#${postId}`, SK: 'METADATA' },
@@ -157,8 +193,12 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
       ExpressionAttributeValues: { ':inc': 1, ':start': 0 },
     }));
 
-    // 7. 최종적으로, 사용자에게 게시물 정보를 담아 200 OK 응답을 보냅니다.
-    return c.json({ post: Item });
+    // 6. 최종적으로, 모든 정보를 합쳐서 응답을 보냅니다.
+    return c.json({
+      post: Item,
+      prevPost, // 이전 글 정보 (없으면 null)
+      nextPost, // 다음 글 정보 (없으면 null)
+    });
 
   } catch (error: any) {
     console.error('Get Post Error:', error);

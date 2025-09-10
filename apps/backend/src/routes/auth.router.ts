@@ -79,10 +79,22 @@ authRouter.post('/login', zValidator('json', LoginSchema), async c => {
     }
 });
 
-// --- [3] POST /logout - 로그아웃 ---
+// --- [3] POST /logout - 로그아웃 (v1.1 - idToken 삭제 추가) ---
 authRouter.post('/logout', async c => {
-    deleteCookie(c, 'accessToken', { path: '/' });
-    deleteCookie(c, 'refreshToken', { path: '/' });
+    // [수정] deleteCookie의 옵션은 setCookie와 동일하게 맞춰주는 것이 가장 안전합니다.
+    const IS_PROD = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+        path: '/',
+        secure: IS_PROD,
+        httpOnly: true,
+        sameSite: 'Strict' as const,
+    };
+
+    deleteCookie(c, 'accessToken', cookieOptions);
+    deleteCookie(c, 'refreshToken', cookieOptions);
+    // --- [핵심 수정] idToken 쿠키를 삭제하는 코드를 추가합니다. ---
+    deleteCookie(c, 'idToken', cookieOptions);
+
     return c.json({ message: 'User logged out successfully.' }, 200);
 });
 
