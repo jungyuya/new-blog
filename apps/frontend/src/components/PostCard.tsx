@@ -96,9 +96,9 @@ export default function PostCard({ post }: PostCardProps) {
           )}
           <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
           <span className="mx-1">·</span>
-          <span>댓글 {post.commentCount || 0}</span>
+          <span>💬 {post.commentCount || 0}</span>
           <span className="mx-1">·</span>
-          <span>조회수 {post.viewCount || 0}</span>
+          <span>👀 {post.viewCount || 0}</span>
         </div>
       </div>
     </div>
