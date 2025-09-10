@@ -85,13 +85,19 @@ export default function PostCard({ post }: PostCardProps) {
           <span className="font-semibold">{post.authorNickname || '익명'}</span>
         </div>
 
-        {/* 오른쪽: 메타데이터 (작성일 + 댓글 수) */}
         <div className="flex items-center space-x-2">
+          {/* --- [핵심 수정] 관리자일 경우에만 상태 태그를 렌더링합니다. --- */}
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              {post.status === 'draft' && <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-md text-xs">📝임시글</span>}
+              {post.visibility === 'private' && <span className="bg-gray-400 text-white px-2 py-0.5 rounded-md text-xs">🔒</span>}
+            </div>
+          )}
           <span><ClientOnlyLocalDate dateString={post.createdAt} /></span>
           <span className="mx-1">·</span>
-          <span>💬 {post.commentCount || 0}</span>
+          <span>댓글 {post.commentCount || 0}</span>
           <span className="mx-1">·</span>
-          <span>👀 {post.viewCount || 0}</span>
+          <span>조회수 {post.viewCount || 0}</span>
         </div>
       </div>
     </div>

@@ -209,23 +209,27 @@ jobs:
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
-          if [ ! -f "$ASSET_JSON_PATH" ]; then
-            echo "::error::CDK output file not found at $ASSET_JSON_PATH"
-            exit 1
-          fi
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
-          echo "Syncing ./apps/frontend/.next/static -> s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static"
-          aws s3 sync ./apps/frontend/.next/static s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static --delete
+          
+          SOURCE_DIR="./apps/frontend/.next/static"
+          DEST_DIR="s3://${ASSET_BUCKET_NAME}/${{ steps.set_release.outputs.release_id }}/_next/static"
+          
+          echo "Syncing ${SOURCE_DIR} -> ${DEST_DIR}"
+          aws s3 sync ${SOURCE_DIR} ${DEST_DIR} --delete
 
-      # --- [핵심 수정] public 디렉토리의 내용을 S3 루트로 동기화하는 스텝 추가 ---
       - name: "PART 2b: Sync Public Assets to S3 Root"
         id: sync_public
         run: |
           set -euo pipefail
           ASSET_JSON_PATH="${{ github.workspace }}/apps/infra/outputs.json"
           ASSET_BUCKET_NAME=$(node -p "require('$ASSET_JSON_PATH').BlogInfraStack.FrontendAssetsBucketName")
-          echo "Syncing ./apps/frontend/public -> s3://${ASSET_BUCKET_NAME}/"
-          aws s3 sync ./apps/frontend/public s3://${ASSET_BUCKET_NAME}/ --delete
+          
+          # public 디렉토리의 파일들은 보통 덮어쓰기만 해도 충분합니다.
+          SOURCE_DIR="./apps/frontend/public"
+          DEST_DIR="s3://${ASSET_BUCKET_NAME}/"
+
+          echo "Syncing ${SOURCE_DIR} -> ${DEST_DIR}"
+          aws s3 sync ${SOURCE_DIR} ${DEST_DIR}
 
       # --- 4악장: 피날레 (Activation & Verification) ---
       - name: "Invalidate CloudFront Cache (For Root Paths Only)"
