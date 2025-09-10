@@ -255,7 +255,7 @@ export class BlogStack extends Stack {
 
     const distribution = new cloudfront.CfnDistribution(this, 'NewFrontendDistribution', {
       distributionConfig: {
-        comment: `Distribution for ${siteDomain}`,
+        comment: `Distribution for ${siteDomain} - V2`,
         enabled: true,
         httpVersion: 'http2',
         priceClass: 'PriceClass_200',
