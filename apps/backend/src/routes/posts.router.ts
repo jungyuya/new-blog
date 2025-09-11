@@ -468,18 +468,21 @@ postsRouter.delete(
         console.log(`Deleted ${keysToDelete.size} objects from S3 for post ${postId}`);
       }
 
-      // --- [핵심 수정] POST와 TAG 아이템 모두에 Soft Delete 및 TTL을 적용합니다. ---
       const now = new Date();
       const ttlInSeconds = Math.floor(now.getTime() / 1000) + (7 * 24 * 60 * 60);
 
-      // 3. 업데이트할 아이템 목록을 준비합니다.
       const updatePromises: Promise<any>[] = [];
 
       // 3.1 POST 아이템 업데이트 약속(Promise) 추가
       const postUpdatePromise = ddbDocClient.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-        UpdateExpression: 'set isDeleted = :d, updatedAt = :u, ttl = :ttl',
+        // [수정] 'ttl'을 별명 '#ttl'으로 변경
+        UpdateExpression: 'set isDeleted = :d, updatedAt = :u, #ttl = :ttl',
+        // [신규] '#ttl'이 실제로는 'ttl' 속성임을 알려줍니다.
+        ExpressionAttributeNames: {
+          '#ttl': 'ttl',
+        },
         ExpressionAttributeValues: {
           ':d': true,
           ':u': now.toISOString(),
@@ -496,7 +499,12 @@ postsRouter.delete(
             const tagUpdatePromise = ddbDocClient.send(new UpdateCommand({
               TableName: TABLE_NAME,
               Key: { PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}` },
-              UpdateExpression: 'set isDeleted = :d, ttl = :ttl',
+              // [수정] 'ttl'을 별명 '#ttl'으로 변경
+              UpdateExpression: 'set isDeleted = :d, #ttl = :ttl',
+              // [신규] '#ttl'이 실제로는 'ttl' 속성임을 알려줍니다.
+              ExpressionAttributeNames: {
+                '#ttl': 'ttl',
+              },
               ExpressionAttributeValues: {
                 ':d': true,
                 ':ttl': ttlInSeconds,
