@@ -7,6 +7,7 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
+import { sanitizeContent } from '../lib/sanitizer'; // [신규] 정제기 import
 import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware } from '../middlewares/auth.middleware'; import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import type { Post } from '../lib/types';
@@ -208,7 +209,7 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [3] POST / - 새 게시물 생성 (v2.2 - 작성자 프로필 연동) ---
+// --- [3] POST / - 새 게시물 생성 (v2.3 - 콘텐츠 정제 적용) ---
 postsRouter.post(
   '/',
   cookieAuthMiddleware,
@@ -224,20 +225,23 @@ postsRouter.post(
       const TABLE_NAME = process.env.TABLE_NAME!;
       const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
-      // 1. [핵심 추가] 글 작성자의 최신 프로필 정보를 DB에서 조회합니다.
+      // --- [핵심 수정 1] DB에 저장하기 직전에 content를 정제합니다. ---
+      const sanitizedContent = sanitizeContent(content);
+
+      // 1. (기존 로직) 작성자 프로필 정보를 조회합니다.
       const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
         TableName: TABLE_NAME,
         Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
       }));
 
-      // 2. [핵심 수정] 조회한 프로필을 기반으로 최종 닉네임을 결정합니다.
+      // 2. (기존 로직) 최종 닉네임을 결정합니다.
       const authorNickname = authorProfile?.nickname || userEmail?.split('@')[0] || '익명';
       const authorBio = authorProfile?.bio || '';
       const authorAvatarUrl = authorProfile?.avatarUrl || '';
 
-      // 3. content에서 첫 번째 이미지 URL을 찾아 thumbnailUrl과 imageUrl을 설정합니다.
+      // 3. [수정] 정제된 콘텐츠(sanitizedContent)에서 첫 번째 이미지 URL을 찾습니다.
       const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-      const firstImageMatch = content.match(imageUrlRegex);
+      const firstImageMatch = sanitizedContent.match(imageUrlRegex); // [수정] content -> sanitizedContent
       let thumbnailUrl = '';
       let imageUrl = '';
       if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
@@ -245,23 +249,25 @@ postsRouter.post(
         thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
       }
 
-      // 4. content를 기반으로 summary를 생성합니다.
-      const summary = (content ?? '')
+      // 4. [수정] 정제된 콘텐츠(sanitizedContent)를 기반으로 summary를 생성합니다.
+      const summary = (sanitizedContent ?? '') // [수정] content -> sanitizedContent
         .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
         .replace(/<[^>]*>?/gm, ' ')
         .replace(/[#*`_~=\->|]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
-        .substring(0, 150) + ((content?.length ?? 0) > 150 ? '...' : '');
+        .substring(0, 150) + ((sanitizedContent?.length ?? 0) > 150 ? '...' : '');
 
-      // 5. Post 아이템 객체를 완전한 형태로 정의합니다.
+      // 5. Post 아이템 객체를 정의할 때, 정제된 content를 사용합니다.
       const postItem = {
         PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post',
-        postId, title, content, summary, authorId: userId, authorEmail: userEmail,
+        postId, title,
+        content: sanitizedContent, // [수정] content -> sanitizedContent
+        summary, authorId: userId, authorEmail: userEmail,
         createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0,
         status: status, visibility: visibility,
-        authorNickname: authorNickname, // [수정] 조회한 최신 닉네임 사용
-        authorBio: authorBio, // <-- 신규 추가
+        authorNickname: authorNickname,
+        authorBio: authorBio,
         authorAvatarUrl: authorAvatarUrl,
         tags: tags, thumbnailUrl: thumbnailUrl, imageUrl: imageUrl,
         GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
@@ -340,10 +346,18 @@ postsRouter.put(
       // 3. 수정될 최종 게시물 상태를 미리 계산합니다.
       const finalPostState: Partial<Post> = { ...updateData, updatedAt: now, authorNickname };
 
+      // --- [핵심 수정] content가 수정된 경우에만 정제 및 관련 속성 재계산 ---
       if (updateData.content) {
-        finalPostState.summary = updateData.content.replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ').replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 150) + (updateData.content.length > 150 ? '...' : '');
+        // 3.1 content를 정제합니다.
+        const sanitizedContent = sanitizeContent(updateData.content);
+        finalPostState.content = sanitizedContent;
+
+        // 3.2 정제된 content를 기반으로 summary를 재생성합니다.
+        finalPostState.summary = sanitizedContent.replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ').replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 150) + (sanitizedContent.length > 150 ? '...' : '');
+        
+        // 3.3 정제된 content를 기반으로 썸네일을 재추출합니다.
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-        const firstImageMatch = updateData.content.match(imageUrlRegex);
+        const firstImageMatch = sanitizedContent.match(imageUrlRegex);
         if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
           finalPostState.imageUrl = firstImageMatch[1];
           finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');

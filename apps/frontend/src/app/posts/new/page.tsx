@@ -85,7 +85,6 @@ function NewPostForm() {
       <form onSubmit={handleSubmit}>
         {/* --- 1. 제목 입력 영역 --- */}
         <div className="mb-8">
-          {/* [수정] JUNGYU 님의 기존 스타일을 유지하여, 크고 굵은 하단 테두리 스타일로 변경 */}
           <label htmlFor="title" className="sr-only">제목</label>
           <input
             id="title"
