@@ -7,7 +7,6 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
-import { marked } from 'marked';
 import { sanitizeContent } from '../lib/sanitizer'; // [신규] 정제기 import
 import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware } from '../middlewares/auth.middleware'; import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
@@ -210,7 +209,7 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [3] POST / - 새 게시물 생성 (v2.3 - 콘텐츠 정제 적용) ---
+// --- [3] POST / - 새 게시물 생성 (v3.0 - 백엔드 정제 로직 제거) ---
 postsRouter.post(
   '/',
   cookieAuthMiddleware,
@@ -226,11 +225,8 @@ postsRouter.post(
       const TABLE_NAME = process.env.TABLE_NAME!;
       const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
-      // --- [핵심 수정 1] 마크다운을 HTML로 변환 후 정제합니다. ---
-      // 1. 마크다운을 HTML로 변환 (비동기 처리)
-      const convertedHtml = await marked.parse(content);
-      // 2. 변환된 HTML을 정제
-      const sanitizedContent = sanitizeContent(convertedHtml);
+      // --- [핵심 수정] 백엔드에서 content를 정제하거나 변환하는 로직을 모두 제거합니다. ---
+      // const sanitizedContent = sanitizeContent(content); // <- 이 라인을 완전히 삭제했습니다.
 
       // 1. (기존 로직) 작성자 프로필 정보를 조회합니다.
       const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
@@ -243,9 +239,9 @@ postsRouter.post(
       const authorBio = authorProfile?.bio || '';
       const authorAvatarUrl = authorProfile?.avatarUrl || '';
 
-      // 3. [수정] 정제된 콘텐츠(sanitizedContent)에서 첫 번째 이미지 URL을 찾습니다.
+      // 3. [수정] 원본 마크다운(content)에서 첫 번째 이미지 URL을 찾습니다.
       const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-      const firstImageMatch = sanitizedContent.match(imageUrlRegex); // [수정] content -> sanitizedContent
+      const firstImageMatch = content.match(imageUrlRegex); // 'sanitizedContent'를 'content'로 변경
       let thumbnailUrl = '';
       let imageUrl = '';
       if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
@@ -253,20 +249,20 @@ postsRouter.post(
         thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
       }
 
-      // 4. [수정] 정제된 콘텐츠(sanitizedContent)를 기반으로 summary를 생성합니다.
-      const summary = (sanitizedContent ?? '') // [수정] content -> sanitizedContent
-        .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
-        .replace(/<[^>]*>?/gm, ' ')
-        .replace(/[#*`_~=\->|]/g, '')
-        .replace(/\s+/g, ' ')
+      // 4. [수정] 원본 마크다운(content)을 기반으로 summary를 생성합니다.
+      const summary = (content ?? '') // 'sanitizedContent'를 'content'로 변경
+        .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '') // 이미지 태그 제거
+        .replace(/<[^>]*>?/gm, ' ') // HTML 태그 제거
+        .replace(/[#*`_~=\->|]/g, '') // 마크다운 특수문자 제거
+        .replace(/\s+/g, ' ') // 연속된 공백을 하나로
         .trim()
-        .substring(0, 150) + ((sanitizedContent?.length ?? 0) > 150 ? '...' : '');
+        .substring(0, 150) + ((content?.length ?? 0) > 150 ? '...' : ''); // 'sanitizedContent'를 'content'로 변경
 
-      // 5. Post 아이템 객체를 정의할 때, 정제된 content를 사용합니다.
+      // 5. Post 아이템 객체를 정의할 때, 원본 마크다운(content)을 저장합니다.
       const postItem = {
         PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post',
         postId, title,
-        content: sanitizedContent, // [수정] content -> sanitizedContent
+        content: content, // 'sanitizedContent'를 'content'로 변경하여 원본 저장
         summary, authorId: userId, authorEmail: userEmail,
         createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0,
         status: status, visibility: visibility,
@@ -281,15 +277,15 @@ postsRouter.post(
       const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
       writeRequests.push({ PutRequest: { Item: postItem } });
 
-      // 6. Tag 아이템을 생성할 때, PostCard가 필요한 모든 데이터를 postItem에서 복제합니다.
+      // 6. (기존 로직) Tag 아이템을 생성합니다.
       for (const tagName of tags) {
         const normalizedTagName = tagName.trim().toLowerCase();
         if (normalizedTagName) {
           const tagItem = {
             PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}`,
             postId: postItem.postId, title: postItem.title, summary: postItem.summary,
-            authorNickname: postItem.authorNickname, // [수정] 최신 닉네임 반영
-            authorBio: postItem.authorBio, // <-- 신규 추가
+            authorNickname: postItem.authorNickname,
+            authorBio: postItem.authorBio,
             authorAvatarUrl: postItem.authorAvatarUrl,
             createdAt: postItem.createdAt, status: postItem.status,
             visibility: postItem.visibility, thumbnailUrl: postItem.thumbnailUrl,
@@ -314,6 +310,7 @@ postsRouter.post(
 );
 
 // --- [4] PUT /:postId - 게시물 수정 (v2.3 - 타입 안정성 및 로직 강화 최종본) ---
+// --- [4] PUT /:postId - 게시물 수정 (v3.0 - 백엔드 정제 로직 제거) ---
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
@@ -328,7 +325,7 @@ postsRouter.put(
     const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
     try {
-      // 1. [타입 수정] GetCommand의 결과를 Post 타입으로 명시적으로 다룹니다.
+      // 1. (기존 로직) 수정할 게시물의 원본 데이터를 가져옵니다.
       const { Item } = await ddbDocClient.send(new GetCommand({
         TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
       }));
@@ -336,9 +333,9 @@ postsRouter.put(
       if (!Item || Item.isDeleted) return c.json({ message: 'Post not found.' }, 404);
       if (Item.authorId !== userId) return c.json({ message: 'Forbidden.' }, 403);
 
-      const existingPost = Item as Post; // 이제 TypeScript는 existingPost의 모든 속성을 압니다.
+      const existingPost = Item as Post;
 
-      // 2. 작성자의 최신 프로필 정보를 조회합니다.
+      // 2. (기존 로직) 작성자의 최신 프로필 정보를 조회합니다.
       const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
         TableName: TABLE_NAME,
         Key: { PK: `USER#${existingPost.authorId}`, SK: 'PROFILE' },
@@ -347,23 +344,27 @@ postsRouter.put(
       const authorBio = authorProfile?.bio || existingPost.authorBio || '';
       const authorAvatarUrl = authorProfile?.avatarUrl || existingPost.authorAvatarUrl || '';
 
-      // 3. 수정될 최종 게시물 상태를 미리 계산합니다.
+      // 3. (기존 로직) 수정될 최종 게시물 상태를 미리 계산합니다.
       const finalPostState: Partial<Post> = { ...updateData, updatedAt: now, authorNickname };
 
-      // --- [핵심 수정] content가 수정된 경우에만 변환, 정제 및 관련 속성 재계산 ---
+      // --- [핵심 수정] content가 수정된 경우, 원본 마크다운을 기반으로 관련 속성을 재계산합니다. ---
       if (updateData.content) {
-        // 3.1 마크다운을 HTML로 변환 (비동기 처리)
-        const convertedHtml = await marked.parse(updateData.content);
-        // 3.2 변환된 HTML을 정제합니다.
-        const sanitizedContent = sanitizeContent(convertedHtml);
-        finalPostState.content = sanitizedContent;
+        // [삭제] content 정제 로직을 완전히 제거합니다.
+        // const sanitizedContent = sanitizeContent(updateData.content);
+        // finalPostState.content = sanitizedContent; // <- 이 라인도 필요 없습니다. finalPostState에 이미 updateData.content가 포함되어 있습니다.
 
-        // 3.2 정제된 content를 기반으로 summary를 재생성합니다.
-        finalPostState.summary = sanitizedContent.replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ').replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 150) + (sanitizedContent.length > 150 ? '...' : '');
+        // 3.1 [수정] 원본 마크다운(updateData.content)을 기반으로 summary를 재생성합니다.
+        finalPostState.summary = updateData.content
+          .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
+          .replace(/<[^>]*>?/gm, ' ')
+          .replace(/[#*`_~=\->|]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .substring(0, 150) + (updateData.content.length > 150 ? '...' : '');
 
-        // 3.3 정제된 content를 기반으로 썸네일을 재추출합니다.
+        // 3.2 [수정] 원본 마크다운(updateData.content)을 기반으로 썸네일을 재추출합니다.
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-        const firstImageMatch = sanitizedContent.match(imageUrlRegex);
+        const firstImageMatch = updateData.content.match(imageUrlRegex); // 'sanitizedContent'를 'updateData.content'로 변경
         if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
           finalPostState.imageUrl = firstImageMatch[1];
           finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
@@ -373,17 +374,15 @@ postsRouter.put(
         }
       }
 
-      // 4. 태그 동기화 로직
+      // 4. (기존 로직) 태그 동기화 로직
       if (finalPostState.tags) {
         const oldTags: string[] = existingPost.tags || [];
         const newTags: string[] = finalPostState.tags;
         const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
-        const tagsToAdd = newTags.filter(t => !oldTags.includes(t));
         const writeRequests: any[] = [];
 
         tagsToDelete.forEach(tagName => writeRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
 
-        // [핵심] 새로 추가되거나 내용이 변경될 수 있는 모든 Tag 아이템을 다시 씁니다.
         newTags.forEach(tagName => {
           const tagItem = {
             PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
@@ -408,9 +407,9 @@ postsRouter.put(
         }
       }
 
-      // 5. Post 아이템을 업데이트합니다.
+      // 5. (기존 로직) Post 아이템을 업데이트합니다.
       const updateExpressionParts: string[] = [];
-      const expressionAttributeValues: Record<string, any> = {};   // <-- ':u' 제거
+      const expressionAttributeValues: Record<string, any> = {};
       const expressionAttributeNames: Record<string, string> = {};
       for (const [key, value] of Object.entries(finalPostState)) {
         if (value !== undefined) {
@@ -438,7 +437,6 @@ postsRouter.put(
     }
   }
 );
-
 // --- [5] DELETE /:postId - 게시물 삭제 (v2.2 - TAG 아이템 TTL 적용) ---
 postsRouter.delete(
   '/:postId',
