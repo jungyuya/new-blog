@@ -78,6 +78,7 @@ export class BlogStack extends Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
     });
 
     // --- GSI 3 (전체 게시물 최신순 조회용) ---

@@ -165,7 +165,7 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
 
     const listCommand = new QueryCommand(listCommandParams);
     const { Items: allPosts } = await ddbDocClient.send(listCommand);
-    
+
     // --- [핵심 수정] isDeleted가 true인 게시물을 필터링합니다. ---
     const activePosts = allPosts?.filter((p: any) => !p.isDeleted && p.postId) || [];
 
@@ -419,7 +419,7 @@ postsRouter.put(
   }
 );
 
-// --- [5] DELETE /:postId - 게시물 삭제 (v2.0 - S3 이미지 동시 삭제) (인증필요)---
+// --- [5] DELETE /:postId - 게시물 삭제 (v2.2 - TAG 아이템 TTL 적용) ---
 postsRouter.delete(
   '/:postId',
   cookieAuthMiddleware,
@@ -432,7 +432,7 @@ postsRouter.delete(
     const s3 = new S3Client({ region: process.env.REGION });
 
     try {
-      // 1. 삭제 전 원본 게시물을 가져와 소유권 및 content를 확인합니다.
+      // 1. (기존 로직) 삭제 전 원본 게시물을 가져옵니다.
       const { Item: existingPost } = await ddbDocClient.send(new GetCommand({
         TableName: TABLE_NAME,
         Key: { PK: `POST#${postId}`, SK: 'METADATA' },
@@ -445,48 +445,72 @@ postsRouter.delete(
         return c.json({ message: 'Forbidden: You are not the author.' }, 403);
       }
 
-      // 2. [핵심] 게시물 content에서 S3 이미지 URL들을 추출합니다.
+      // 2. (기존 로직) S3 이미지 URL들을 추출하고 삭제합니다.
       const content = existingPost.content || '';
-      // 정규표현식을 사용하여 마크다운 이미지 태그에서 S3 객체 키를 추출합니다.
+      // ... (S3 키 추출 및 삭제 로직은 변경 없음)
       const imageUrlRegex = new RegExp(`https://${BUCKET_NAME}.s3.[^/]+/(images|thumbnails)/([^)]+)`, 'g');
       const keysToDelete = new Set<string>();
-
       let match;
       while ((match = imageUrlRegex.exec(content)) !== null) {
-        // match[1] = 'images' or 'thumbnails', match[2] = 'uuid.webp'
         const key = `${match[1]}/${match[2]}`;
         keysToDelete.add(key);
-        // 섬네일이 있다면, 원본 이미지도 함께 삭제 목록에 추가 (또는 그 반대)
         if (match[1] === 'images') {
           keysToDelete.add(`thumbnails/${match[2]}`);
         } else {
           keysToDelete.add(`images/${match[2]}`);
         }
       }
-
-      // 3. [핵심] S3에서 추출된 이미지 객체들을 삭제합니다.
       if (keysToDelete.size > 0) {
-        const deleteCommand = new DeleteObjectsCommand({
+        await s3.send(new DeleteObjectsCommand({
           Bucket: BUCKET_NAME,
-          Delete: {
-            Objects: Array.from(keysToDelete).map(key => ({ Key: key })),
-            Quiet: true, // 성공한 객체에 대한 정보를 응답에서 생략
-          },
-        });
-        await s3.send(deleteCommand);
+          Delete: { Objects: Array.from(keysToDelete).map(key => ({ Key: key })), Quiet: true },
+        }));
         console.log(`Deleted ${keysToDelete.size} objects from S3 for post ${postId}`);
       }
 
-      // 4. DynamoDB에서 게시물을 soft-delete 합니다.
-      const now = new Date().toISOString();
-      await ddbDocClient.send(new UpdateCommand({
+      // --- [핵심 수정] POST와 TAG 아이템 모두에 Soft Delete 및 TTL을 적용합니다. ---
+      const now = new Date();
+      const ttlInSeconds = Math.floor(now.getTime() / 1000) + (7 * 24 * 60 * 60);
+
+      // 3. 업데이트할 아이템 목록을 준비합니다.
+      const updatePromises: Promise<any>[] = [];
+
+      // 3.1 POST 아이템 업데이트 약속(Promise) 추가
+      const postUpdatePromise = ddbDocClient.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-        UpdateExpression: 'set isDeleted = :d, updatedAt = :u',
-        ExpressionAttributeValues: { ':d': true, ':u': now },
+        UpdateExpression: 'set isDeleted = :d, updatedAt = :u, ttl = :ttl',
+        ExpressionAttributeValues: {
+          ':d': true,
+          ':u': now.toISOString(),
+          ':ttl': ttlInSeconds,
+        },
       }));
+      updatePromises.push(postUpdatePromise);
 
-      return c.json({ message: 'Post and associated images soft-deleted successfully!' }, 200);
+      // 3.2 TAG 아이템 업데이트 약속(Promise)들 추가
+      if (existingPost.tags && existingPost.tags.length > 0) {
+        for (const tagName of existingPost.tags) {
+          const normalizedTagName = tagName.trim().toLowerCase();
+          if (normalizedTagName) {
+            const tagUpdatePromise = ddbDocClient.send(new UpdateCommand({
+              TableName: TABLE_NAME,
+              Key: { PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}` },
+              UpdateExpression: 'set isDeleted = :d, ttl = :ttl',
+              ExpressionAttributeValues: {
+                ':d': true,
+                ':ttl': ttlInSeconds,
+              },
+            }));
+            updatePromises.push(tagUpdatePromise);
+          }
+        }
+      }
+
+      // 4. 모든 업데이트 작업을 병렬로 실행합니다.
+      await Promise.all(updatePromises);
+
+      return c.json({ message: 'Post and associated items soft-deleted successfully! TTL set for 7 days.' }, 200);
 
     } catch (error: any) {
       console.error('Delete Post Error:', error);
