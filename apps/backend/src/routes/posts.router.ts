@@ -7,6 +7,7 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
+import { marked } from 'marked';
 import { sanitizeContent } from '../lib/sanitizer'; // [신규] 정제기 import
 import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware } from '../middlewares/auth.middleware'; import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
@@ -225,8 +226,11 @@ postsRouter.post(
       const TABLE_NAME = process.env.TABLE_NAME!;
       const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
 
-      // --- [핵심 수정 1] DB에 저장하기 직전에 content를 정제합니다. ---
-      const sanitizedContent = sanitizeContent(content);
+      // --- [핵심 수정 1] 마크다운을 HTML로 변환 후 정제합니다. ---
+      // 1. 마크다운을 HTML로 변환 (비동기 처리)
+      const convertedHtml = await marked.parse(content);
+      // 2. 변환된 HTML을 정제
+      const sanitizedContent = sanitizeContent(convertedHtml);
 
       // 1. (기존 로직) 작성자 프로필 정보를 조회합니다.
       const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
@@ -346,15 +350,17 @@ postsRouter.put(
       // 3. 수정될 최종 게시물 상태를 미리 계산합니다.
       const finalPostState: Partial<Post> = { ...updateData, updatedAt: now, authorNickname };
 
-      // --- [핵심 수정] content가 수정된 경우에만 정제 및 관련 속성 재계산 ---
+      // --- [핵심 수정] content가 수정된 경우에만 변환, 정제 및 관련 속성 재계산 ---
       if (updateData.content) {
-        // 3.1 content를 정제합니다.
-        const sanitizedContent = sanitizeContent(updateData.content);
+        // 3.1 마크다운을 HTML로 변환 (비동기 처리)
+        const convertedHtml = await marked.parse(updateData.content);
+        // 3.2 변환된 HTML을 정제합니다.
+        const sanitizedContent = sanitizeContent(convertedHtml);
         finalPostState.content = sanitizedContent;
 
         // 3.2 정제된 content를 기반으로 summary를 재생성합니다.
         finalPostState.summary = sanitizedContent.replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ').replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim().substring(0, 150) + (sanitizedContent.length > 150 ? '...' : '');
-        
+
         // 3.3 정제된 content를 기반으로 썸네일을 재추출합니다.
         const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
         const firstImageMatch = sanitizedContent.match(imageUrlRegex);

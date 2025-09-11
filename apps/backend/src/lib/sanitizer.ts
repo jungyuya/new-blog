@@ -10,7 +10,7 @@
 
     /**
      * 블로그 콘텐츠를 위한 맞춤형 HTML 정제기 (sanitize-html 기반)
-     * @param dirtyHtml 정제할 HTML 문자열 (마크다운 원본)
+     * @param dirtyHtml 정제할 HTML 문자열 (반드시 마크다운이 HTML로 변환된 이후의 값이어야 함)
      * @returns 정제된 안전한 HTML 문자열
      */
     export function sanitizeContent(dirtyHtml: string): string {

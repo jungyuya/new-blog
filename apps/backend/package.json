@@ -17,6 +17,7 @@
   "devDependencies": {
     "@hono/node-server": "^1.18.1",
     "@types/aws-lambda": "^8.10.152",
+    "@types/node": "^22.17.0",
     "@types/sanitize-html": "^2.16.0",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
@@ -24,6 +25,7 @@
     "dotenv-cli": "^10.0.0",
     "esbuild": "^0.21.0",
     "supertest": "^7.1.4",
+    "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
@@ -35,8 +37,10 @@
     "@aws-sdk/lib-dynamodb": "^3.859.0",
     "@aws-sdk/s3-request-presigner": "^3.873.0",
     "@hono/zod-validator": "^0.7.2",
+    "@types/marked": "^6.0.0",
     "aws-jwt-verify": "^5.1.0",
     "hono": "^4.8.12",
+    "marked": "^16.2.1",
     "sanitize-html": "^2.17.0",
     "uuid": "^11.1.0",
     "zod": "^4.0.14"
