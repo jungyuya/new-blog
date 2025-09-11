@@ -114,12 +114,12 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [2] GET /:postId - 단일 게시물 조회 (v1.1 - 이전/다음 글 추가) ---
+// --- [2] GET /:postId - 단일 게시물 조회 (v1.2 - isDeleted 필터링 추가) ---
 postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
   const postId = c.req.param('postId');
   const TABLE_NAME = process.env.TABLE_NAME!;
   const currentUserId = c.get('userId');
-  const userGroups = c.get('userGroups'); // [신규] 관리자 여부 확인
+  const userGroups = c.get('userGroups');
   const isAdmin = userGroups?.includes('Admins');
 
   try {
@@ -141,15 +141,15 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
     }
 
     // --- [핵심 수정] 이전 글 / 다음 글 정보를 조회합니다. ---
-    // 3. GSI3를 사용해 모든 게시물 목록을 시간순으로 가져옵니다. (GET / 와 유사)
+    // 3. GSI3를 사용해 모든 게시물 목록을 시간순으로 가져옵니다.
     const listCommandParams: QueryCommandInput = {
       TableName: TABLE_NAME,
       IndexName: 'GSI3',
       KeyConditionExpression: 'GSI3_PK = :pk',
       ExpressionAttributeValues: { ':pk': 'POST#ALL' },
       ScanIndexForward: false, // 최신순 정렬
-      // [성능 최적화] postId와 title만 가져옵니다.
-      ProjectionExpression: 'postId, title',
+      // [성능 최적화] isDeleted도 확인해야 하므로 ProjectionExpression에 추가합니다.
+      ProjectionExpression: 'postId, title, isDeleted',
     };
 
     // 관리자가 아닐 경우, 공개된 글만 목록에 포함시킵니다.
@@ -165,7 +165,9 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
 
     const listCommand = new QueryCommand(listCommandParams);
     const { Items: allPosts } = await ddbDocClient.send(listCommand);
-    const activePosts = allPosts?.filter((p: any) => p.postId) || [];
+    
+    // --- [핵심 수정] isDeleted가 true인 게시물을 필터링합니다. ---
+    const activePosts = allPosts?.filter((p: any) => !p.isDeleted && p.postId) || [];
 
     // 4. 현재 게시물의 인덱스를 찾습니다.
     const currentIndex = activePosts.findIndex(p => p.postId === postId);
