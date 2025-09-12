@@ -10,6 +10,6 @@ export interface Comment {
   createdAt: string;
   isDeleted: boolean;
   parentCommentId: string | null;
-  // 재귀적인 구조를 표현하기 위해, Comment 타입 자신이 배열로 포함
+  // 재귀적인 구조를 표현하기 위해, Comment 타입 자신이 배열로 포함 
   replies: Comment[];
 }
