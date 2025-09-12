@@ -7,7 +7,7 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
-import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware,  tryAnonymousAuthMiddleware } from '../middlewares/auth.middleware'; 
+import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware, tryAnonymousAuthMiddleware } from '../middlewares/auth.middleware';
 import { togglePostLike, checkUserLikeStatus } from '../services/likes.service';
 import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
@@ -104,6 +104,10 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
           ...post,
           authorAvatarUrl,
           commentCount: commentCount || 0,
+          // GSI3 조회 시 이미 'post' 객체에 포함되어 있지만,
+          // 만약 값이 없는 경우(오래된 데이터 등)를 대비하여 기본값 0을 설정해줍니다.
+          // 이를 통해 프론트엔드는 항상 number 타입의 likeCount를 보장받을 수 있습니다.
+          likeCount: post.likeCount || 0,
         };
       })
     );
