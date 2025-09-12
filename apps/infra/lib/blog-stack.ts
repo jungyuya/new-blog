@@ -71,7 +71,7 @@ export class BlogStack extends Stack {
       precedence: 0, // 우선순위 (숫자가 낮을수록 높음)
     });
 
-    // --- 1.2. 데이터베이스 리소스 ---
+    // --- 1.2. 데이터베이스 리소스 (핵심 수정 영역) ---
     const postsTable = new dynamodb.Table(this, 'BlogPostsTable', {
       tableName: `BlogPosts-${this.stackName}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -86,6 +86,14 @@ export class BlogStack extends Stack {
       indexName: 'GSI3',
       partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
+      // [핵심 수정 1] PostCard 목록 조회 시 '좋아요' 수를 함께 가져오기 위해
+      // projectionType을 INCLUDE로 변경하고 nonKeyAttributes에 likeCount를 추가합니다.
+      projectionType: dynamodb.ProjectionType.INCLUDE,
+      nonKeyAttributes: [
+        'postId', 'title', 'authorNickname', 'status', 'visibility',
+        'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio',
+        'authorAvatarUrl', 'createdAt', 'commentCount', 'likeCount', 'isDeleted'
+      ]
     });
 
     // --- GSI 2 (태그별 게시물 최신순 조회용) ---
@@ -96,8 +104,23 @@ export class BlogStack extends Stack {
       projectionType: dynamodb.ProjectionType.INCLUDE,
       nonKeyAttributes: [
         'postId', 'title', 'authorNickname', 'status', 'visibility',
-        'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio'
+        'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio',
+        // [핵심 수정 2] 태그별 게시물 목록에서도 '좋아요' 수를 표시하기 위해
+        // nonKeyAttributes에 likeCount를 추가합니다.
+        'likeCount'
       ],
+    });
+
+    // --- [신규 추가] GSI 4 ('좋아요' 기능 전용) ---
+    // 특정 사용자가 '좋아요'를 누른 모든 게시물을 효율적으로 조회하기 위한 인덱스입니다.
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'GSI4',
+      partitionKey: { name: 'GSI4_PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI4_SK', type: dynamodb.AttributeType.STRING },
+      // '좋아요' 여부만 확인하거나, 나중에 '좋아요'한 글 목록을 만들 때
+      // 기본 정보만 필요하므로 INCLUDE 타입을 사용합니다.
+      projectionType: dynamodb.ProjectionType.INCLUDE,
+      nonKeyAttributes: ['postId', 'title', 'thumbnailUrl', 'summary']
     });
 
     // --- 1.3. 이미지 S3저장소 리소스 ---
@@ -192,14 +215,18 @@ export class BlogStack extends Stack {
     postsTable.grantReadWriteData(backendApiLambda);
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:Query'],
-      resources: [`${postsTable.tableArn}/index/*`],
+      // [핵심 수정 3] 새로 추가된 GSI4에 대한 쿼리 권한을 부여합니다.
+      resources: [
+        `${postsTable.tableArn}/index/GSI2`,
+        `${postsTable.tableArn}/index/GSI3`,
+        `${postsTable.tableArn}/index/GSI4`
+      ],
     }));
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['cognito-idp:SignUp', 'cognito-idp:InitiateAuth', 'cognito-idp:GetUser'],
       resources: [userPool.userPoolArn],
     }));
 
-    // [핵심] S3 버킷에 대한 권한을 여기에 모아서 부여합니다.
     this.imageBucket.grantPut(backendApiLambda, 'uploads/*');
     this.imageBucket.grantDelete(backendApiLambda, 'images/*');
     this.imageBucket.grantDelete(backendApiLambda, 'thumbnails/*');

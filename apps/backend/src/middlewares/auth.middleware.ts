@@ -107,3 +107,26 @@ export const adminOnlyMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =>
   }
   await next();
 };
+
+
+// =================================================================
+// [신규] 비로그인 사용자 식별 미들웨어 (Anonymous User Middleware)
+// =================================================================
+/**
+ * X-Anonymous-Id 헤더가 존재하면 검증하고 컨텍스트에 주입합니다.
+ * 헤더가 없어도 에러를 반환하지 않고 다음 핸들러로 넘어갑니다.
+ * 로그인 여부와 관계없이 항상 익명 ID를 확인할 필요가 있을 때 사용합니다.
+ */
+export const tryAnonymousAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const anonymousId = c.req.header('x-anonymous-id');
+
+  // UUID v4 형식을 따르는지 간단히 검증하여 안전성을 높입니다.
+  const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (anonymousId && uuidV4Regex.test(anonymousId)) {
+    c.set('anonymousId', anonymousId);
+  }
+  
+  // 헤더가 없거나 형식이 맞지 않아도 에러 없이 다음으로 넘어갑니다.
+  await next();
+};

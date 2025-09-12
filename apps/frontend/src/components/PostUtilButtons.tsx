@@ -3,8 +3,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { AdjacentPost } from '@/utils/api'; // AdjacentPost 타입 import
-
+import { Post, AdjacentPost } from '@/utils/api';
+import { useLike } from '@/hooks/useLike';
 
 // 아이콘 컴포넌트 (SVG) - 파일 내부에 직접 정의하여 외부 의존성을 줄입니다.
 const ShareIcon = () => (
@@ -31,15 +31,25 @@ const ArrowRightIcon = () => (
     </svg>
 );
 
+// '좋아요'를 위한 하트 아이콘을 추가합니다.
+const HeartIcon = ({ filled }: { filled: boolean }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} fill={filled ? 'currentColor' : 'none'}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.5l1.318-1.182a4.5 4.5 0 116.364 6.364L12 21l-7.682-7.682a4.5 4.5 0 010-6.364z" />
+    </svg>
+);
+
 // [신규] 컴포넌트가 받을 props 타입 정의
 interface PostUtilButtonsProps {
+    post: Post;
     prevPost: AdjacentPost | null;
     nextPost: AdjacentPost | null;
 }
 
-export default function PostUtilButtons({ prevPost, nextPost }: PostUtilButtonsProps) {
+export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilButtonsProps) {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
 
+    // [신규 3] useLike 훅을 호출하여 '좋아요' 상태와 핸들러를 가져옵니다.
+    const { likeCount, isLiked, handleLike, isPending } = useLike(post);
     const handleCopyLink = () => {
         if (navigator.clipboard) {
             navigator.clipboard.writeText(window.location.href)
@@ -73,20 +83,37 @@ export default function PostUtilButtons({ prevPost, nextPost }: PostUtilButtonsP
         // [수정] 최상위 div의 border를 상단(t)만 남기고, 하단(y) 패딩을 제거하여 구조를 변경합니다.
         <div className="my-12 pt-8 border-t border-gray-200">
             <div className="flex justify-between items-center">
-                {/* 왼쪽: 공유 버튼 */}
-                <div className="relative">
+                {/* 왼쪽: 공유 버튼과 '좋아요' 버튼 */}
+                <div className="flex items-center space-x-2">
+                    <div className="relative">
+                        <button
+                            onClick={handleCopyLink}
+                            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                            aria-label="Share post"
+                        >
+                            <ShareIcon />
+                        </button>
+                        {copyStatus === 'copied' && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
+                                Copy OK!
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- [핵심 신규 UI] '좋아요' 버튼 --- */}
                     <button
-                        onClick={handleCopyLink}
-                        className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
-                        aria-label="Share post"
+                        onClick={handleLike}
+                        disabled={isPending} // API 요청이 처리 중일 때는 버튼을 비활성화
+                        className={`flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform active:scale-95 ${isLiked
+                            ? 'text-red-500 bg-red-100 hover:bg-red-200'
+                            : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
+                            } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        aria-pressed={isLiked}
+                        aria-label="Like this post"
                     >
-                        <ShareIcon />
+                        <HeartIcon filled={isLiked} />
+                        <span className="font-semibold text-sm">{likeCount}</span>
                     </button>
-                    {copyStatus === 'copied' && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
-                            Copy OK!
-                        </div>
-                    )}
                 </div>
 
                 {/* 오른쪽: 목록 버튼 */}
@@ -100,49 +127,50 @@ export default function PostUtilButtons({ prevPost, nextPost }: PostUtilButtonsP
             </div>
 
             {/* --- [핵심 수정] 이전/다음 글 네비게이션 UI 전체 변경 --- */}
-            {(prevPost || nextPost) && (
-                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                    {/* 이전 글 링크 */}
-                    {prevPost ? (
-                        <Link 
-                          href={`/posts/${prevPost.postId}`} 
-                          // --- [핵심 수정] hover:bg-gray-50을 그라데이션 클래스로 교체 ---
-                          className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors"
-                        >
-                          <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1">
-                            <ArrowLeftIcon />
-                          </div>
-                          <div className="ml-4 overflow-hidden">
-                            <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
-                                {prevPost.title}
-                            </p>
-                          </div>
-                        </Link>
-                    ) : (
-                        <div></div>
-                    )}
+            {
+                (prevPost || nextPost) && (
+                    <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                        {/* 이전 글 링크 */}
+                        {prevPost ? (
+                            <Link
+                                href={`/posts/${prevPost.postId}`}
+                                // --- [핵심 수정] hover:bg-gray-50을 그라데이션 클래스로 교체 ---
+                                className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors"
+                            >
+                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1">
+                                    <ArrowLeftIcon />
+                                </div>
+                                <div className="ml-4 overflow-hidden">
+                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                        {prevPost.title}
+                                    </p>
+                                </div>
+                            </Link>
+                        ) : (
+                            <div></div>
+                        )}
 
-                    {/* 다음 글 링크 */}
-                    {nextPost ? (
-                        <Link 
-                          href={`/posts/${nextPost.postId}`} 
-                          // --- [핵심 수정] hover:bg-gray-50을 그라데이션 클래스로 교체 ---
-                          className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors"
-                        >
-                          <div className="mr-4 overflow-hidden text-right">
-                            <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
-                                {nextPost.title}
-                            </p>
-                          </div>
-                          <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1">
-                            <ArrowRightIcon />
-                          </div>
-                        </Link>
-                    ) : (
-                        <div></div>
-                    )}
-                </div>
-            )}
-        </div>
+                        {/* 다음 글 링크 */}
+                        {nextPost ? (
+                            <Link
+                                href={`/posts/${nextPost.postId}`}
+                                className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors"
+                            >
+                                <div className="mr-4 overflow-hidden text-right">
+                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                        {nextPost.title}
+                                    </p>
+                                </div>
+                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1">
+                                    <ArrowRightIcon />
+                                </div>
+                            </Link>
+                        ) : (
+                            <div></div>
+                        )}
+                    </div>
+                )
+            }
+        </div >
     );
 }

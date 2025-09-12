@@ -121,6 +121,9 @@ importers:
       '@toast-ui/react-editor':
         specifier: ^3.2.3
         version: 3.2.3(react@19.1.0)
+      '@types/uuid':
+        specifier: ^10.0.0
+        version: 10.0.0
       next:
         specifier: 15.4.5
         version: 15.4.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -148,6 +151,9 @@ importers:
       swr:
         specifier: ^2.3.6
         version: 2.3.6(react@19.1.0)
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
       yet-another-react-lightbox:
         specifier: ^3.25.0
         version: 3.25.0(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

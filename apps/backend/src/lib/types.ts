@@ -19,11 +19,12 @@ export type AppEnv = {
     // [수정] 기존 타입들은 남겨두되, user 객체를 새로 추가합니다.
     // cookieAuthMiddleware를 거치지 않은 라우트에서는 user가 undefined일 수 있으므로 '?'를 붙입니다.
     user?: UserContext;
-    
+
     // 기존 타입들은 tryCookieAuthMiddleware 등에서 여전히 사용될 수 있으므로 유지합니다.
     userId?: string;
     userEmail?: string;
     userGroups?: string[];
+    anonymousId?: string;
   };
 };
 

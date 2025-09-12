@@ -7,8 +7,9 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
-import { sanitizeContent } from '../lib/sanitizer'; // [신규] 정제기 import
-import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware } from '../middlewares/auth.middleware'; import type { AppEnv } from '../lib/types';
+import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware,  tryAnonymousAuthMiddleware } from '../middlewares/auth.middleware'; 
+import { togglePostLike, checkUserLikeStatus } from '../services/likes.service';
+import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import type { Post } from '../lib/types';
 
@@ -115,16 +116,17 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [2] GET /:postId - 단일 게시물 조회 (v1.2 - isDeleted 필터링 추가) ---
-postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
+// --- [2] GET /:postId - 단일 게시물 조회 (v3.1 - '좋아요' 상태 포함) ---
+postsRouter.get('/:postId', tryCookieAuthMiddleware, tryAnonymousAuthMiddleware, async (c) => {
   const postId = c.req.param('postId');
   const TABLE_NAME = process.env.TABLE_NAME!;
   const currentUserId = c.get('userId');
   const userGroups = c.get('userGroups');
   const isAdmin = userGroups?.includes('Admins');
+  const anonymousId = c.get('anonymousId');
 
   try {
-    // 1. (기존 로직) 현재 게시물 정보를 가져옵니다.
+    // 1. 현재 게시물 정보를 가져옵니다.
     const { Item } = await ddbDocClient.send(new GetCommand({
       TableName: TABLE_NAME,
       Key: { PK: `POST#${postId}`, SK: 'METADATA' },
@@ -134,26 +136,27 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
       return c.json({ message: 'Post not found.' }, 404);
     }
 
-    // 2. (기존 로직) 비밀글 접근 권한을 검사합니다.
+    // 2.  비밀글 접근 권한을 검사합니다.
     if (Item.visibility === 'private') {
       if (!currentUserId || Item.authorId !== currentUserId) {
         return c.json({ message: 'Forbidden: You do not have permission to view this post.' }, 403);
       }
     }
 
-    // --- [핵심 수정] 이전 글 / 다음 글 정보를 조회합니다. ---
-    // 3. GSI3를 사용해 모든 게시물 목록을 시간순으로 가져옵니다.
+    // --- [핵심 수정 1] 현재 사용자가 이 게시물에 '좋아요'를 눌렀는지 확인합니다. ---
+    // anonymousId가 존재할 경우에만 서비스 함수를 호출하여 DB를 조회합니다.
+    const isLiked = anonymousId ? await checkUserLikeStatus(postId, anonymousId) : false;
+
+    // --- [핵심 수정 2] 이전 글 / 다음 글 정보를 조회합니다. (기존 로직과 동일) ---
     const listCommandParams: QueryCommandInput = {
       TableName: TABLE_NAME,
       IndexName: 'GSI3',
       KeyConditionExpression: 'GSI3_PK = :pk',
       ExpressionAttributeValues: { ':pk': 'POST#ALL' },
-      ScanIndexForward: false, // 최신순 정렬
-      // [성능 최적화] isDeleted도 확인해야 하므로 ProjectionExpression에 추가합니다.
+      ScanIndexForward: false,
       ProjectionExpression: 'postId, title, isDeleted',
     };
 
-    // 관리자가 아닐 경우, 공개된 글만 목록에 포함시킵니다.
     if (!isAdmin) {
       listCommandParams.FilterExpression = '#status = :published AND #visibility = :public';
       listCommandParams.ExpressionAttributeNames = {
@@ -166,29 +169,21 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
 
     const listCommand = new QueryCommand(listCommandParams);
     const { Items: allPosts } = await ddbDocClient.send(listCommand);
-
-    // --- [핵심 수정] isDeleted가 true인 게시물을 필터링합니다. ---
     const activePosts = allPosts?.filter((p: any) => !p.isDeleted && p.postId) || [];
 
-    // 4. 현재 게시물의 인덱스를 찾습니다.
     const currentIndex = activePosts.findIndex(p => p.postId === postId);
-
     let prevPost = null;
     let nextPost = null;
-
     if (currentIndex !== -1) {
-      // 이전 글: 현재 인덱스보다 1 큰 항목 (최신순 정렬이므로)
       if (currentIndex + 1 < activePosts.length) {
         prevPost = activePosts[currentIndex + 1];
       }
-      // 다음 글: 현재 인덱스보다 1 작은 항목
       if (currentIndex - 1 >= 0) {
         nextPost = activePosts[currentIndex - 1];
       }
     }
-    // ---------------------------------------------------------
 
-    // 5. (기존 로직) 조회수를 1 증가시킵니다. (Fire and Forget)
+    // --- [핵심 수정 3] 조회수를 1 증가시킵니다. (기존 로직과 동일) ---
     ddbDocClient.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { PK: `POST#${postId}`, SK: 'METADATA' },
@@ -196,16 +191,48 @@ postsRouter.get('/:postId', tryCookieAuthMiddleware, async (c) => {
       ExpressionAttributeValues: { ':inc': 1, ':start': 0 },
     }));
 
-    // 6. 최종적으로, 모든 정보를 합쳐서 응답을 보냅니다.
+    // --- [핵심 수정 4] 최종 응답 객체에 isLiked와 likeCount를 포함시킵니다. ---
+    const postWithLikeStatus = {
+      ...Item,
+      isLiked: isLiked,
+      likeCount: Item.likeCount || 0, // DB에 likeCount가 없을 경우(초기 상태)를 대비해 기본값 0을 설정
+    };
+
     return c.json({
-      post: Item,
-      prevPost, // 이전 글 정보 (없으면 null)
-      nextPost, // 다음 글 정보 (없으면 null)
+      post: postWithLikeStatus,
+      prevPost,
+      nextPost,
     });
 
   } catch (error: any) {
     console.error('Get Post Error:', error);
     return c.json({ message: 'Internal Server Error fetching post.', error: error.message }, 500);
+  }
+});
+
+// --- [2.5 좋아요 기능] POST /:postId/like - '좋아요' 토글 ---
+postsRouter.post('/:postId/like', tryAnonymousAuthMiddleware, async (c) => {
+  const postId = c.req.param('postId');
+  const anonymousId = c.get('anonymousId');
+
+  // 방어적 코딩: anonymousId가 없으면 요청을 처리할 수 없으므로 에러를 반환합니다.
+  // 프론트엔드에서는 항상 anonymousId를 생성하여 보내주므로, 이 에러는 비정상적인 접근일 가능성이 높습니다.
+  if (!anonymousId) {
+    return c.json({ message: 'Bad Request: Anonymous ID is missing.' }, 400);
+  }
+
+  try {
+    // 모든 복잡한 로직은 서비스 레이어에 위임하고, 결과만 받아서 전달합니다.
+    const result = await togglePostLike(postId, anonymousId);
+    return c.json(result);
+  } catch (error: any) {
+    console.error('Toggle Like Error:', error);
+    // 서비스 레이어에서 발생할 수 있는 특정 에러에 대해 구체적인 응답을 보냅니다.
+    if (error.message === 'Post not found') {
+      return c.json({ message: 'Post not found.' }, 404);
+    }
+    // 그 외의 모든 예상치 못한 에러는 500 Internal Server Error로 처리합니다.
+    return c.json({ message: 'Internal Server Error processing like.', error: error.message }, 500);
   }
 });
 
@@ -309,7 +336,6 @@ postsRouter.post(
   }
 );
 
-// --- [4] PUT /:postId - 게시물 수정 (v2.3 - 타입 안정성 및 로직 강화 최종본) ---
 // --- [4] PUT /:postId - 게시물 수정 (v3.0 - 백엔드 정제 로직 제거) ---
 postsRouter.put(
   '/:postId',
@@ -437,6 +463,7 @@ postsRouter.put(
     }
   }
 );
+
 // --- [5] DELETE /:postId - 게시물 삭제 (v2.2 - TAG 아이템 TTL 적용) ---
 postsRouter.delete(
   '/:postId',

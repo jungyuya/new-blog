@@ -31,9 +31,7 @@ export default function PostDetailView({ post, prevPost, nextPost }: PostDetailV
       <PostHeader post={post} />
       <PostContent content={post.content!} />
       <PostAuthorProfile post={post} />
-
-      {/* --- [핵심 수정] PostUtilButtons에 prevPost와 nextPost를 props로 전달합니다. --- */}
-      <PostUtilButtons prevPost={prevPost} nextPost={nextPost} />
+      <PostUtilButtons post={post} prevPost={prevPost} nextPost={nextPost} />
     </div>
   );
 }

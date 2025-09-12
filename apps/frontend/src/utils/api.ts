@@ -1,7 +1,8 @@
 // 파일 위치: apps/frontend/src/utils/api.ts (v4.5 - Final Verified Code)
-// 역할: TypeScript 오류를 모두 해결하고, cookies()의 비동기 특성을 완벽히 처리하는 최종 버전.
 
-// Post 타입을 여기에 직접 정의합니다.
+import { getAnonymousId } from './anonymousId';
+
+
 export interface Post {
   PK: string;
   SK: string;
@@ -23,7 +24,9 @@ export interface Post {
   isDeleted?: boolean;
   summary?: string;
   content?: string;
-  commentCount?: number;    // [추가]
+  commentCount?: number;
+  likeCount?: number;
+  isLiked?: boolean;
 }
 
 export interface UserProfile {
@@ -73,16 +76,20 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
 
+  // --- [수정 2] 모든 API 요청에 익명 ID 헤더를 자동으로 추가합니다. ---
+  if (typeof window !== 'undefined') {
+    // 브라우저 환경에서만 anonymousId를 가져와 헤더에 추가합니다.
+    const anonymousId = getAnonymousId();
+    if (anonymousId) {
+      headers.set('X-Anonymous-Id', anonymousId);
+    }
+  }
+
   if (typeof window === 'undefined') {
     const { cookies } = await import('next/headers');
-
-    // [핵심 최종 수정 1] cookies()는 Promise를 반환하므로 반드시 await으로 실제 객체를 가져옵니다.
     const cookieStore = await cookies();
-
     const allCookies = cookieStore.getAll();
-
     if (allCookies.length > 0) {
-      // [핵심 최종 수정 2] map의 인자에 명시적 타입을 추가하여 암시적 'any' 오류를 방지합니다.
       const cookieHeader = allCookies
         .map((cookie: { name: string; value: string }) => `${cookie.name}=${cookie.value}`)
         .join('; ');
@@ -132,7 +139,7 @@ export const api = {
   fetchPosts: (): Promise<{ posts: Post[] }> => {
     return fetchWrapper('/posts', { method: 'GET' });
   },
-  fetchPostById: (postId: string): Promise<{ 
+  fetchPostById: (postId: string): Promise<{
     post: Post;
     prevPost: AdjacentPost | null;
     nextPost: AdjacentPost | null;
@@ -184,6 +191,12 @@ export const api = {
   },
   fetchPostsByTag: (tagName: string): Promise<{ posts: Post[] }> => {
     return fetchWrapper(`/tags/${tagName}/posts`, { method: 'GET' });
+  },
+
+  toggleLike: (postId: string): Promise<{ likeCount: number; isLiked: boolean }> => {
+    return fetchWrapper(`/posts/${postId}/like`, {
+      method: 'POST',
+    });
   },
 
   // --- [신규] Comment APIs ---
