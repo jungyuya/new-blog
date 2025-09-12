@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Post, AdjacentPost } from '@/utils/api';
 import { useLike } from '@/hooks/useLike';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 // 아이콘 컴포넌트 (SVG) - 파일 내부에 직접 정의하여 외부 의존성을 줄입니다.
 const ShareIcon = () => (
@@ -47,8 +49,6 @@ interface PostUtilButtonsProps {
 
 export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilButtonsProps) {
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
-
-    // [신규 3] useLike 훅을 호출하여 '좋아요' 상태와 핸들러를 가져옵니다.
     const { likeCount, isLiked, handleLike, isPending } = useLike(post);
     const handleCopyLink = () => {
         if (navigator.clipboard) {
@@ -79,8 +79,27 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         }
     };
 
+    const [direction, setDirection] = useState(0);
+    const [animationKey, setAnimationKey] = useState(0);
+
+    const wrappedHandleLike = () => {
+        // isLiked가 true이면 (즉, 취소할 것이므로) 숫자가 감소 -> direction = -1
+        // isLiked가 false이면 (즉, 추가할 것이므로) 숫자가 증가 -> direction = 1
+        setDirection(isLiked ? -1 : 1);
+        handleLike();
+        setAnimationKey(prevKey => prevKey + 1);
+    };
+
+    // [신규] likeCount의 자릿수에 따라 Tailwind 클래스를 반환하는 로직
+    const getWidthClass = (count: number): string => {
+        if (count < 10) return 'w-2';
+        if (count < 100) return 'w-5';
+        if (count < 1000) return 'w-7';
+        return 'w-10';
+    };
+    const widthClass = getWidthClass(likeCount);
+
     return (
-        // [수정] 최상위 div의 border를 상단(t)만 남기고, 하단(y) 패딩을 제거하여 구조를 변경합니다.
         <div className="my-12 pt-8 border-t border-gray-200">
             <div className="flex justify-between items-center">
                 {/* 왼쪽: 공유 버튼과 '좋아요' 버튼 */}
@@ -100,19 +119,45 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         )}
                     </div>
 
-                    {/* --- [핵심 신규 UI] '좋아요' 버튼 --- */}
+                    {/* --- [핵심 수정] '좋아요' 버튼 --- */}
                     <button
-                        onClick={handleLike}
-                        disabled={isPending} // API 요청이 처리 중일 때는 버튼을 비활성화
-                        className={`flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform active:scale-95 ${isLiked
+                        onClick={wrappedHandleLike}  // [수정] handleLike -> wrappedHandleLike
+                        disabled={isPending}
+                        className={`group flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform ${isLiked
                             ? 'text-red-500 bg-red-100 hover:bg-red-200'
                             : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
-                            } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            } ${isPending ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
                         aria-pressed={isLiked}
                         aria-label="Like this post"
                     >
-                        <HeartIcon filled={isLiked} />
-                        <span className="font-semibold text-sm">{likeCount}</span>
+                        <div
+                            key={animationKey}
+                            className={`transition-transform duration-200 ease-in-out ${isLiked ? 'animate-bouncy-heart' : ''}`}
+                        >
+                            <HeartIcon filled={isLiked} />
+                        </div>
+
+                        {/* --- [핵심 수정] 숫자 부분을 framer-motion 컴포넌트로 교체 --- */}
+                        <div className={`relative ${widthClass} h-5 overflow-hidden text-center transition-all duration-300 ease-in-out`}>
+                            <AnimatePresence initial={false} custom={direction}>
+                                <motion.span
+                                    key={likeCount}
+                                    className="absolute inset-0 font-semibold text-sm"
+                                    variants={{
+                                        enter: (direction: number) => ({ y: direction > 0 ? 15 : -15, opacity: 0 }),
+                                        center: { y: 0, opacity: 1 },
+                                        exit: (direction: number) => ({ y: direction > 0 ? -15 : 15, opacity: 0 }),
+                                    }}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                    transition={{ duration: 0.2 }}
+                                    custom={direction}
+                                >
+                                    {likeCount}
+                                </motion.span>
+                            </AnimatePresence>
+                        </div>
                     </button>
                 </div>
 
@@ -126,51 +171,48 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 </Link>
             </div>
 
-            {/* --- [핵심 수정] 이전/다음 글 네비게이션 UI 전체 변경 --- */}
-            {
-                (prevPost || nextPost) && (
-                    <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                        {/* 이전 글 링크 */}
-                        {prevPost ? (
-                            <Link
-                                href={`/posts/${prevPost.postId}`}
-                                // --- [핵심 수정] hover:bg-gray-50을 그라데이션 클래스로 교체 ---
-                                className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors"
-                            >
-                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1">
-                                    <ArrowLeftIcon />
-                                </div>
-                                <div className="ml-4 overflow-hidden">
-                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
-                                        {prevPost.title}
-                                    </p>
-                                </div>
-                            </Link>
-                        ) : (
-                            <div></div>
-                        )}
+            {/* --- 이전/다음 글 네비게이션 UI 전체 변경 --- */}
+            {(prevPost || nextPost) && (
+                <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                    {/* 이전 글 링크 */}
+                    {prevPost ? (
+                        <Link
+                            href={`/posts/${prevPost.postId}`}
+                            className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors"
+                        >
+                            <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1">
+                                <ArrowLeftIcon />
+                            </div>
+                            <div className="ml-4 overflow-hidden">
+                                <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                    {prevPost.title}
+                                </p>
+                            </div>
+                        </Link>
+                    ) : (
+                        <div></div>
+                    )}
 
-                        {/* 다음 글 링크 */}
-                        {nextPost ? (
-                            <Link
-                                href={`/posts/${nextPost.postId}`}
-                                className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors"
-                            >
-                                <div className="mr-4 overflow-hidden text-right">
-                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
-                                        {nextPost.title}
-                                    </p>
-                                </div>
-                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1">
-                                    <ArrowRightIcon />
-                                </div>
-                            </Link>
-                        ) : (
-                            <div></div>
-                        )}
-                    </div>
-                )
-            }
-        </div >
+                    {/* 다음 글 링크 */}
+                    {nextPost ? (
+                        <Link
+                            href={`/posts/${nextPost.postId}`}
+                            className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors"
+                        >
+                            <div className="mr-4 overflow-hidden text-right">
+                                <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                    {nextPost.title}
+                                </p>
+                            </div>
+                            <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1">
+                                <ArrowRightIcon />
+                            </div>
+                        </Link>
+                    ) : (
+                        <div></div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }

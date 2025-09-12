@@ -13,6 +13,7 @@
     "@swc/helpers": "^0.5.17",
     "@toast-ui/react-editor": "^3.2.3",
     "@types/uuid": "^10.0.0",
+    "framer-motion": "^12.23.12",
     "next": "15.4.5",
     "prismjs": "^1.30.0",
     "react": "19.1.0",
