@@ -12,7 +12,7 @@ interface CommentsSectionProps {
   postId: string;
 }
 
-const commentsFetcher = ([key, postId]: [string, string]) => api.fetchCommentsByPostId(postId);
+const commentsFetcher = ([_key, postId]: [string, string]) => api.fetchCommentsByPostId(postId);
 
 export default function CommentsSection({ postId }: CommentsSectionProps) {
   const { user } = useAuth(); // [신규] 로그인 상태 확인을 위해 user 정보 가져오기

@@ -3,7 +3,6 @@
 
 import { Post } from '@/utils/api';
 import Image from 'next/image';
-import Link from 'next/link';
 
 // 이 컴포넌트가 받을 props 타입을 정의합니다.
 interface PostAuthorProfileProps {

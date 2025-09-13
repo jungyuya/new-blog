@@ -55,10 +55,16 @@ export interface Comment {
   replies: Comment[];
 }
 
-// --- [신규] 이전/다음 글을 위한 간단한 타입 정의 ---
+// --- 이전/다음 글을 위한 간단한 타입 정의 ---
 export interface AdjacentPost {
   postId: string;
   title: string;
+}
+
+// --- 페이지네이션 응답을 위한 타입 정의 ---
+export interface PaginatedPosts {
+  posts: Post[];
+  nextCursor: string | null;
 }
 
 const getApiBaseUrl = () => {
@@ -136,8 +142,21 @@ export const api = {
     return fetchWrapper('/auth/signup', { method: 'POST', body: JSON.stringify(credentials) });
   },
   // --- Post APIs ---
-  fetchPosts: (): Promise<{ posts: Post[] }> => {
-    return fetchWrapper('/posts', { method: 'GET' });
+  fetchPosts: (limit: number | null, cursor: string | null): Promise<PaginatedPosts> => {
+    const params = new URLSearchParams();
+
+    // limit 값이 유효한 숫자인 경우에만 파라미터에 추가합니다.
+    if (limit && limit > 0) {
+      params.append('limit', String(limit));
+    }
+    // cursor 값이 유효한 문자열인 경우에만 파라미터에 추가합니다.
+    if (cursor) {
+      params.append('cursor', cursor);
+    }
+    const queryString = params.toString();
+    const path = queryString ? `/posts?${queryString}` : '/posts';
+
+    return fetchWrapper(path, { method: 'GET' });
   },
   fetchPostById: (postId: string): Promise<{
     post: Post;

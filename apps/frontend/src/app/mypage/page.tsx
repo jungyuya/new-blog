@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/app/mypage/page.tsx (v1.1 - 비동기 문제 해결 최종본)
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Image from 'next/image';
@@ -18,7 +18,7 @@ export default function MyPage() {
 
 // 실제 폼 로직을 담고 있는 컴포넌트
 function MyPageForm() {
-    const { user, setUser, refreshUser } = useAuth();
+    const { user, setUser, } = useAuth();
 
     // 폼 입력 값을 위한 상태
     const [nickname, setNickname] = useState('');

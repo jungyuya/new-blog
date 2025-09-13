@@ -1,38 +1,37 @@
-// 파일 위치: apps/frontend/src/app/page.tsx (v1.1 - PostCard 적용 최종본)
-import { api, Post } from "@/utils/api";
-// [추가] PostCard 컴포넌트를 import 합니다.
-import PostCard from "@/components/PostCard";
+// 파일 위치: apps/frontend/src/app/page.tsx (v2.0 - 페이지네이션 적용)
+import { api } from "@/utils/api";
+// [수정] PostCard 대신, 동적 목록을 처리할 PostList를 import 합니다.
+import PostList from "@/components/PostList";
 
 export const dynamic = 'force-dynamic';
 
+// 한 페이지에 보여줄 게시물 수를 상수로 정의합니다.
+const POSTS_PER_PAGE = 12;
+
 export default async function HomePage() {
-  let posts: Post[] = [];
-  let error: string | null = null;
-
   try {
-    const response = await api.fetchPosts();
-    posts = response.posts;
-  } catch (err) {
-    console.error("Failed to fetch posts on server:", err);
-    error = "게시물 목록을 불러오는 데 실패했습니다.";
-  }
+    // --- [핵심 수정 1] ---
+    // 서버에서 첫 페이지만 미리 가져옵니다.
+    const initialPostsData = await api.fetchPosts(POSTS_PER_PAGE, null);
 
-  return (
-    <div>
-      <h1 className="text-3xl font-bold mb-8">최신 게시물</h1>
-      
-      {error ? (
+    return (
+      <div>
+        <h1 className="text-3xl font-bold mb-8">최신 게시물</h1>
+        
+        {/* --- [핵심 수정 2] --- */}
+        {/* 실제 렌더링 로직을 클라이언트 컴포넌트에 위임하고, 초기 데이터를 fallback으로 전달합니다. */}
+        <PostList fallbackData={initialPostsData} />
+      </div>
+    );
+  } catch (err) {
+    // 기존의 에러 처리 방식을 유지합니다.
+    console.error("Failed to fetch posts on server:", err);
+    const error = "게시물 목록을 불러오는 데 실패했습니다.";
+    return (
+      <div>
+        <h1 className="text-3xl font-bold mb-8">최신 게시물</h1>
         <p className="text-red-500">{error}</p>
-      ) : posts.length > 0 ? (
-        // [핵심 수정] 기존 목록을 Grid 레이아웃으로 변경하고, PostCard를 사용합니다.
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => (
-            <PostCard key={post.postId} post={post} />
-          ))}
-        </div>
-      ) : (
-        <p>아직 작성된 게시물이 없습니다.</p>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
 }

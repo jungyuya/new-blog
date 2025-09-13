@@ -40,11 +40,17 @@ const UpdatePostSchema = z.object({
 
 const postsRouter = new Hono<AppEnv>();
 
-// --- [1] GET / - 모든 게시물 조회 (v2.1 - 아바타 및 댓글 수 추가) ---
+// --- [1] GET / - 모든 게시물 조회 (v2.2 - 페이지네이션 적용) ---
 postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   const TABLE_NAME = process.env.TABLE_NAME!;
   const userGroups = c.get('userGroups');
   const isAdmin = userGroups?.includes('Admins');
+
+  // [핵심 수정] Zod 스키마에 .default()를 추가하여, 값이 없을 때의 기본값을 명시합니다.
+  const { limit, cursor } = z.object({
+    limit: z.coerce.number().int().positive().default(12),
+    cursor: z.string().optional(),
+  }).parse(c.req.query());
 
   try {
     // 1. 기존 로직: GSI를 사용하여 모든 게시물의 기본 정보를 가져옵니다.
@@ -54,7 +60,19 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
       KeyConditionExpression: 'GSI3_PK = :pk',
       ExpressionAttributeValues: { ':pk': 'POST#ALL' },
       ScanIndexForward: false,
+      Limit: limit,
     };
+
+    // [신규] cursor가 있으면, ExclusiveStartKey를 설정합니다.
+    if (cursor) {
+      try {
+        const decodedKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        commandParams.ExclusiveStartKey = decodedKey;
+      } catch (e) {
+        // 잘못된 형식의 커서는 400 에러를 반환하여 비정상적인 요청을 차단합니다.
+        return c.json({ message: 'Invalid cursor format.' }, 400);
+      }
+    }
 
     if (!isAdmin) {
       commandParams.FilterExpression = '#status = :published AND #visibility = :public';
@@ -67,7 +85,7 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
     }
 
     const command = new QueryCommand(commandParams);
-    const { Items } = await ddbDocClient.send(command);
+    const { Items, LastEvaluatedKey } = await ddbDocClient.send(command);
     const activePosts = Items?.filter((i) => !i.isDeleted) || [];
 
     // --- [핵심 수정] 각 게시물에 대한 추가 정보(아바타, 댓글 수)를 병렬로 조회합니다. ---
@@ -112,7 +130,12 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
       })
     );
 
-    return c.json({ posts: enrichedPosts });
+    // [신규] 다음 페이지를 위한 cursor를 생성합니다.
+    const nextCursor = LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
+      : null;
+
+    return c.json({ posts: enrichedPosts, nextCursor: nextCursor, });
 
   } catch (error: any) {
     console.error('Get All Posts Error:', error);
