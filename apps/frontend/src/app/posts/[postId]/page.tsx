@@ -1,22 +1,22 @@
-// 파일 위치: apps/frontend/src/app/posts/[postId]/page.tsx (v1.4 - 최신 표준 패턴 적용)
+// apps/frontend/src/app/posts/[postId]/page.tsx
 import { api } from "@/utils/api";
 import PostDetailView from "@/components/PostDetailView";
-import { notFound } from 'next/navigation';
+import { notFound } from "next/navigation";
 import CommentsSection from "@/components/comments/CommentsSection";
 
 export const dynamic = 'force-dynamic';
 
-// [신규] 페이지 컴포넌트의 props 타입을 명시적으로 정의합니다.
+type ParamsShape = { postId: string };
+
+// params가 동기 객체일 수도, Promise일 수도 있게 허용
 interface PostDetailPageProps {
-  params: {
-    postId: string;
-  };
+  params: ParamsShape | Promise<ParamsShape>;
+  // searchParams 등 다른 props가 필요하면 여기에 추가
 }
 
-// [수정] props 타입으로 위에서 정의한 인터페이스를 사용합니다.
 export default async function PostDetailPage({ params }: PostDetailPageProps) {
-  // [수정] params는 이제 일반 객체이므로, await 구문을 제거합니다.
-  const { postId } = params;
+  // Promise/동기 모두 안전하게 처리
+  const { postId } = await params;
 
   try {
     const { post, prevPost, nextPost } = await api.fetchPostById(postId);
@@ -30,8 +30,7 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
         <PostDetailView post={post} prevPost={prevPost} nextPost={nextPost} />
         <CommentsSection postId={postId} />
       </div>
-    ); 
-
+    );
   } catch (error) {
     console.error(`Failed to fetch post ${postId}:`, error);
     notFound();
