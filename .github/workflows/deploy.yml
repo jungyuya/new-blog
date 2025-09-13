@@ -1,5 +1,5 @@
 # 파일 위치: .github/workflows/deploy.yml
-# 버전: v2025.08.15-Immutable-Masterpiece-R2 <LEEJUNGYU 검토필 KS인증마크버전>
+# 버전: v2025.09.13
 # 역할: "단일 빌드, 다중 배포" 원칙에 입각하여, 빌드 불일치와 캐시 문제를 원천적으로 해결하고,
 #       YAML 문법 오류를 완벽하게 수정한 최종 안정화 버전의 통합 배포 워크플로우.
 
@@ -148,12 +148,27 @@ jobs:
           echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
           echo "✅ Created unique release ID: $RELEASE_ID"
 
+      - name: "Configure AWS Credentials via OIDC"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} # GitHub Secrets에 저장된 IAM 역할 ARN
+          aws-region: ${{ env.AWS_REGION }}    
+
+      - name: "Read GitHub URL from Parameter Store"
+        id: read_param
+        run: |
+          PARAM_NAME="/new-blog/frontend/github-url"
+          VALUE=$(aws ssm get-parameter --name "$PARAM_NAME" --query "Parameter.Value" --output text)
+          echo "GITHUB_URL_FROM_SSM=$VALUE" >> $GITHUB_ENV
+          
+
       - name: "The Single Source of Truth: Build Frontend Once"
         env:
           NODE_ENV: production
           NEXT_PUBLIC_ASSET_PREFIX: "/${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_API_ENDPOINT: /api
+          NEXT_PUBLIC_GITHUB_URL: ${{ env.GITHUB_URL_FROM_SSM }}
         run: |          
           echo "🚀 Starting the single build..."
           pnpm --filter frontend run build
@@ -167,11 +182,6 @@ jobs:
         
 
       # --- 3악장: 2중주 (The Dual Deployment) ---
-      - name: "Configure AWS Credentials"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: "Login to Amazon ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2

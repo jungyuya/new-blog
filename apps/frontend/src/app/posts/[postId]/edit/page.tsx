@@ -58,7 +58,7 @@ function EditPostForm() {
 
       // [핵심 수정] 불러온 데이터로 모든 상태를 올바르게 초기화합니다.
       setTitle(fetchedPost.title);
-      setContent(fetchedPost.content);
+      setContent(fetchedPost.content ?? '');
       // PostMetadataEditor가 사용할 초기 데이터를 설정합니다.
       setMetadata({
         tags: fetchedPost.tags || [],

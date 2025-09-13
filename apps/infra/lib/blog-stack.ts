@@ -1,4 +1,4 @@
-// 파일 위치: apps/infra/lib/InfraStack.ts
+// 파일 위치: apps/infra/lib/blog-stack.ts
 // 최종 버전: v2025.09.03-The-Purified-Masterpiece - GSI2 수정
 
 import * as cdk from 'aws-cdk-lib';
@@ -24,6 +24,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 
 
@@ -248,6 +249,11 @@ export class BlogStack extends Stack {
 
     const ecrRepository = ecr.Repository.fromRepositoryName(this, 'FrontendEcrRepo', 'new-blog-frontend');
 
+    const githubUrlParameter = ssm.StringParameter.valueForStringParameter(
+      this,
+      '/new-blog/frontend/github-url' // Step 1.1에서 생성한 파라미터 이름
+    );
+
     const serverLambda = new lambda.DockerImageFunction(this, 'FrontendServerLambda', {
       functionName: `blog-frontend-server-${this.stackName}`,
       description: 'Renders the Next.js frontend application (SSR).',
@@ -263,6 +269,7 @@ export class BlogStack extends Stack {
         NEXT_PUBLIC_REGION: this.region,
         NEXT_PUBLIC_USER_POOL_ID: userPool.userPoolId,
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        NEXT_PUBLIC_GITHUB_URL: githubUrlParameter,
       },
     });
     this.imageBucket.grantRead(serverLambda);
