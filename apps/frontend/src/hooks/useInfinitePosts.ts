@@ -63,6 +63,7 @@ export function useInfinitePosts(fallbackData: PaginatedPosts) {
     isLoading,      // fallbackData가 없을 때의 초기 로딩 상태
     isRefreshing: isValidating, // 추가 페이지 로딩 또는 기존 데이터 갱신 시의 로딩 상태
     isReachingEnd,
+    size,
     loadMore: () => setSize(size + 1), // '더 보기' 버튼에 연결할 함수
   };
 }
