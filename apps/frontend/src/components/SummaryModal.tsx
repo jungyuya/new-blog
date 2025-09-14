@@ -3,6 +3,8 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import React from 'react';
+import { useAuth } from '@/contexts/AuthContext'; // [신규]
+import { api } from '@/utils/api'; // [신규]
 
 // 로딩 스켈레톤 UI
 const SummarySkeleton = () => (
@@ -19,9 +21,28 @@ interface SummaryModalProps {
   isLoading: boolean;
   summary: string;
   onClose: () => void;
+  postId: string; // [신규] 캐시 삭제 API 호출을 위해 postId가 필요
+
 }
 
-export default function SummaryModal({ isOpen, isLoading, summary, onClose }: SummaryModalProps) {
+export default function SummaryModal({ isOpen, isLoading, summary, onClose, postId }: SummaryModalProps) {
+  const { user } = useAuth(); // [신규] 관리자 여부 확인을 위해 user 정보 가져오기
+  const isAdmin = user?.groups?.includes('Admins');
+
+  const handleClearCache = async () => {
+    if (!isAdmin) return;
+    if (window.confirm('정말로 이 요약 캐시를 삭제하시겠습니까? 다음에 요약 요청 시 AI가 새로 생성하게 됩니다.')) {
+      try {
+        await api.deleteSummary(postId);
+        alert('요약 캐시가 삭제되었습니다.');
+        onClose(); // 성공 시 모달 닫기
+      } catch (error) {
+        console.error('Failed to clear summary cache:', error);
+        alert('캐시 삭제에 실패했습니다.');
+      }
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -81,9 +102,21 @@ export default function SummaryModal({ isOpen, isLoading, summary, onClose }: Su
               </AnimatePresence>
             </div>
 
-            {/* 5. 모달 푸터 */}
-            <div className="mt-6 pt-4 border-t text-right text-xs text-gray-400">
-              Powered by AWS Bedrock (Claude 3 Haiku)
+            {/* --- [수정] 모달 푸터 --- */}
+            <div className="mt-6 pt-4 border-t flex justify-between items-center">
+              <span className="text-xs text-gray-400">
+                Powered by AWS Bedrock (Claude 3 Haiku)
+              </span>
+
+              {/* [신규] 관리자일 경우에만 캐시 삭제 버튼 표시 */}
+              {isAdmin && !isLoading && (
+                <button
+                  onClick={handleClearCache}
+                  className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+                >
+                  요약 캐시 지우기
+                </button>
+              )}
             </div>
           </motion.div>
         </motion.div>

@@ -740,4 +740,33 @@ postsRouter.get(
   }
 );
 
+// --- [요약 캐시 지우기] DELETE /:postId/summary - AI 요약 캐시 삭제 (관리자 전용) ---
+postsRouter.delete(
+  '/:postId/summary',
+  cookieAuthMiddleware,
+  adminOnlyMiddleware, // [보안] 오직 관리자만 이 API를 호출할 수 있습니다.
+  async (c) => {
+    const postId = c.req.param('postId');
+    const TABLE_NAME = process.env.TABLE_NAME!;
+
+    try {
+      // UpdateCommand를 사용하여 aiSummary와 aiKeywords 속성만 제거(REMOVE)합니다.
+      const command = new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+        // REMOVE 액션은 지정된 속성을 아이템에서 완전히 삭제합니다.
+        UpdateExpression: 'REMOVE aiSummary, aiKeywords',
+      });
+
+      await ddbDocClient.send(command);
+
+      return c.json({ message: 'AI summary cache cleared successfully.' }, 200);
+
+    } catch (error: any) {
+      console.error('Clear AI Summary Cache Error:', error);
+      return c.json({ message: 'Failed to clear AI summary cache.', error: error.message }, 500);
+    }
+  }
+);
+
 export default postsRouter;

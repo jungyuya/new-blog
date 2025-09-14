@@ -195,6 +195,8 @@ export class BlogStack extends Stack {
       },
     });
 
+    cdk.Tags.of(backendApiLambda).add('blog-project-cost', 'bedrock-caller');
+
     cdk.Tags.of(backendApiLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(backendApiLambda).add('Tier', 'Backend');
 

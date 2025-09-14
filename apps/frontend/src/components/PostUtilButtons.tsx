@@ -3,9 +3,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image'; 
-import { Post, AdjacentPost, api } from '@/utils/api'; 
-import { useAuth } from '@/contexts/AuthContext'; 
+import Image from 'next/image';
+import { Post, AdjacentPost, api } from '@/utils/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLike } from '@/hooks/useLike';
 import { motion, AnimatePresence } from 'framer-motion';
 import SummaryModal from './SummaryModal'; // SummaryModal import
@@ -210,14 +210,14 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         {/* --- AI 요약 버튼의 아이콘 --- */}
                         <button
                             onClick={handleSummaryClick}
-                            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                            className="p-0.9 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
                             aria-label="AI 요약 보기"
                         >
                             <Image
-                              src="/ai-summary-icon.svg" // public 디렉토리의 파일 경로
-                              alt="AI 요약 아이콘"
-                              width={36} 
-                              height={36}
+                                src="/ai-summary-icon.svg" // public 디렉토리의 파일 경로
+                                alt="AI 요약 아이콘"
+                                width={36}
+                                height={36}
                             />
                         </button>
                     </div>
@@ -282,6 +282,8 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 onClose={() => setIsModalOpen(false)}
                 summary={summary}
                 isLoading={isLoadingSummary}
+                postId={post.postId} // [신규] postId 전달
+                
             />
         </>
     );

@@ -251,9 +251,12 @@ export const api = {
       method: 'DELETE',
       body: JSON.stringify(commentData),
     }),
-
+  // ---  AI Summary API ---
   fetchSummary: (postId: string): Promise<{ summary: string; keywords: string[]; source: 'cache' | 'live' }> => {
     return fetchWrapper(`/posts/${postId}/summary`, { method: 'GET' });
   },
 
+  deleteSummary: (postId: string): Promise<{ message: string }> => {
+    return fetchWrapper(`/posts/${postId}/summary`, { method: 'DELETE' });
+  },
 };
