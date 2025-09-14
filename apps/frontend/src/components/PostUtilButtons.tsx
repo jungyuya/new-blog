@@ -102,7 +102,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         setIsModalOpen(true);
         setIsLoadingSummary(true);
         setSummary(''); // 이전 요약 내용 초기화
-        try {                                     //fake time zz
+        try {                                     //fake time 0.5 zz
             await new Promise(resolve => setTimeout(resolve, 500));
             const result = await api.fetchSummary(post.postId);
             setSummary(result.summary);
@@ -150,7 +150,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                             </button>
                             {copyStatus === 'copied' && (
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
-                                    Copy OK!
+                                    Copied, OK!
                                 </div>
                             )}
                         </div>
@@ -283,7 +283,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 summary={summary}
                 isLoading={isLoadingSummary}
                 postId={post.postId} // [신규] postId 전달
-                
+
             />
         </>
     );

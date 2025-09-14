@@ -58,12 +58,12 @@ authRouter.post('/login', zValidator('json', LoginSchema), async c => {
             const cookieOptions = { httpOnly: true, secure: IS_PROD, sameSite: 'Strict' as const, path: '/' };
 
             if (AccessToken) {
-                setCookie(c, 'accessToken', AccessToken, { ...cookieOptions, maxAge: 15 * 60 });
+                setCookie(c, 'accessToken', AccessToken, { ...cookieOptions, maxAge: 60 * 60 });
             }
             if (RefreshToken) {
                 setCookie(c, 'refreshToken', RefreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 });
             }
-            if (IdToken) setCookie(c, 'idToken', IdToken, { ...cookieOptions, maxAge: 15 * 60 });
+            if (IdToken) setCookie(c, 'idToken', IdToken, { ...cookieOptions, maxAge: 60 * 60 });
             return c.json({ message: 'Authentication successful' });
         }
         return c.json({ message: 'Authentication failed, no tokens returned.' }, 401);
@@ -92,7 +92,6 @@ authRouter.post('/logout', async c => {
 
     deleteCookie(c, 'accessToken', cookieOptions);
     deleteCookie(c, 'refreshToken', cookieOptions);
-    // --- [핵심 수정] idToken 쿠키를 삭제하는 코드를 추가합니다. ---
     deleteCookie(c, 'idToken', cookieOptions);
 
     return c.json({ message: 'User logged out successfully.' }, 200);
