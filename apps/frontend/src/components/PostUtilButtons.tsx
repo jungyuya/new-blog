@@ -3,9 +3,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Post, AdjacentPost } from '@/utils/api';
+import { Post, AdjacentPost, api } from '@/utils/api'; // [수정] api import
+import { useAuth } from '@/contexts/AuthContext'; // [신규] useAuth import
 import { useLike } from '@/hooks/useLike';
 import { motion, AnimatePresence } from 'framer-motion';
+import SummaryModal from './SummaryModal'; // [신규] SummaryModal import
+
 
 
 // 아이콘 컴포넌트 (SVG) - 파일 내부에 직접 정의하여 외부 의존성을 줄입니다.
@@ -47,6 +50,14 @@ const GitHubIcon = () => (
     </svg>
 );
 
+// ---  AI 요약 기능을 위한 커스텀 아이콘 ---
+const MagicIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0m-7.072 0l-2.828 2.829M12 21v-1m1.657-3.343l.707.707m-9.192-9.192l-.707.707" />
+    </svg>
+);
+
+
 // [신규] 컴포넌트가 받을 props 타입 정의
 interface PostUtilButtonsProps {
     post: Post;
@@ -55,7 +66,14 @@ interface PostUtilButtonsProps {
 }
 
 export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilButtonsProps) {
+    const { user } = useAuth(); // 로그인 상태 확인
     const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL;
+
+    // --- AI 요약 모달 관련 상태 관리 ---
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [summary, setSummary] = useState('');
+    const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const { likeCount, isLiked, handleLike, isPending } = useLike(post);
     const handleCopyLink = () => {
@@ -87,6 +105,22 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         }
     };
 
+    const handleSummaryClick = async () => {
+        setIsModalOpen(true);
+        setIsLoadingSummary(true);
+        setSummary(''); // 이전 요약 내용 초기화
+        try {                                     //fake time zz
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await api.fetchSummary(post.postId);
+            setSummary(result.summary);
+        } catch (err) {
+            console.error('Failed to fetch summary:', err);
+            setSummary('요약을 생성하는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
+        } finally {
+            setIsLoadingSummary(false);
+        }
+    };
+
     const [direction, setDirection] = useState(0);
     const [animationKey, setAnimationKey] = useState(0);
 
@@ -106,12 +140,13 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         return 'w-10';
     };
     const widthClass = getWidthClass(likeCount);
-
-    return (
+return (
+    <>
         <div className="my-12 pt-8 border-t border-gray-200">
             <div className="flex justify-between items-center">
-                {/* 왼쪽: 공유 버튼과 '좋아요' 버튼 */}
+                {/* 왼쪽: 공유, GitHub, 좋아요, AI 요약 버튼 */}
                 <div className="flex items-center space-x-2">
+                    {/* 공유 버튼  */}
                     <div className="relative">
                         <button
                             onClick={handleCopyLink}
@@ -127,8 +162,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         )}
                     </div>
 
-                    {/* --- [핵심 추가 2] GitHub 링크 버튼 --- */}
-                    {/* githubUrl 환경 변수가 존재할 때만 버튼을 렌더링합니다. */}
+                    {/* GitHub 링크 버튼 */}
                     {githubUrl && (
                         <a
                             href={githubUrl}
@@ -141,9 +175,9 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         </a>
                     )}
 
-                    {/* --- [핵심 수정] '좋아요' 버튼 --- */}
+                    {/* '좋아요' 버튼  */}
                     <button
-                        onClick={wrappedHandleLike}  // [수정] handleLike -> wrappedHandleLike
+                        onClick={wrappedHandleLike}
                         disabled={isPending}
                         className={`group flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform ${isLiked
                             ? 'text-red-500 bg-red-100 hover:bg-red-200'
@@ -158,8 +192,6 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         >
                             <HeartIcon filled={isLiked} />
                         </div>
-
-                        {/* --- [핵심 수정] 숫자 부분을 framer-motion 컴포넌트로 교체 --- */}
                         <div className={`relative ${widthClass} h-5 overflow-hidden text-center transition-all duration-300 ease-in-out`}>
                             <AnimatePresence initial={false} custom={direction}>
                                 <motion.span
@@ -181,9 +213,18 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                             </AnimatePresence>
                         </div>
                     </button>
-                </div>
 
-                {/* 오른쪽: 목록 버튼 */}
+                    {/* --- AI 요약 버튼 (로그인 시에만 렌더링) --- */}
+                       <button
+                            onClick={handleSummaryClick}
+                            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                            aria-label="AI 요약 보기"
+                        >
+                            <MagicIcon />
+                        </button>
+                    </div>
+
+                {/* 오른쪽: 목록 버튼  */}
                 <Link
                     href="/"
                     className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
@@ -193,7 +234,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 </Link>
             </div>
 
-            {/* --- 이전/다음 글 네비게이션 UI 전체 변경 --- */}
+            {/* 이전/다음 글 네비게이션  */}
             {(prevPost || nextPost) && (
                 <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
                     {/* 이전 글 링크 */}
@@ -236,5 +277,14 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 </div>
             )}
         </div>
-    );
+
+        {/* ---  모달 컴포넌트 렌더링 --- */}
+        <SummaryModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            summary={summary}
+            isLoading={isLoadingSummary}
+        />
+    </>
+);
 }

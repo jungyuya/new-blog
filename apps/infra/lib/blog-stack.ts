@@ -228,6 +228,15 @@ export class BlogStack extends Stack {
       resources: [userPool.userPoolArn],
     }));
 
+    // --- Bedrock 모델 호출을 위한 IAM 권한을 부여합니다. ---
+    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeModel'],
+      // "최소 권한의 원칙"에 따라, 모든 모델이 아닌 Claude 3 Haiku 모델에 대한
+      // 호출 권한만 최소한으로 부여하여 보안을 강화합니다.
+      resources: [`arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`],
+    }));
+
     this.imageBucket.grantPut(backendApiLambda, 'uploads/*');
     this.imageBucket.grantDelete(backendApiLambda, 'images/*');
     this.imageBucket.grantDelete(backendApiLambda, 'thumbnails/*');

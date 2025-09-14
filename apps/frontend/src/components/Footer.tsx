@@ -39,7 +39,7 @@ export default function Footer() {
           © {new Date().getFullYear()} JUNGYU. All Rights Reserved.
         </div>
 
-        {/* --- 오른쪽 영역: 아이콘 링크 버튼 그룹 (기존과 동일) --- */}
+        {/* --- 오른쪽 영역: 아이콘 링크 버튼 그룹 --- */}
         <div className="flex items-center space-x-4">
           {homeUrl && (
             <a

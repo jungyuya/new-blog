@@ -1,4 +1,4 @@
-// 파일 위치: apps/backend/src/lib/types.ts (v1.1 - UserContext 추가)
+// 파일 위치: apps/backend/src/lib/types.ts (v1.3 - aiSummary 추가)
 import type { LambdaEvent } from 'hono/aws-lambda';
 
 export type UserContext = {
@@ -43,9 +43,10 @@ export interface Post {
   thumbnailUrl: string;
   imageUrl: string;
   isDeleted: boolean;
-  // [신규] 좋아요 및 댓글 수를 Post 타입에 명시적으로 추가합니다.
   likeCount?: number;
   commentCount?: number;
+  // --- AI 요약을 저장할 선택적 필드 ---
+  aiSummary?: string;
 };
 
 export interface PaginatedPosts {

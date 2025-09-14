@@ -27,6 +27,9 @@ export interface Post {
   commentCount?: number;
   likeCount?: number;
   isLiked?: boolean;
+  // --- AI 요약 관련 필드를 Post 타입에 추가합니다. ---
+  aiSummary?: string;
+  aiKeywords?: string[];
 }
 
 export interface UserProfile {
@@ -41,7 +44,7 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-// --- 댓글 타입을 여기에 직접 정의합니다. ---
+// --- 댓글 타입 정의 ---
 export interface Comment {
   commentId: string;
   content: string;
@@ -55,7 +58,7 @@ export interface Comment {
   replies: Comment[];
 }
 
-// --- 이전/다음 글을 위한 간단한 타입 정의 ---
+// --- 이전/다음 글 타입 정의 ---
 export interface AdjacentPost {
   postId: string;
   title: string;
@@ -237,28 +240,20 @@ export const api = {
     });
   },
   // --- [신규] Comment APIs ---
-  updateComment: (
-    commentId: string,
-    commentData: {
-      content: string;
-      postId: string;
-    }
-  ): Promise<Comment> => {
-    return fetchWrapper(`/comments/${commentId}`, {
+  updateComment: (commentId: string, commentData: { content: string; postId: string }) =>
+    fetchWrapper(`/comments/${commentId}`, {
       method: 'PUT',
       body: JSON.stringify(commentData),
-    });
-  },
+    }),
 
-  deleteComment: (
-    commentId: string,
-    commentData: {
-      postId: string;
-    }
-  ): Promise<null> => {
-    return fetchWrapper(`/comments/${commentId}`, {
+  deleteComment: (commentId: string, commentData: { postId: string }) =>
+    fetchWrapper(`/comments/${commentId}`, {
       method: 'DELETE',
       body: JSON.stringify(commentData),
-    });
+    }),
+
+  fetchSummary: (postId: string): Promise<{ summary: string; keywords: string[]; source: 'cache' | 'live' }> => {
+    return fetchWrapper(`/posts/${postId}/summary`, { method: 'GET' });
   },
+
 };
