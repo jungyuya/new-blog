@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,18 +18,20 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+ return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>
-          <Header />
-          {/* --- [핵심 수정] --- */}
-          {/* 기존 'container' 클래스를 제거하고, 'max-w-7xl'을 직접 명시합니다. */}
-          {/* 'max-w-7xl'은 Tailwind CSS 기본값으로 1280px에 해당합니다. */}
-          <main className="max-w-7xl mx-auto px-6 py-8">
-            {children}
-          </main>
-        </Providers>
+        {/* [수정] flex 구조로 변경하여 푸터를 하단에 고정합니다. */}
+        <div className="flex flex-col min-h-screen">
+          <Providers>
+            <Header />
+            {/* [수정] main 영역이 남은 공간을 모두 차지하도록 합니다. */}
+            <main className="flex-grow max-w-7xl mx-auto px-6 py-8 w-full">
+              {children}
+            </main>
+            <Footer /> {/* [신규] Footer 컴포넌트 추가 */}
+          </Providers>
+        </div>
       </body>
     </html>
   );
