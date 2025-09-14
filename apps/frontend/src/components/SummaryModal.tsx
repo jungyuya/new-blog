@@ -108,13 +108,13 @@ export default function SummaryModal({ isOpen, isLoading, summary, onClose, post
                 Powered by AWS Bedrock (Claude 3 Haiku)
               </span>
 
-              {/* [신규] 관리자일 경우에만 캐시 삭제 버튼 표시 */}
+              {/* 관리자일 경우에만 캐시 삭제 버튼 표시 */}
               {isAdmin && !isLoading && (
                 <button
                   onClick={handleClearCache}
                   className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
                 >
-                  요약 캐시 지우기
+                  🗑️요약캐시 삭제
                 </button>
               )}
             </div>
