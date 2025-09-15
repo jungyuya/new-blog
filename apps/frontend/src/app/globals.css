@@ -1,37 +1,41 @@
-/* 파일 위치: apps/frontend/src/app/globals.css (v1.2 - Tailwind v4 다크 모드 활성화) */
+/* apps/frontend/src/app/globals.css — Tailwind v4 호환 버전 */
 @import "tailwindcss";
 
-/* --- [핵심 수정 1] :root에 라이트 모드 변수를 기본으로 정의합니다. --- */
-:root {
-  --background: #ffffff;
-  --foreground: #1F2937; /* JUNGYU님의 tailwind.config.js와 일치시킵니다. */
-  /* ... 기타 전역 CSS 변수 ... */
+/* base 레이어에 전역 변수와 기본 스타일을 두어 utilities와 우선순위 충돌 방지 */
+@layer base {
+  /* 1. 라이트 모드 (기본 테마) 색상 변수 정의                      */
+  :root {
+    --background: #ffffff;
+    --foreground: #1F2937;
+    --header-bg: #ffffff;
+    --header-text: #1F2937;
+  }
+  /* 2. 다크 모드 색상 변수 재정의    */
+  .dark {
+    --background: #1f1e1eff;
+    --foreground: #e0e0e0;   /* 다크 모드일 때의 전체 페이지 기본 글자 색상입니다. */
+    --header-bg: #000000;
+    --header-text: #e0e0e0;
+  }
+
+  /* 전역 기본 스타일 (base 레이어 안에) */
+  html, body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  body {
+    background-color: var(--background); /* background-color로 명시 */
+    color: var(--foreground);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
 }
 
-/* --- [핵심 수정 2] 미디어 쿼리 대신 '.dark' 클래스를 사용합니다. --- */
-/* <html> 태그에 'dark' 클래스가 있을 때 적용될 변수들을 정의합니다. */
-.dark {
-  --background: #111827; /* JUNGYU님의 tailwind.config.js와 일치시킵니다. */
-  --foreground: #E5E7EB;
-}
-
-/* @theme 지시어는 v4의 실험적인 기능일 수 있으므로, 우선순위를 명확히 하기 위해 
-   body 스타일링과 같은 기본 스타일링과 분리하여 생각하는 것이 좋습니다.
-   현재 코드에서는 이 부분이 직접적인 원인은 아니므로 그대로 둡니다. */
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-/* body 스타일은 이제 CSS 변수를 통해 동적으로 테마가 적용됩니다. */
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-  /* 테마 전환 시 부드러운 색상 변경 효과를 추가합니다. */
-  transition: background-color 0.3s ease, color 0.3s ease;
+/* 안전장치: header가 변수 기반 스타일을 직접 참조하게 함 */
+header {
+  background-color: var(--header-bg);
+  color: var(--header-text);
 }
 
 /* ================================================================ */
@@ -40,24 +44,8 @@ body {
 
 /* [수정] prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
 .prose img {
-  /* 
-    [핵심 수정] 너비(width) 대신, 최대 높이(max-height)를 기준으로 크기를 제어합니다.
-    이를 통해 가로/세로 비율이 다른 이미지들도 시각적으로 비슷한 공간을 차지하게 됩니다.
-    450px은 일반적인 기술 블로그에서 가독성을 해치지 않는 적절한 높이입니다.
-    이 값은 JUNGYU 님의 취향에 맞게 자유롭게 조정할 수 있습니다.
-  */
-  max-height: 450px;
-
-  /* 
-    너비(width)는 'auto'로 설정하여, 이미지의 원래 가로/세로 비율이 유지되도록 합니다.
-    (예: 세로가 450px로 줄어들면, 가로도 그 비율에 맞게 자동으로 줄어듭니다.)
-  */
+  max-height: 550px;
   width: auto;
-  
-  /* 
-    가운데 정렬 및 기타 미적 스타일은 그대로 유지합니다.
-    이미지를 클릭할 수 있다는 시각적 힌트를 제공하기 위해 cursor: pointer를 추가합니다.
-  */
   display: block;
   margin-left: auto;
   margin-right: auto;

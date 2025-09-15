@@ -30,11 +30,12 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const theme = cookieStore.get('theme')?.value || 'light';
 
- return (
+  return (
     <html lang="en" className={theme} style={{ colorScheme: theme }}>
-      <body className={inter.className}>
+      {/* --- body에 배경색과 텍스트색을 적용합니다. --- */}
+      <body className={`${inter.className} bg-background text-foreground transition-colors duration-300`}>
         <script dangerouslySetInnerHTML={{ __html: setInitialTheme }} />
-        
+
         <div className="flex flex-col min-h-screen">
           <Providers>
             <Header />

@@ -17,15 +17,15 @@ export default function ThemeToggleButton() {
   return (
     <button
       onClick={toggleTheme}
-      className={`relative flex items-center w-14 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-        theme === 'light' ? 'bg-blue-400' : 'bg-gray-700'
-      }`}
+      className={`relative flex items-center w-14 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${theme === 'light' ? 'bg-blue-400' : 'bg-gray-700'
+        }`}
       aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
     >
       <motion.div
         layout
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        className="absolute w-6 h-6 bg-white rounded-full shadow-md"
+        className={`absolute w-6 h-6 rounded-full shadow-md transition-colors duration-300 ease-in-out ${theme === 'light' ? 'bg-white' : 'bg-black'
+          }`}
         style={{
           left: theme === 'light' ? '4px' : 'auto',
           right: theme === 'dark' ? '4px' : 'auto',

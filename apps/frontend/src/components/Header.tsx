@@ -20,26 +20,25 @@ export default function Header() {
   };
 
   return (
-    // --- [핵심 수정 1] 헤더에 다크 모드 스타일을 적용합니다. ---
-    <header className="bg-white dark:bg-gray-800 shadow-md dark:shadow-gray-700 sticky top-0 z-50 transition-colors">
-      <nav className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center">
-        <Link href="/" className="flex items-center space-x-2">
-          <Image
-            src="/homelogo.webp"
-            alt="Deep Dive! 로고"
-            width={28}
-            height={28}
-            priority
-            unoptimized={true}
-          />
-          {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
-          <span className="text-xl font-bold text-gray-800 dark:text-gray-200">
-            Deep Dive!
-          </span>
-        </Link>
+    // --- 헤더에 다크 모드 스타일을 적용합니다. ---
+    <header className="sticky top-0 z-50 bg-light-header-bg dark:bg-dark-header-bg shadow-md dark:border-b dark:border-dark-border transition-all duration-300">
+      <nav className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center">        <Link href="/" className="flex items-center space-x-2">
+        <Image
+          src="/homelogo.webp"
+          alt="Deep Dive! 로고"
+          width={28}
+          height={28}
+          priority
+          unoptimized={true}
+        />
+        {/* 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+        <span className="text-xl font-bold dark:text-gray-300 dark:hover:text-indigo-400">
+          Deep Dive!
+        </span>
+      </Link>
 
         <div className="flex items-center space-x-4">
-          {/* --- [핵심 수정 2] 토글 버튼을 조건부 렌더링 바깥으로 이동시켜 항상 보이게 합니다. --- */}
+          {/* --- 토글 버튼을 조건부 렌더링 바깥으로 이동시켜 항상 보이게 합니다. --- */}
           <ThemeToggleButton />
 
           {isLoading ? (
@@ -71,7 +70,7 @@ export default function Header() {
                     key={user.avatarUrl}
                   />
                 </div>
-                {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+                {/* 텍스트 색상도 다크 모드를 지원하도록 변경 */}
                 <span className="font-semibold text-gray-700 dark:text-gray-300 hidden sm:block">
                   {user.nickname || user.email.split('@')[0]}
                 </span>
@@ -79,8 +78,8 @@ export default function Header() {
             </>
           ) : (
             <>
-              {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
-              <Link href="/login" className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400">
+              {/* 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+              <Link href="/login" className="text-gray-00 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400">
                 로그인
               </Link>
               <Link href="/signup" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 dark:bg-primary-dark dark:hover:bg-primary-dark-hover">
