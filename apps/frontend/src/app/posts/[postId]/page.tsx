@@ -7,9 +7,10 @@ import type { Metadata, ResolvingMetadata } from 'next'
 
 export const dynamic = 'force-dynamic';
 
+// <-- 변경: params를 Promise로 선언
 type Props = {
-  params: { postId: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  params: Promise<{ postId: string }> | { postId: string }; // 안전하게 union으로 허용
+  searchParams: Record<string, string | string[] | undefined>;
 };
 
 export default async function PostDetailPage({ params }: Props) {

@@ -1,9 +1,10 @@
-// 파일 위치: apps/frontend/src/components/Header.tsx (v1.3 - 로고 이미지 적용)
+// 파일 위치: apps/frontend/src/components/Header.tsx (v1.4 - 다크 모드 토글 적용)
 'use client';
 
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
+import ThemeToggleButton from './ThemeToggleButton'; // [신규] 테마 토글 버튼 import
 
 export default function Header() {
   const { user, isLoading, logout } = useAuth();
@@ -19,27 +20,28 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-md sticky top-0 z-50">
-      <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
-        {/* --- [핵심 수정] 로고 부분을 이미지와 텍스트 조합으로 변경 --- */}
+    // --- [핵심 수정 1] 헤더에 다크 모드 스타일을 적용합니다. ---
+    <header className="bg-white dark:bg-gray-800 shadow-md dark:shadow-gray-700 sticky top-0 z-50 transition-colors">
+      <nav className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center">
         <Link href="/" className="flex items-center space-x-2">
-          {/* 1. 로고 이미지 추가 */}
           <Image
-            src="/homelogo.webp" // public 디렉토리의 로고 파일 경로
+            src="/homelogo.webp"
             alt="Deep Dive! 로고"
-            width={28} // 로고의 너비 (px)
-            height={28} // 로고의 높이 (px)
-            priority // 헤더 로고는 중요하므로 우선적으로 로드
-            unoptimized={true} // --- [핵심 수정] 이 이미지에 대한 Next.js 최적화 기능을 비활성화
+            width={28}
+            height={28}
+            priority
+            unoptimized={true}
           />
-          {/* 2. 기존 텍스트 유지 */}
-          <span className="text-xl font-bold text-gray-800">
+          {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+          <span className="text-xl font-bold text-gray-800 dark:text-gray-200">
             Deep Dive!
           </span>
         </Link>
 
         <div className="flex items-center space-x-4">
-          {/* ... (오른쪽 메뉴 부분은 변경 없음) ... */}
+          {/* --- [핵심 수정 2] 토글 버튼을 조건부 렌더링 바깥으로 이동시켜 항상 보이게 합니다. --- */}
+          <ThemeToggleButton />
+
           {isLoading ? (
             <div className="animate-pulse flex space-x-4">
               <div className="h-8 w-24 bg-gray-300 rounded"></div>
@@ -48,13 +50,13 @@ export default function Header() {
           ) : user ? (
             <>
               {isAdmin && (
-                <Link href="/posts/new" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                <Link href="/posts/new" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 dark:bg-primary-dark dark:hover:bg-primary-dark-hover">
                   새 글 작성
                 </Link>
               )}
               <button
                 onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-indigo-600"
+                className="text-sm text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
               >
                 로그아웃
               </button>
@@ -69,17 +71,19 @@ export default function Header() {
                     key={user.avatarUrl}
                   />
                 </div>
-                <span className="font-semibold text-gray-700 hidden sm:block">
+                {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+                <span className="font-semibold text-gray-700 dark:text-gray-300 hidden sm:block">
                   {user.nickname || user.email.split('@')[0]}
                 </span>
               </Link>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-gray-600 hover:text-indigo-600">
+              {/* [수정] 텍스트 색상도 다크 모드를 지원하도록 변경 */}
+              <Link href="/login" className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400">
                 로그인
               </Link>
-              <Link href="/signup" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+              <Link href="/signup" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 dark:bg-primary-dark dark:hover:bg-primary-dark-hover">
                 회원가입
               </Link>
             </>
