@@ -1,20 +1,39 @@
-// 파일 위치: apps/frontend/src/components/Editor.tsx (v1.1 - 타입 오류 해결 최종본)
+// 파일 위치: apps/frontend/src/components/Editor.tsx
 'use client';
 
 import { Editor as TuiEditor, EditorProps } from '@toast-ui/react-editor';
 import '@toast-ui/editor/dist/toastui-editor.css';
-import { useRef } from 'react';
+import '@toast-ui/editor/dist/theme/toastui-editor-dark.css'; // [추가] 1. 다크 테마 CSS import
+import { useRef, useLayoutEffect } from 'react'; // [수정] 2. useLayoutEffect import
 import { api } from '@/utils/api';
+import { useTheme } from 'next-themes'; // [추가] 3. useTheme 훅 import
 
-// Editor 컴포넌트가 받을 props 타입을 정의합니다.
 interface EditorPropsWithHandlers extends EditorProps {
   onChange: (value: string) => void;
   initialValue?: string;
 }
 
 export default function Editor({ onChange, initialValue = '' }: EditorPropsWithHandlers) {
-  // [수정] ref의 타입을 TuiEditor로 명확히 지정합니다.
   const editorRef = useRef<TuiEditor>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null); // [추가] 4. wrapper를 위한 ref 생성
+  const { theme } = useTheme(); // [추가] 5. 현재 테마 상태 가져오기
+
+  // [추가] 6. 테마 변경 시 DOM에 직접 클래스를 주입/제거하는 로직
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // Toast UI Editor의 컨테이너 요소를 찾습니다.
+    const tuiEl = wrapper.querySelector<HTMLElement>('.toastui-editor-defaultUI');
+
+    if (tuiEl) {
+      if (theme === 'dark') {
+        tuiEl.classList.add('toastui-editor-dark');
+      } else {
+        tuiEl.classList.remove('toastui-editor-dark');
+      }
+    }
+  }, [theme]);
 
   const handleContentChange = () => {
     if (editorRef.current) {
@@ -24,10 +43,10 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
   };
 
   const onUploadImage = async (blob: File | Blob, callback: (url: string, altText: string) => void) => {
+    // ... (기존 이미지 업로드 로직은 변경 없음)
     console.log('Uploading image...', blob);
     try {
       const fileName = blob instanceof File ? blob.name : 'image.png';
-      // [수정] 이제 api.getPresignedUrl이 존재하므로 오류가 발생하지 않습니다.
       const { presignedUrl, publicUrl } = await api.getPresignedUrl(fileName);
 
       console.log('Got presigned URL:', presignedUrl);
@@ -50,7 +69,6 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
 
       handleContentChange();
 
-
     } catch (error) {
       console.error('Image upload failed:', error);
       alert('이미지 업로드에 실패했습니다.');
@@ -58,7 +76,8 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
   };
 
   return (
-    <div>
+    // [수정] 7. TuiEditor를 div로 감싸고 wrapperRef를 연결합니다.
+    <div ref={wrapperRef}>
       <TuiEditor
         ref={editorRef}
         initialValue={initialValue}
@@ -71,6 +90,8 @@ export default function Editor({ onChange, initialValue = '' }: EditorPropsWithH
         hooks={{
           addImageBlobHook: onUploadImage,
         }}
+        // [추가] 8. 초기 렌더링 시 깜빡임 방지를 위해 theme prop 전달
+        theme={theme === 'dark' ? 'dark' : 'default'}
       />
     </div>
   );

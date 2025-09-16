@@ -31,6 +31,37 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* [추가] Tailwind Typography(prose)가 코드 블록에 적용하는 기본 스타일을 덮어쓰기 위한 규칙 */
+.prose pre {
+  border: none !important;
+  background-color: transparent !important;
+}
+
+.prose.toastui-editor-dark {
+  /* 일반 텍스트(p), 목록(li), 설명(figcaption) 등의 색상 */
+  --tw-prose-body: theme('colors.gray.300');
+  --tw-prose-captions: theme('colors.gray.400');
+
+  /* 제목(h1, h2, h3, h4) 색상 */
+  --tw-prose-headings: theme('colors.gray.100');
+  
+  /* 링크(a) 색상 */
+  --tw-prose-links: theme('colors.blue.400');
+  
+  /* 굵은 텍스트(strong) 색상 */
+  --tw-prose-bold: theme('colors.gray.200');
+
+  /* 인용문(blockquote)의 텍스트 색상 및 왼쪽 테두리 색상 */
+  --tw-prose-quotes: theme('colors.gray.300');
+  --tw-prose-quote-borders: theme('colors.gray.600');
+
+}
+
+/* [추가] 인라인 코드(code) 태그의 색상을 직접 덮어쓰기 위한, 더 강력한 규칙 */
+.prose.toastui-editor-dark code {
+  color: theme('colors.gray.300') !important; /* <-- 여기에 !important 추가 */
+}
+
 /* ================================================================ */
 /* Custom Styles for Markdown Content                             */
 /* ================================================================ */
