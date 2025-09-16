@@ -1,4 +1,4 @@
-// 파일 위치: apps/frontend/src/app/layout.tsx (레이아웃 너비 제한 적용)
+// apps/frontend/src/app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -19,17 +19,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
  return (
-    <html lang="en">
+    <html lang="ko" suppressHydrationWarning> 
       <body className={inter.className}>
-        {/* [수정] flex 구조로 변경하여 푸터를 하단에 고정합니다. */}
         <div className="flex flex-col min-h-screen">
           <Providers>
             <Header />
-            {/* [수정] main 영역이 남은 공간을 모두 차지하도록 합니다. */}
             <main className="flex-grow max-w-7xl mx-auto px-6 py-8 w-full">
               {children}
             </main>
-            <Footer /> {/* [신규] Footer 컴포넌트 추가 */}
+            <Footer />
           </Providers>
         </div>
       </body>

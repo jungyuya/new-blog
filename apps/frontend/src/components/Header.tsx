@@ -4,6 +4,8 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
+import ThemeToggleButton from './ThemeToggleButton'; // [추가] 1. 토글 버튼 컴포넌트 import
+
 
 export default function Header() {
   const { user, isLoading, logout } = useAuth();
@@ -19,27 +21,27 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-white shadow-md sticky top-0 z-50">
+    // [수정] 2. 헤더 자체에 다크 모드 스타일 적용 (배경색, 하단 테두리)
+    <header className="bg-white dark:bg-gray-900 shadow-md dark:shadow-none dark:border-b dark:border-gray-800 sticky top-0 z-50">
       <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
-        {/* --- [핵심 수정] 로고 부분을 이미지와 텍스트 조합으로 변경 --- */}
         <Link href="/" className="flex items-center space-x-2">
-          {/* 1. 로고 이미지 추가 */}
           <Image
-            src="/homelogo.webp" // public 디렉토리의 로고 파일 경로
+            src="/homelogo.webp"
             alt="Deep Dive! 로고"
-            width={28} // 로고의 너비 (px)
-            height={28} // 로고의 높이 (px)
-            priority // 헤더 로고는 중요하므로 우선적으로 로드
-            unoptimized={true} // --- [핵심 수정] 이 이미지에 대한 Next.js 최적화 기능을 비활성화
+            width={28}
+            height={28}
+            priority
+            unoptimized={true}
           />
-          {/* 2. 기존 텍스트 유지 */}
-          <span className="text-xl font-bold text-gray-800">
+          {/* [수정] 3. 로고 텍스트에 다크 모드 스타일 적용 */}
+          <span className="text-xl font-bold text-gray-800 dark:text-gray-200">
             Deep Dive!
           </span>
         </Link>
 
         <div className="flex items-center space-x-4">
-          {/* ... (오른쪽 메뉴 부분은 변경 없음) ... */}
+          <ThemeToggleButton /> {/* [추가] 4. 토글 버튼을 조건부 렌더링 바깥에 배치 */}
+          
           {isLoading ? (
             <div className="animate-pulse flex space-x-4">
               <div className="h-8 w-24 bg-gray-300 rounded"></div>
@@ -52,9 +54,10 @@ export default function Header() {
                   새 글 작성
                 </Link>
               )}
+              {/* [수정] 5. 로그인 후 텍스트들에 다크 모드 스타일 적용 */}
               <button
                 onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-indigo-600"
+                className="text-sm text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
               >
                 로그아웃
               </button>
@@ -69,14 +72,15 @@ export default function Header() {
                     key={user.avatarUrl}
                   />
                 </div>
-                <span className="font-semibold text-gray-700 hidden sm:block">
+                <span className="font-semibold text-gray-700 hidden sm:block dark:text-gray-200">
                   {user.nickname || user.email.split('@')[0]}
                 </span>
               </Link>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-gray-600 hover:text-indigo-600">
+              {/* [수정] 5. 로그아웃 상태 텍스트들에 다크 모드 스타일 적용 */}
+              <Link href="/login" className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400">
                 로그인
               </Link>
               <Link href="/signup" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
