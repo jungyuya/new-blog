@@ -3,5 +3,23 @@
     {
       "mode": "auto"
     }
-  ]
+  ],
+  "editor.colorDecorators": true,
+  "editor.defaultColorDecorators": "auto",
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "tailwindCSS.includeLanguages": {
+    "postcss": "css",
+    "css": "css",
+    "plaintext": "html"
+  },
+  "files.associations": {
+    "*.css": "css",
+    "*.pcss": "postcss",
+    "*.module.css": "css"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  }
 }

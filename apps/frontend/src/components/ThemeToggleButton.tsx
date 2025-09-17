@@ -1,56 +1,44 @@
-// 파일 위치: apps/frontend/src/components/ThemeToggleButton.tsx
+// apps/frontend/src/components/ThemeToggleButton.tsx
 'use client';
 
-import { useTheme } from '@/contexts/ThemeProvider';
+import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react'; // [추가]
 
 export default function ThemeToggleButton() {
-  const { theme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false); // [추가]
+  const { theme, setTheme } = useTheme();
 
-  // 테마가 아직 결정되지 않은 초기 상태(SSR)를 고려합니다.
-  // 이 경우, 버튼을 렌더링하지 않거나 기본 상태로 보여줄 수 있습니다.
-  // 여기서는 클라이언트에서 테마가 확정될 때까지 렌더링하지 않도록 처리합니다.
-  if (!theme) {
-    return <div className="w-14 h-8" />; // 깜빡임을 방지하기 위해 공간만 차지
+  // [추가] useEffect는 클라이언트에서만, 그리고 컴포넌트가 마운트된 후에 실행됩니다.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  // [추가] 마운트 되기 전(서버 렌더링 시)에는 UI를 렌더링하지 않거나,
+  // 레이아웃 쉬프트를 방지하기 위한 플레이스홀더를 렌더링합니다.
+  if (!mounted) {
+    return <div className="w-14 h-7" />; // 빈 공간을 차지하여 레이아웃이 깨지지 않도록 함
   }
 
   return (
-    <button
+    // 스위치의 트랙(배경) 역할을 하는 div 입니다.
+    <div
       onClick={toggleTheme}
-      className={`relative flex items-center w-14 h-8 rounded-full p-1 transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${theme === 'light' ? 'bg-blue-400' : 'bg-gray-700'
-        }`}
-      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      className={`
+        flex items-center w-14 h-7 rounded-full p-1 cursor-pointer
+        ${theme === 'light' ? 'bg-gray-300 justify-start' : 'bg-blue-500 justify-end'}
+      `}
     >
+      {/* 스위치의 핸들(손잡이) 역할을 하는 motion.div 입니다. */}
       <motion.div
-        layout
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        className={`absolute w-6 h-6 rounded-full shadow-md transition-colors duration-300 ease-in-out ${theme === 'light' ? 'bg-white' : 'bg-black'
-          }`}
-        style={{
-          left: theme === 'light' ? '4px' : 'auto',
-          right: theme === 'dark' ? '4px' : 'auto',
-        }}
-      >
-        <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-          {/* 아이콘들이 동그라미 밖으로 삐져나가지 않도록 overflow-hidden 추가 */}
-          <motion.span
-            className="absolute text-yellow-500"
-            initial={{ y: 10, opacity: 0 }}
-            animate={{ y: theme === 'light' ? 0 : -10, opacity: theme === 'light' ? 1 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            ☀️
-          </motion.span>
-          <motion.span
-            className="absolute text-slate-300"
-            initial={{ y: 10, opacity: 0 }}
-            animate={{ y: theme === 'dark' ? 0 : -10, opacity: theme === 'dark' ? 1 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            🌙
-          </motion.span>
-        </div>
-      </motion.div>
-    </button>
+        className="w-5 h-5 bg-white rounded-full shadow-md"
+        layout // 이 prop이 마법같은 자동 애니메이션을 만듭니다.
+        transition={{ type: 'spring', stiffness: 700, damping: 30 }} // 통통 튀는 효과
+      />
+    </div>
   );
 }

@@ -22,7 +22,6 @@ export default function CommentItem({ comment, postId, onReplySubmit, isSubmitti
   const { user } = useAuth();
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  // --- [신규] 답글 목록 표시 상태 추가 ---
   const [isRepliesVisible, setIsRepliesVisible] = useState(false);
 
   const isOwner = user?.id === comment.authorId;
@@ -60,15 +59,16 @@ export default function CommentItem({ comment, postId, onReplySubmit, isSubmitti
   const hasReplies = comment.replies && comment.replies.length > 0;
 
   return (
-    <article className="py-4 border-b border-gray-200 last:border-b-0">
+    <article className="py-4 border-b border-gray-200 last:border-b-0 dark:border-gray-700">
       <div className="flex items-start mb-2">
         <div className="relative flex-shrink-0 w-8 h-8 mr-3">
           <Image src={comment.authorAvatarUrl || '/default-avatar.png'} alt={`${comment.authorNickname}의 프로필 사진`} fill className="object-cover rounded-full" sizes="32px" />
         </div>
         <div className="flex-grow">
           <div className="flex items-center">
-            <span className="font-bold text-gray-800">{comment.authorNickname}</span>
-            <span className="mx-2 text-gray-400">·</span>
+            {/* [수정] 2. 텍스트 요소들에 다크 모드 색상 적용 */}
+            <span className="font-bold text-gray-800 dark:text-gray-100">{comment.authorNickname}</span>
+            <span className="mx-2 text-gray-400 dark:text-gray-500">·</span>
             <ClientOnlyLocalDate dateString={comment.createdAt} />
           </div>
           
@@ -76,39 +76,39 @@ export default function CommentItem({ comment, postId, onReplySubmit, isSubmitti
             <CommentForm onSubmit={handleUpdateSubmit} isSubmitting={isSubmitting} initialContent={comment.content} />
           ) : (
             comment.isDeleted ? (
-              <p className="text-gray-500 italic mt-2">{comment.content}</p>
+              <p className="text-gray-500 italic mt-2 dark:text-gray-500">{comment.content}</p>
             ) : (
-              <p className="text-gray-700 whitespace-pre-wrap mt-2">{comment.content}</p>
+              <p className="text-gray-700 whitespace-pre-wrap mt-2 dark:text-gray-300">{comment.content}</p>
             )
           )}
 
           {/* --- [핵심 수정] 버튼 컨테이너를 justify-between으로 변경하고, 그룹을 나눔 --- */}
           <div className="flex items-center justify-between mt-2">
-            {/* 왼쪽 버튼 그룹 */}
             <div className="flex items-center space-x-4">
               {!isEditing && !comment.isDeleted && (
                 <>
-                  <button onClick={() => setIsReplying(!isReplying)} className="text-sm text-gray-600 hover:text-gray-800">
+                  {/* [수정] 3. 버튼들에 다크 모드 색상 적용 */}
+                  <button onClick={() => setIsReplying(!isReplying)} className="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white">
                     {isReplying ? '취소' : '답글 달기'}
                   </button>
                   {isOwner && (
                     <>
-                      <button onClick={() => setIsEditing(true)} className="text-sm text-gray-600 hover:text-gray-800">수정</button>
-                      <button onClick={handleDelete} className="text-sm text-red-600 hover:text-red-800">삭제</button>
+                      <button onClick={() => setIsEditing(true)} className="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white">수정</button>
+                      <button onClick={handleDelete} className="text-sm text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-400">삭제</button>
                     </>
                   )}
                 </>
               )}
             </div>
 
-            {/* 오른쪽 버튼 그룹 */}
             <div>
               {hasReplies && (
                 <button
                   onClick={() => setIsRepliesVisible(!isRepliesVisible)}
-                  className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  // [수정] 4. 답글 보기 버튼에 다크 모드 스타일 적용
+                  className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                 >
-                  <svg className={`w-4 h-4 mr-1 transition-transform duration-200 ${isRepliesVisible ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  <svg className={`w-4 h-4 mr-1 transition-transform duration-200 ${isRepliesVisible ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                   {isRepliesVisible ? '숨기기' : `답글 ${comment.replies.length}개`}
                 </button>
               )}
@@ -124,7 +124,8 @@ export default function CommentItem({ comment, postId, onReplySubmit, isSubmitti
       )}
 
       {isRepliesVisible && hasReplies && (
-        <div className="pl-8 mt-2 border-l-2 border-gray-100">
+        // [수정] 5. 답글 영역의 왼쪽 테두리에 다크 모드 색상 적용
+        <div className="pl-8 mt-2 border-l-2 border-gray-100 dark:border-gray-700">
           <CommentList comments={comment.replies} postId={postId} onReplySubmit={onReplySubmit} isSubmitting={isSubmitting} onUpdate={onUpdate} />
         </div>
       )}

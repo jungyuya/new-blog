@@ -135,22 +135,22 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
     const widthClass = getWidthClass(likeCount);
     return (
         <>
-            <div className="my-12 pt-8 border-t border-gray-200">
+            {/* [수정] 1. 최상위 컨테이너의 상단 테두리에 다크 모드 색상 적용 */}
+            <div className="my-12 pt-8 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center">
-                    {/* 왼쪽: 공유, GitHub, 좋아요, AI 요약 버튼 */}
                     <div className="flex items-center space-x-2">
-                        {/* 공유 버튼  */}
                         <div className="relative">
                             <button
                                 onClick={handleCopyLink}
-                                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                                // [수정] 2. 기본 아이콘 버튼에 다크 모드 스타일 적용
+                                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                                 aria-label="Share post"
                             >
                                 <ShareIcon />
                             </button>
                             {copyStatus === 'copied' && (
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
-                                    Copied, OK!
+                                    ✓ Copied!
                                 </div>
                             )}
                         </div>
@@ -161,7 +161,8 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                                 href={githubUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                                // [수정] 2. 기본 아이콘 버튼에 다크 모드 스타일 적용
+                                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                                 aria-label="Visit my GitHub profile"
                             >
                                 <GitHubIcon />
@@ -173,8 +174,8 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                             onClick={wrappedHandleLike}
                             disabled={isPending}
                             className={`group flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform ${isLiked
-                                ? 'text-red-500 bg-red-100 hover:bg-red-200'
-                                : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
+                                ? 'text-red-500 bg-red-100 hover:bg-red-200 dark:text-red-400 dark:bg-red-900/50 dark:hover:bg-red-900'
+                                : 'text-gray-500 bg-gray-100 hover:bg-gray-200 dark:text-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600'
                                 } ${isPending ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
                             aria-pressed={isLiked}
                             aria-label="Like this post"
@@ -210,22 +211,19 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         {/* --- AI 요약 버튼의 아이콘 --- */}
                         <button
                             onClick={handleSummaryClick}
-                            className="p-0.9 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                            // [수정] 2. 기본 아이콘 버튼에 다크 모드 스타일 적용
+                            className="p-0.9 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                             aria-label="AI 요약 보기"
                         >
-                            <Image
-                                src="/ai-summary-icon.svg" // public 디렉토리의 파일 경로
-                                alt="AI 요약 아이콘"
-                                width={36}
-                                height={36}
-                            />
+                            <Image src="/ai-summary-icon.svg" alt="AI 요약 아이콘" width={36} height={36} />
                         </button>
                     </div>
 
                     {/* 오른쪽: 목록 버튼  */}
                     <Link
                         href="/"
-                        className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200"
+                        // [수정] 2. 기본 아이콘 버튼에 다크 모드 스타일 적용
+                        className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
                         aria-label="Back to list"
                     >
                         <ListIcon />
@@ -235,17 +233,17 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 {/* 이전/다음 글 네비게이션  */}
                 {(prevPost || nextPost) && (
                     <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                        {/* 이전 글 링크 */}
                         {prevPost ? (
                             <Link
                                 href={`/posts/${prevPost.postId}`}
-                                className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors"
+                                // [수정] 4. 이전/다음 글 링크에 다크 모드 스타일 적용
+                                className="group flex items-center p-4 rounded-lg hover:bg-gradient-to-r from-gray-50 to-transparent transition-colors dark:hover:bg-gradient-to-r dark:from-gray-800/50"
                             >
-                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1">
+                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:-translate-x-1 dark:text-gray-500 dark:group-hover:text-gray-300">
                                     <ArrowLeftIcon />
                                 </div>
                                 <div className="ml-4 overflow-hidden">
-                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate dark:text-gray-300 dark:group-hover:text-blue-400">
                                         {prevPost.title}
                                     </p>
                                 </div>
@@ -258,14 +256,15 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         {nextPost ? (
                             <Link
                                 href={`/posts/${nextPost.postId}`}
-                                className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors"
+                                // [수정] 4. 이전/다음 글 링크에 다크 모드 스타일 적용
+                                className="group flex items-center justify-end p-4 rounded-lg hover:bg-gradient-to-l from-gray-50 to-transparent transition-colors dark:hover:bg-gradient-to-l dark:from-gray-800/50"
                             >
                                 <div className="mr-4 overflow-hidden text-right">
-                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate">
+                                    <p className="font-semibold text-gray-800 group-hover:text-blue-600 truncate dark:text-gray-300 dark:group-hover:text-blue-400">
                                         {nextPost.title}
                                     </p>
                                 </div>
-                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1">
+                                <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-transform duration-300 ease-in-out group-hover:translate-x-1 dark:text-gray-500 dark:group-hover:text-gray-300">
                                     <ArrowRightIcon />
                                 </div>
                             </Link>
@@ -282,8 +281,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 onClose={() => setIsModalOpen(false)}
                 summary={summary}
                 isLoading={isLoadingSummary}
-                postId={post.postId} // [신규] postId 전달
-
+                postId={post.postId}
             />
         </>
     );

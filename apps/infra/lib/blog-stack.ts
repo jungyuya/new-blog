@@ -195,6 +195,7 @@ export class BlogStack extends Stack {
       },
     });
 
+    // --- Lambda 함수에 비용 추적을 위한 태그를 추가 ---
     cdk.Tags.of(backendApiLambda).add('blog-project-cost', 'bedrock-caller');
 
     cdk.Tags.of(backendApiLambda).add('Purpose', 'Application Logic');
