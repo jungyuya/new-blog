@@ -50,7 +50,7 @@ export default function SignUp() {
                 />
             </div>
             <div>
-                {/* [수정] 1. 라벨에 다크 모드 색상 적용 */}
+                {/* 라벨에 다크 모드 색상 적용 */}
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Password
                 </label>
