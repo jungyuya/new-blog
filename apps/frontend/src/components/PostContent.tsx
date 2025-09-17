@@ -21,7 +21,7 @@ export default function PostContent({ content }: PostContentProps) {
   const articleClassName = `
     prose lg:prose-xl max-w-none 
     bg-white rounded-lg shadow-md p-6 md:p-8
-    dark:bg-gray-800 dark:border dark:border-gray-800
+    dark:bg-stone-800 dark:border dark:border-gray-900
     ${theme === 'dark' && mounted ? 'toastui-editor-dark' : ''}
   `;
 

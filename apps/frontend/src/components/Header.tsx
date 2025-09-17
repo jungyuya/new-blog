@@ -22,7 +22,7 @@ export default function Header() {
 
   return (
     // [수정] 2. 헤더 자체에 다크 모드 스타일 적용 (배경색, 하단 테두리)
-    <header className="bg-white dark:bg-gray-900 shadow-md dark:shadow-none dark:border-b dark:border-gray-800 sticky top-0 z-50">
+    <header className="bg-white dark:bg-stone-950 shadow-md dark:shadow-none dark:border-b dark:border-gray-800 sticky top-0 z-50">
       <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
         <Link href="/" className="flex items-center space-x-2">
           <Image

@@ -8,59 +8,30 @@
 
 /* 라이트 모드(기본값)를 위한 CSS 변수 */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 245, 245, 245;
-  --background-end-rgb: 255, 255, 255;
+  --color-text: #111827; /* 기본 텍스트 색상 (Tailwind gray-900) */
+  --color-bg-start: #f5f5f5; /* 배경 시작 색상 (옅은 회색) */
+  --color-bg-end: #ffffff;   /* 배경 끝 색상 (흰색) */
 }
 
-/* 다크 모드를 위한 CSS 변수 (html.dark 클래스가 있을 때 활성화) */
+/* [수정] 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
 html.dark {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 41, 41, 41;
-  --background-end-rgb: 2, 6, 10;
+  --color-text: #e5e7eb; /* 기본 텍스트 색상 (Tailwind gray-200) */
+  --color-bg-start: #292929; /* 배경 시작 색상 (어두운 회색) */
+  --color-bg-end: #02060a;   /* 배경 끝 색상 (거의 검은색) */
 }
 
-/*  body 스타일은 변수를 사용하므로 코드 변경 없이 동적으로 테마가 적용됩니다. */
+/* body 스타일이 새로운 변수를 직접 사용하도록 변경 */
 body {
-  color: rgb(var(--foreground-rgb));
+  color: var(--color-text);
   background: linear-gradient(
       to bottom,
       transparent,
-      rgb(var(--background-end-rgb))
+      var(--color-bg-end)
     )
-    rgb(var(--background-start-rgb));
+    var(--color-bg-start);
 }
 
-/* [추가] Tailwind Typography(prose)가 코드 블록에 적용하는 기본 스타일을 덮어쓰기 위한 규칙 */
-.prose pre {
-  border: none !important;
-  background-color: transparent !important;
-}
 
-.prose.toastui-editor-dark {
-  /* 일반 텍스트(p), 목록(li), 설명(figcaption) 등의 색상 */
-  --tw-prose-body: theme('colors.gray.300');
-  --tw-prose-captions: theme('colors.gray.400');
-
-  /* 제목(h1, h2, h3, h4) 색상 */
-  --tw-prose-headings: theme('colors.gray.100');
-  
-  /* 링크(a) 색상 */
-  --tw-prose-links: theme('colors.blue.400');
-  
-  /* 굵은 텍스트(strong) 색상 */
-  --tw-prose-bold: theme('colors.gray.200');
-
-  /* 인용문(blockquote)의 텍스트 색상 및 왼쪽 테두리 색상 */
-  --tw-prose-quotes: theme('colors.gray.300');
-  --tw-prose-quote-borders: theme('colors.gray.600');
-
-}
-
-/* [추가] 인라인 코드(code) 태그의 색상을 직접 덮어쓰기 위한, 더 강력한 규칙 */
-.prose.toastui-editor-dark code {
-  color: theme('colors.gray.300') !important; /* <-- 여기에 !important 추가 */
-}
 
 /* ================================================================ */
 /* Custom Styles for Markdown Content                             */
@@ -68,7 +39,7 @@ body {
 
 /* [수정] prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
 .prose img {
-  max-height: 450px;
+  max-height: 550px;
   width: auto;
   display: block;
   margin-left: auto;
@@ -79,6 +50,11 @@ body {
   cursor: pointer; /* 클릭 가능하다는 것을 알려주는 커서 모양 */
 }
 
+
+/* prose 내부의 task-list-item의 ::before 가상 요소를 숨겨 중복 체크박스 제거 */
+.prose .task-list-item::before {
+  display: none !important;
+}
 /* ================================================================ */
 /* Custom Styles for yet-another-react-lightbox Plugins           */
 /* ================================================================ */
@@ -119,3 +95,50 @@ body {
 .animate-bouncy-heart {
   animation: bouncy-heart 0.7s ease-in-out;
 }
+
+/* ================================================================ */
+/*         🌛🌛🌛🌛🌛🌛🌛🌛다크모드 영역🌛🌛🌛🌛🌛🌛🌛🌛🌛           */
+/* ================================================================ */
+
+/* 일반 텍스트(p), 목록(li) 등 */
+.prose.toastui-editor-dark p,
+.prose.toastui-editor-dark li,
+.prose.toastui-editor-dark figcaption {
+  color: #AAB4BE !important;
+}
+
+/* 제목(h1, h2, h3, h4) */
+.prose.toastui-editor-dark h1,
+.prose.toastui-editor-dark h2,
+.prose.toastui-editor-dark h3,
+.prose.toastui-editor-dark h4 {
+  color: #FFFFFF !important;
+}
+
+/* 링크(a) */
+.prose.toastui-editor-dark a {
+  color: #7b959c !important;
+}
+
+/* 굵은 텍스트(strong) */
+.prose.toastui-editor-dark strong {
+  color: #FFFFFF !important;
+}
+
+/* 인용문(blockquote) */
+.prose.toastui-editor-dark blockquote {
+  color: #D6EFFF !important;
+  border-left-color: #85ddec !important;
+}
+
+/* [추가] 인라인 코드(code) 태그의 색상을 직접 덮어쓰기 위한, 더 강력한 규칙 */
+.prose.toastui-editor-dark code {
+  color: #c5d9f5 !important; 
+}
+
+/* 단, 블록 코드(pre > code)는 원래 스타일(또는 다른 색)로 복원 */
+.prose.toastui-editor-dark pre code {
+  color: inherit !important; /* 또는 원하는 색 지정 */
+}
+
+
