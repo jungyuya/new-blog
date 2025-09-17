@@ -48,8 +48,8 @@ export default function PostCard({ post }: PostCardProps) {
 
       <div className="flex flex-col flex-1 p-6">
         {/* [수정] 2. 제목과 요약 텍스트에 다크 모드 색상 적용 */}
-        <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-500 transition-colors dark:text-gray-100 dark:group-hover:text-indigo-400">{post.title}</h3>
-        <p className="text-gray-300 text-sm mb-4 dark:text-gray-300">{post.summary || ''}</p>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-500 transition-colors dark:text-stone-50 dark:group-hover:text-indigo-400">{post.title}</h3>
+        <p className="text-stone-500 text-sm mb-4 dark:text-stone-300">{post.summary || ''}</p>
 
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-auto pt-4">

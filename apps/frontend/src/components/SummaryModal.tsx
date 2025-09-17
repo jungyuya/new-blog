@@ -26,7 +26,7 @@ interface SummaryModalProps {
 }
 
 export default function SummaryModal({ isOpen, isLoading, summary, onClose, postId }: SummaryModalProps) {
-  const { user } = useAuth(); // [신규] 관리자 여부 확인을 위해 user 정보 가져오기
+  const { user } = useAuth();
   const isAdmin = user?.groups?.includes('Admins');
 
   const handleClearCache = async () => {
@@ -46,46 +46,40 @@ export default function SummaryModal({ isOpen, isLoading, summary, onClose, post
   return (
     <AnimatePresence>
       {isOpen && (
-        // 1. 배경 오버레이
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose} // 배경 클릭 시 닫기
+          onClick={onClose}
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
         >
-          {/* 2. 모달 컨테이너 */}
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            onClick={(e) => e.stopPropagation()} // 모달 내부 클릭 시 닫힘 방지
-            className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6"
+            onClick={(e) => e.stopPropagation()}
+            // [수정] 1. 모달 컨테이너에 다크 모드 스타일 적용
+            className="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6 dark:bg-stone-800 dark:border dark:border-gray-700"
           >
-            {/* 3. 모달 헤더 */}
-            <div className="flex items-center justify-between pb-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-800">AI 요약</h3>
-              <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-100">
+            {/* [수정] 2. 모달 헤더에 다크 모드 스타일 적용 */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">AI 요약</h3>
+              <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* 4. 모달 본문 (로딩/결과 UI 전환) */}
             <div className="mt-4 min-h-[100px]">
               <AnimatePresence mode="wait">
                 {isLoading ? (
-                  <motion.div
-                    key="loader"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
+                  <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <div className="flex flex-col items-center justify-center text-center">
-                      <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                      <p className="text-gray-600">AI가 글을 읽고 있어요...</p>
+                      <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4 dark:border-blue-700 dark:border-t-blue-400"></div>
+                      {/* [수정] 3. 로딩 텍스트에 다크 모드 색상 적용 */}
+                      <p className="text-gray-600 dark:text-gray-300">AI가 글을 읽고 있어요...</p>
                     </div>
                   </motion.div>
                 ) : (
@@ -94,7 +88,8 @@ export default function SummaryModal({ isOpen, isLoading, summary, onClose, post
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="text-gray-700 whitespace-pre-wrap leading-relaxed"
+                    // [수정] 4. 요약 결과 텍스트에 다크 모드 색상 적용
+                    className="text-gray-700 whitespace-pre-wrap leading-relaxed dark:text-gray-300"
                   >
                     {summary}
                   </motion.div>
@@ -102,17 +97,15 @@ export default function SummaryModal({ isOpen, isLoading, summary, onClose, post
               </AnimatePresence>
             </div>
 
-            {/* --- [수정] 모달 푸터 --- */}
-            <div className="mt-6 pt-4 border-t flex justify-between items-center">
-              <span className="text-xs text-gray-400">
+            {/* [수정] 5. 모달 푸터에 다크 모드 스타일 적용 */}
+            <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center dark:border-gray-700">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
                 Powered by AWS Bedrock (Claude 3 Haiku)
               </span>
-
-              {/* 관리자일 경우에만 캐시 삭제 버튼 표시 */}
               {isAdmin && !isLoading && (
                 <button
                   onClick={handleClearCache}
-                  className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+                  className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/50"
                 >
                   🗑️요약캐시 삭제
                 </button>

@@ -119,27 +119,36 @@ function EditPostForm() {
     return <div className="text-red-500 text-center p-8">{error}</div>;
   }
 
+  if (isLoading) {
+    // [수정] 로딩 메시지에 다크 모드 색상 적용
+    return <div className="text-center p-8 dark:text-gray-300">게시물 정보를 불러오는 중...</div>;
+  }
+
+  if (error) {
+    // [수정] 에러 메시지에 다크 모드 색상 적용
+    return <div className="text-red-500 text-center p-8 dark:text-red-400">{error}</div>;
+  }
+
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-4xl font-bold mb-8">글 수정하기</h1>
+      {/* [수정] 페이지 제목에 다크 모드 색상 적용 */}
+      <h1 className="text-4xl font-bold mb-8 dark:text-gray-100">글 수정하기</h1>
       <form onSubmit={handleSubmit}>
-        {/* --- 1. 제목 입력 영역 --- */}
         <div className="mb-8">
           <label htmlFor="title" className="sr-only">제목</label>
+          {/* [수정] 제목 입력창에 다크 모드 스타일 적용 */}
           <input
             id="title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-500 transition-colors bg-transparent"
+            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-500 transition-colors bg-transparent dark:text-gray-100 dark:border-gray-700 dark:focus:border-indigo-500"
             required
           />
         </div>
 
-        {/* --- 2. 본문 에디터 영역 --- */}
         <div className="mb-8">
           <label htmlFor="content" className="sr-only">내용</label>
-          {/* [수정] 데이터 로딩이 완료된 후에만 Editor를 렌더링합니다. */}
           {!isLoading && (
             <Editor
               initialValue={content}
@@ -148,7 +157,6 @@ function EditPostForm() {
           )}
         </div>
 
-        {/* --- 3. 메타데이터 설정 영역 --- */}
         <div className="mb-8">
           <PostMetadataEditor
             initialData={metadata}
@@ -156,16 +164,16 @@ function EditPostForm() {
           />
         </div>
 
-        {/* 에러 메시지 표시 영역 */}
-        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+        {/* [수정] 에러 메시지에 다크 모드 색상 적용 */}
+        {error && <p className="text-red-500 text-center mb-4 dark:text-red-400">{error}</p>}
 
-        {/* --- 4. 하단 고정 버튼 영역 --- */}
-        <footer className="sticky bottom-0 left-0 w-full bg-white bg-opacity-90 backdrop-blur-sm p-4 mt-8 border-t">
+        {/* [수정] 하단 고정 푸터에 다크 모드 스타일 적용 */}
+        <footer className="sticky bottom-0 left-0 w-full bg-white/80 backdrop-blur-sm p-4 mt-8 border-t border-gray-200 dark:bg-stone-950/80 dark:border-gray-800">
           <div className="container mx-auto flex justify-end max-w-4xl px-4">
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-8 py-3 bg-yellow-500 text-white font-semibold rounded-md shadow-sm hover:bg-yellow-600 disabled:bg-gray-400"
+              className="px-8 py-3 bg-yellow-500 text-white font-semibold rounded-md shadow-sm hover:bg-yellow-600 disabled:bg-gray-400 dark:disabled:bg-gray-600"
             >
               {isSubmitting ? '수정 중...' : '수정 완료'}
             </button>

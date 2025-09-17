@@ -21,7 +21,6 @@ export default function PostMetadataEditor({ initialData, onMetadataChange }: Po
   const [status, setStatus] = useState<'published' | 'draft'>(initialData.status || 'published');
   const [visibility, setVisibility] = useState<'public' | 'private'>(initialData.visibility || 'public');
 
-  // 메타데이터가 변경될 때마다 부모 컴포넌트에 알립니다.
   useEffect(() => {
     onMetadataChange({ tags, status, visibility });
   }, [tags, status, visibility, onMetadataChange]);
@@ -41,21 +40,24 @@ export default function PostMetadataEditor({ initialData, onMetadataChange }: Po
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  return (
-    <div className="p-6 border rounded-lg shadow-sm bg-gray-50">
-      <h2 className="text-xl font-semibold mb-4">게시물 설정</h2>
+ return (
+    // [수정] 1. 카드 컨테이너에 다크 모드 스타일 적용
+    <div className="p-6 border rounded-lg shadow-sm bg-gray-50 dark:bg-stone-800 dark:border-gray-700">
+      {/* [수정] 2. 텍스트 요소들에 다크 모드 색상 적용 */}
+      <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">게시물 설정</h2>
       
-      {/* 태그 입력 UI */}
       <div className="mb-6">
-        <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1">태그</label>
+        <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">태그</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {tags.map(tag => (
-            <span key={tag} className="flex items-center bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+            // [수정] 3. 입력된 태그에 다크 모드 스타일 적용
+            <span key={tag} className="flex items-center bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-blue-900/50 dark:text-blue-300">
               {tag}
-              <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-blue-600 hover:text-blue-800">&times;</button>
+              <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200">&times;</button>
             </span>
           ))}
         </div>
+        {/* [수정] 4. 태그 입력창에 다크 모드 스타일 적용 */}
         <input
           id="tags"
           type="text"
@@ -63,35 +65,34 @@ export default function PostMetadataEditor({ initialData, onMetadataChange }: Po
           onChange={(e) => setCurrentTag(e.target.value)}
           onKeyDown={handleTagKeyDown}
           placeholder="태그를 입력하고 Enter를 누르세요"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400"
         />
       </div>
 
-      {/* 공개 여부 설정 */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">공개 설정</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">공개 설정</label>
         <div className="flex gap-4">
-          <label className="flex items-center">
-            <input type="radio" name="visibility" value="public" checked={visibility === 'public'} onChange={() => setVisibility('public')} className="form-radio"/>
+          {/* [수정] 5. 라디오 버튼 텍스트에 다크 모드 색상 적용 */}
+          <label className="flex items-center dark:text-gray-300">
+            <input type="radio" name="visibility" value="public" checked={visibility === 'public'} onChange={() => setVisibility('public')} className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"/>
             <span className="ml-2">공개글</span>
           </label>
-          <label className="flex items-center">
-            <input type="radio" name="visibility" value="private" checked={visibility === 'private'} onChange={() => setVisibility('private')} className="form-radio"/>
+          <label className="flex items-center dark:text-gray-300">
+            <input type="radio" name="visibility" value="private" checked={visibility === 'private'} onChange={() => setVisibility('private')} className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"/>
             <span className="ml-2">비밀글</span>
           </label>
         </div>
       </div>
 
-      {/* 발행 상태 설정 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">발행 상태</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">발행 상태</label>
         <div className="flex gap-4">
-          <label className="flex items-center">
-            <input type="radio" name="status" value="published" checked={status === 'published'} onChange={() => setStatus('published')} className="form-radio"/>
+          <label className="flex items-center dark:text-gray-300">
+            <input type="radio" name="status" value="published" checked={status === 'published'} onChange={() => setStatus('published')} className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"/>
             <span className="ml-2">발행</span>
           </label>
-          <label className="flex items-center">
-            <input type="radio" name="status" value="draft" checked={status === 'draft'} onChange={() => setStatus('draft')} className="form-radio"/>
+          <label className="flex items-center dark:text-gray-300">
+            <input type="radio" name="status" value="draft" checked={status === 'draft'} onChange={() => setStatus('draft')} className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"/>
             <span className="ml-2">임시저장</span>
           </label>
         </div>
