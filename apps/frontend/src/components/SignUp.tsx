@@ -1,12 +1,12 @@
-// 파일 위치: apps/frontend/src/components/SignUp.tsx (리팩토링)
+// 파일 위치: apps/frontend/src/components/SignUp.tsx
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/utils/api'; // [수정] 중앙 api 클라이언트를 import 합니다.
-import { useRouter } from 'next/navigation'; // [추가] 성공 시 페이지 이동을 위해 import 합니다.
+import { api } from '@/utils/api';
+import { useRouter } from 'next/navigation';
 
 export default function SignUp() {
-    const router = useRouter(); // [추가]
+    const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -18,18 +18,12 @@ export default function SignUp() {
         setIsLoading(true);
         setError(null);
         setSuccess(null);
-
         try {
-            // [수정] fetch 로직 전체를 api.signup 호출로 대체합니다.
             const data = await api.signup({ email, password });
-
             setSuccess(data.message || '회원가입에 성공했습니다! 2초 후 로그인 페이지로 이동합니다.');
-            
-            // [추가] 성공 시, 2초 후에 로그인 페이지로 자동 이동시켜 사용자 경험을 개선합니다.
             setTimeout(() => {
                 router.push('/login');
             }, 2000);
-
         } catch (err) {
             if (err instanceof Error) {
                 setError(err.message);
@@ -42,40 +36,43 @@ export default function SignUp() {
     };
 
     return (
-        // [수정] 최상위 div는 페이지 컴포넌트에서 처리하므로 제거합니다.
-        // 이렇게 해야 다른 페이지에서도 이 컴포넌트를 유연하게 재사용할 수 있습니다.
         <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* ... (기존 form 내용은 변경 없음) ... */}
             <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                {/* [수정] 1. 라벨에 다크 모드 색상 적용 */}
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     E-mail
                 </label>
+                {/* [수정] 2. input에 다크 모드 스타일 적용 */}
                 <input
                     id="email" name="email" type="email" autoComplete="email" required
                     value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
                 />
             </div>
             <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                {/* [수정] 1. 라벨에 다크 모드 색상 적용 */}
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Password
                 </label>
+                {/* [수정] 2. input에 다크 모드 스타일 적용 */}
                 <input
                     id="password" name="password" type="password" autoComplete="new-password" required
                     value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
                 />
             </div>
             <div>
+                {/* [수정] 3. 버튼의 비활성화 상태에 다크 모드 스타일 적용 */}
                 <button
                     type="submit" disabled={isLoading}
-                    className="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
+                    className="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 dark:disabled:bg-gray-600"
                 >
                     {isLoading ? '가입하는 중...' : '가입하기'}
                 </button>
             </div>
-            {error && <p className="text-sm text-center text-red-600">{error}</p>}
-            {success && <p className="text-sm text-center text-green-600">{success}</p>}
+            {/* [수정] 4. 성공/에러 메시지에 다크 모드 색상 적용 */}
+            {error && <p className="text-sm text-center text-red-600 dark:text-red-400">{error}</p>}
+            {success && <p className="text-sm text-center text-green-600 dark:text-green-400">{success}</p>}
         </form>
     );
 }
