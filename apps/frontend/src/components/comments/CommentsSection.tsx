@@ -1,4 +1,4 @@
-// 파일 위치: apps/frontend/src/components/comments/CommentsSection.tsx (v2.2 - 답글 기능 완성)
+// 파일 위치: apps/frontend/src/components/comments/CommentsSection.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -6,7 +6,7 @@ import useSWR from 'swr';
 import { api } from '@/utils/api';
 import CommentForm from './CommentForm';
 import CommentList from './CommentList';
-import { useAuth } from '@/contexts/AuthContext'; // [신규] useAuth 훅 import
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CommentsSectionProps {
   postId: string;
@@ -15,9 +15,8 @@ interface CommentsSectionProps {
 const commentsFetcher = ([_key, postId]: [string, string]) => api.fetchCommentsByPostId(postId);
 
 export default function CommentsSection({ postId }: CommentsSectionProps) {
-  const { user } = useAuth(); // [신규] 로그인 상태 확인을 위해 user 정보 가져오기
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // [신규] 댓글 섹션 전체의 표시 여부를 관리하는 상태
   const [isSectionVisible, setIsSectionVisible] = useState(true);
 
   const { data: comments, error, isLoading, mutate } = useSWR(
@@ -57,18 +56,20 @@ export default function CommentsSection({ postId }: CommentsSectionProps) {
 
   if (isLoading) {
     return (
-      <section className="py-8 mt-8 border-t border-gray-200">
-        <h3 className="text-xl font-bold">댓글</h3>
-        <div className="py-4 text-center text-gray-500">댓글을 불러오는 중입니다...</div>
+      // [수정] 1. 로딩 상태 컨테이너에 다크 모드 스타일 적용
+      <section className="py-8 mt-8 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-xl font-bold dark:text-gray-100">댓글</h3>
+        <div className="py-4 text-center text-gray-500 dark:text-gray-400">댓글을 불러오는 중입니다...</div>
       </section>
     );
   }
 
   if (error) {
     return (
-      <section className="py-8 mt-8 border-t border-gray-200">
-        <h3 className="text-xl font-bold">댓글</h3>
-        <div className="py-4 text-center text-red-500">
+      // [수정] 1. 에러 상태 컨테이너에 다크 모드 스타일 적용
+      <section className="py-8 mt-8 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-xl font-bold dark:text-gray-100">댓글</h3>
+        <div className="py-4 text-center text-red-500 dark:text-red-400">
           댓글을 불러오는 데 실패했습니다.
         </div>
       </section>
@@ -78,32 +79,31 @@ export default function CommentsSection({ postId }: CommentsSectionProps) {
   const totalComments = comments?.length || 0;
 
   return (
-    <section className="py-8 mt-8 border-t border-gray-200">
-      {/* --- [핵심 수정] 제목 부분을 클릭 가능한 버튼으로 변경 --- */}
+    // [수정] 1. 메인 컨테이너에 다크 모드 스타일 적용
+    <section className="py-8 mt-8 border-t border-gray-200 dark:border-gray-700">
       <div className="flex items-center mb-4">
         <button
           onClick={() => setIsSectionVisible(!isSectionVisible)}
-          className="flex items-center text-xl font-bold text-gray-800 hover:text-gray-900"
+          // [수정] 2. 섹션 제목/토글 버튼에 다크 모드 스타일 적용
+          className="flex items-center text-xl font-bold text-gray-800 hover:text-gray-900 dark:text-gray-100 dark:hover:text-white"
         >
           <span>💬 댓글</span>
-          <span className="ml-2 text-blue-600">{totalComments}</span>
-          {/* 화살표 아이콘 */}
+          <span className="ml-2 text-blue-600 dark:text-blue-400">{totalComments}</span>
           <svg className={`w-5 h-5 ml-2 transition-transform duration-200 ${isSectionVisible ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
         </button>
       </div>
 
-      {/* --- [핵심 수정] 댓글 폼과 목록을 isSectionVisible 상태에 따라 조건부 렌더링 --- */}
       {isSectionVisible && (
         <>
-          {/* [신규] 로그인한 사용자에게만 댓글 폼을 보여줍니다. */}
           {user ? (
             <CommentForm
               onSubmit={handleCreateComment}
               isSubmitting={isSubmitting}
             />
           ) : (
-            <div className="p-4 text-center text-gray-500 border border-gray-200 rounded-md">
-              댓글을 작성하려면 <a href="/login" className="text-blue-600 hover:underline">로그인</a>이 필요합니다.
+            // [수정] 3. 로그인 안내문에 다크 모드 스타일 적용
+            <div className="p-4 text-center text-gray-500 border border-gray-200 rounded-md dark:bg-stone-800 dark:border-gray-700 dark:text-gray-400">
+              댓글을 작성하려면 <a href="/login" className="text-blue-600 hover:underline dark:text-blue-400">로그인</a>이 필요합니다.
             </div>
           )}
 
@@ -116,7 +116,8 @@ export default function CommentsSection({ postId }: CommentsSectionProps) {
               onUpdate={mutate}
             />
           ) : (
-            <div className="pt-8 text-center text-gray-500">
+            // [수정] 4. '댓글 없음' 안내문에 다크 모드 스타일 적용
+            <div className="pt-8 text-center text-gray-500 dark:text-gray-400">
               아직 댓글이 없습니다. 첫 댓글을 작성해보세요!
             </div>
           )}

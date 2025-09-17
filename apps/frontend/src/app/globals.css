@@ -50,11 +50,6 @@ body {
   cursor: pointer; /* 클릭 가능하다는 것을 알려주는 커서 모양 */
 }
 
-
-/* prose 내부의 task-list-item의 ::before 가상 요소를 숨겨 중복 체크박스 제거 */
-.prose .task-list-item::before {
-  display: none !important;
-}
 /* ================================================================ */
 /* Custom Styles for yet-another-react-lightbox Plugins           */
 /* ================================================================ */
@@ -74,6 +69,17 @@ body {
 .yarl__button[aria-label="Reset zoom"] svg {
   width: 24px;
   height: 24px;
+}
+
+/* prose 내부의 task-list-item의 ::before 가상 요소를 숨겨 중복 체크박스 제거 */
+.prose .task-list-item::before {
+  display: none !important;
+}
+
+/* [추가] Tailwind Typography(prose)가 코드 블록에 적용하는 기본 스타일을 덮어쓰기 위한 규칙 */
+.prose pre {
+  border: none !important;
+  background-color: transparent !important;
 }
 
 /* ================================================================ */
