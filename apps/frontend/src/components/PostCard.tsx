@@ -68,7 +68,7 @@ export default function PostCard({ post }: PostCardProps) {
       </div>
 
       {/* [수정] 4. 푸터 영역의 상단 테두리에 다크 모드 색상 적용 */}
-      <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+      <div className="px-6 py-4 border-t border-gray-100 dark:border-stone-600">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">

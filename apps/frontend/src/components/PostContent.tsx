@@ -10,18 +10,24 @@ interface PostContentProps {
 }
 
 export default function PostContent({ content }: PostContentProps) {
-  const { theme } = useTheme(); // [추가]
-  const [mounted, setMounted] = useState(false); // [추가]
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => { // [추가]
+  useEffect(() => {
     setMounted(true);
   }, []);
 
-  // [수정] 다크 모드일 때 'toastui-editor-dark' 클래스를 동적으로 추가합니다.
   const articleClassName = `
-    prose lg:prose-xl max-w-none 
-    bg-white rounded-lg shadow-md p-6 md:p-8
-    dark:bg-stone-800 dark:border dark:border-gray-900
+    prose max-w-none 
+    lg:prose-xl 
+    
+    /* 모든 카드 관련 스타일(배경, 그림자, 둥근 모서리, 패딩)을 sm: 접두사로 감싸
+       데스크탑에서만 적용되도록 합니다. */
+    px-4 
+    sm:bg-white sm:rounded-lg sm:shadow-md 
+    sm:p-6 md:p-8 
+    
+    dark:sm:bg-stone-800 dark:sm:border dark:sm:border-gray-900
     ${theme === 'dark' && mounted ? 'toastui-editor-dark' : ''}
   `;
 

@@ -39,9 +39,9 @@ export default function PostHeader({ post }: PostHeaderProps) {
   };
 
   return (
-    <div className="mb-8">
-      {/* [수정] 1. 제목에 다크 모드 색상 적용 */}
-      <h1 className="text-4xl font-bold text-gray-900 mb-4 dark:text-gray-100">{post.title}</h1>
+    <div className="mb-8 px-4 sm:px-0">
+      {/* [수정] 모바일에서는 text-3xl, sm 사이즈 이상에서 text-4xl로 변경 */}
+      <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 dark:text-gray-100">{post.title}</h1>
 
       {/* [수정] 2. 메타 정보 텍스트에 다크 모드 색상 적용 */}
       <div className="flex items-center space-x-4 text-sm text-gray-500 mb-6 dark:text-gray-400">

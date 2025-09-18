@@ -8,9 +8,9 @@
 
 /* 라이트 모드(기본값)를 위한 CSS 변수 */
 :root {
-  --color-text: #111827; /* 기본 텍스트 색상 (Tailwind gray-900) */
-  --color-bg-start: #f5f5f5; /* 배경 시작 색상 (옅은 회색) */
-  --color-bg-end: #ffffff;   /* 배경 끝 색상 (흰색) */
+  --color-text: #111827; /* Tailwind gray-900 */
+  --color-bg-start: #fafafa; /* Tailwind gray-50 */
+  --color-bg-end: #ffffff;   /* White */
 }
 
 /* [수정] 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
@@ -39,7 +39,7 @@ body {
 
 /* [수정] prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
 .prose img {
-  max-height: 550px;
+  max-height: 450px;
   width: auto;
   display: block;
   margin-left: auto;

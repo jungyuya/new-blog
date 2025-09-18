@@ -1,20 +1,19 @@
-// 파일 위치: apps/frontend/src/app/posts/[postId]/page.tsx (v1.6 - 타입 오류 해결)
+// 파일 위치: apps/frontend/src/app/posts/[postId]/page.tsx
 import { api } from "@/utils/api";
 import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation';
-import CommentsSection from "@/components/comments/CommentsSection";
+// [수정] CommentsSection import는 이제 PostDetailView에서 처리하므로 제거합니다.
+// import CommentsSection from "@/components/comments/CommentsSection"; 
 import type { Metadata, ResolvingMetadata } from 'next'
 
 export const dynamic = 'force-dynamic';
 
-// 수정: Next.js 15 표준 타입으로 변경
 type Props = {
-  params: Promise<{ postId: string }>; // Promise만 허용 (union 타입 제거)
-  searchParams: Promise<Record<string, string | string[] | undefined>>; // searchParams도 Promise로 수정
+  params: Promise<{ postId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function PostDetailPage({ params }: Props) {
-  // Next.js 15의 변경 사항에 따라 params를 await
   const { postId } = await params;
 
   try {
@@ -24,9 +23,10 @@ export default async function PostDetailPage({ params }: Props) {
     }
 
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <PostDetailView post={post} prevPost={prevPost} nextPost={nextPost} />
-        <CommentsSection postId={postId} />
+      // [핵심 수정] 모바일(기본) 좌우 패딩을 px-0으로 제거합니다.
+      // sm 화면부터 패딩을 다시 적용하여 데스크탑 경험은 그대로 유지합니다.
+      <div className="max-w-4xl mx-auto px-0 py-6 sm:px-6 lg:px-8 sm:py-8">
+        <PostDetailView post={post} prevPost={prevPost} nextPost={nextPost} postId={postId} />
       </div>
     ); 
   } catch (error) {
