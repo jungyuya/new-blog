@@ -83,16 +83,16 @@ function NewPostForm() {
     // [수정] 전체적인 레이아웃을 중앙 정렬된 단일 컬럼으로 변경합니다.
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <form onSubmit={handleSubmit}>
-        {/* --- 1. 제목 입력 영역 --- */}
         <div className="mb-8">
           <label htmlFor="title" className="sr-only">제목</label>
+          {/* [수정] 1. 제목 입력창에 다크 모드 스타일 적용 */}
           <input
             id="title"
             type="text"
             placeholder="제목을 입력하세요"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-200 transition-colors bg-transparent"
+            className="w-full text-4xl font-bold p-3 border-b-2 border-gray-200 focus:outline-none focus:border-indigo-200 transition-colors bg-transparent dark:text-gray-100 dark:border-gray-700 dark:focus:border-indigo-500 dark:placeholder-gray-500"
             required
           />
         </div>
@@ -115,15 +115,15 @@ function NewPostForm() {
         </div>
 
         {/* 에러 메시지 표시 영역 */}
-        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+        {error && <p className="text-red-500 text-center mb-4 dark:text-red-400">{error}</p>}
 
         {/* --- 4. 하단 고정 버튼 영역 --- */}
-        <footer className="sticky bottom-0 left-0 w-full bg-white bg-opacity-90 backdrop-blur-sm p-4 mt-8 border-t">
+        <footer className="sticky bottom-0 left-0 w-full bg-white/80 backdrop-blur-sm p-4 mt-8 border-t border-gray-200 dark:bg-stone-950/80 dark:border-gray-800">
           <div className="container mx-auto flex justify-end max-w-4xl px-4">
             <button
               type="submit"
               disabled={isLoading}
-              className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400"
+              className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600"
             >
               {isLoading ? '저장 중...' : '글 저장하기'}
             </button>
