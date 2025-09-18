@@ -139,7 +139,7 @@ body {
 
 /* [추가] 인라인 코드(code) 태그의 색상을 직접 덮어쓰기 위한, 더 강력한 규칙 */
 .prose.toastui-editor-dark code {
-  color: #c5d9f5 !important; 
+  color: #C8EEFF !important; 
 }
 
 /* 단, 블록 코드(pre > code)는 원래 스타일(또는 다른 색)로 복원 */

@@ -5,10 +5,25 @@ import { useState, useEffect, ComponentProps } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+// [수정] 1. Prism 대신 PrismLight를 import 합니다.
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+// 스타일 테마 import
 import { materialDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CSSProperties } from 'react';
 import { useTheme } from 'next-themes';
+
+// [추가] 2. 필요한 언어 파서들만 개별적으로 import 합니다.
+import ts from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
+import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx';
+import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
+import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
+import css from 'react-syntax-highlighter/dist/esm/languages/prism/css';
+import html from 'react-syntax-highlighter/dist/esm/languages/prism/markup'; // HTML은 'markup'으로 import
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
+import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
+import docker from 'react-syntax-highlighter/dist/esm/languages/prism/docker';
 
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
@@ -16,6 +31,22 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 import '@toast-ui/editor/dist/toastui-editor-viewer.css';
 import '@toast-ui/editor/dist/theme/toastui-editor-dark.css';
+
+// [추가] 3. import한 언어들을 SyntaxHighlighter에 등록합니다.
+// 이 코드는 컴포넌트 바깥에서 한 번만 실행됩니다.
+SyntaxHighlighter.registerLanguage('ts', ts);
+SyntaxHighlighter.registerLanguage('tsx', tsx);
+SyntaxHighlighter.registerLanguage('js', js);
+SyntaxHighlighter.registerLanguage('jsx', jsx);
+SyntaxHighlighter.registerLanguage('css', css);
+SyntaxHighlighter.registerLanguage('html', html);
+SyntaxHighlighter.registerLanguage('bash', bash);
+SyntaxHighlighter.registerLanguage('python', python);
+SyntaxHighlighter.registerLanguage('json', json);
+SyntaxHighlighter.registerLanguage('yaml', yaml);
+SyntaxHighlighter.registerLanguage('docker', docker);
+
+// 코드하이라이터 영역 끝
 
 interface MarkdownViewerProps {
     content: string;
