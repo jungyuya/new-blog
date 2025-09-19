@@ -199,7 +199,7 @@ postsRouter.get('/featured', tryCookieAuthMiddleware, async (c) => {
       })).then(result => result.Item)
       : Promise.resolve(null);
 
-    // 3. 'featured' 태그가 붙은 나머지 게시물(Editor's Picks)을 조회합니다.
+    // 3. 'featured' 태그가 붙은 나머지 게시물(추천 게시물)을 조회합니다.
     // [핵심 수정] ExpressionAttributeValues를 isAdmin 상태에 따라 분기하여 생성합니다.
     let expressionAttributeValues: Record<string, any> = {
       ':pk': 'TAG#featured',

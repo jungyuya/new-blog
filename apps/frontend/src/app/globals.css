@@ -148,3 +148,47 @@ body {
 }
 
 
+/* ================================================================== */
+/* ============ Liquid Fill Button Style (최적화 버전) ============ */
+/* ================================================================== */
+
+/* Liquid Fill Effect (액체 채우기 효과) */
+.liquid {
+  position: relative;
+  overflow: hidden;
+  /* 내부 가상요소의 z-index 기준점을 마련해줍니다. */
+  z-index: 0;
+}
+
+.liquid::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  /* 기본 채우기 색상 (이 부분을 직접 수정하시거나 아래의 커스텀 클래스를 사용하세요) */
+  background: rgba(40, 127, 241, 0.5);
+  transform: translate(-50%, -50%);
+  /* 애니메이션을 더 부드럽게 만들기 위해 'ease'를 추가했습니다. */
+  transition: width 0.6s ease, height 0.6s ease;
+  /* z-index를 -1로 설정하여 액체 효과가 버튼 텍스트 뒤에 위치하도록 합니다. */
+  z-index: -1;
+}
+
+.liquid:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* (선택) 색상 커스터마이징을 위한 추가 클래스 */
+.liquid-blue::before {
+    background: #3b82f6; /* 파란색 */
+}
+.liquid-green::before {
+    background: #22c55e; /* 초록색 */
+}
+.liquid-purple::before {
+    background: #8b5cf6; /* 보라색 */
+}

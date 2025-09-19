@@ -21,13 +21,13 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
       {/* Hero Section: heroPost가 존재할 경우에만 렌더링합니다. */}
       {heroPost && (
         <section className="mb-16">
-          <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">Featured Post</h2>
+          <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">🏆 Spotlight Post</h2>
           <FeaturedPostCard post={heroPost} />
         </section>
       )}
 
       <section className="mb-16">
-        <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">Explore Topics</h2>
+        <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">인기 태그</h2>
         <TagFilter />
       </section>
 
