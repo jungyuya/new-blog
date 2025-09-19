@@ -37,7 +37,7 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
           <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">추천 게시물</h2>
           <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {editorPicks.map(post => (
-              <PostCard key={post.postId} post={post} isEditorPick={true} />
+              <PostCard key={post.postId} post={post} isEditorPick={true} variant="compact" />
             ))}
           </div>
         </section>

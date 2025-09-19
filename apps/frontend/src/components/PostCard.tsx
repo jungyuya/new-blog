@@ -11,11 +11,12 @@ import { useRouter } from 'next/navigation';
 // [수정] 1. isEditorPick prop을 추가합니다.
 interface PostCardProps {
   post: Post;
-  isEditorPick?: boolean; // 선택적 prop으로 추가
+  isEditorPick?: boolean;
+  variant?: 'default' | 'compact'; // 'compact' 변형 추가
 }
 
 // [수정] 2. props에서 isEditorPick을 받습니다.
-export default function PostCard({ post, isEditorPick = false }: PostCardProps) {
+export default function PostCard({ post, isEditorPick = false, variant = 'default' }: PostCardProps) {
   const { user } = useAuth();
   const isAdmin = user?.groups?.includes('Admins');
   const router = useRouter();
@@ -28,6 +29,8 @@ export default function PostCard({ post, isEditorPick = false }: PostCardProps) 
   };
 
   const thumbnailUrl = post.thumbnailUrl || '/default-thumbnail.webp';
+  const summaryLineClamp = variant === 'compact' ? 'line-clamp-2' : 'line-clamp-3'; // compact일 때 2줄, default일 때 3줄
+
 
   return (
     <div
@@ -37,7 +40,6 @@ export default function PostCard({ post, isEditorPick = false }: PostCardProps) 
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
-      {/* [수정] 3. 이미지 영역에 relative 클래스를 추가하고, 배지를 조건부 렌더링합니다. */}
       <div className="relative w-full aspect-video">
         <Image
           src={thumbnailUrl}
@@ -55,10 +57,12 @@ export default function PostCard({ post, isEditorPick = false }: PostCardProps) 
       </div>
 
       <div className="flex flex-col flex-1 p-6">
-        {/* [수정] 2. 제목과 요약 텍스트에 다크 모드 색상 적용 */}
         <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-indigo-500 transition-colors dark:text-stone-50 dark:group-hover:text-indigo-400">{post.title}</h3>
-        <p className="text-stone-500 text-sm mb-4 dark:text-stone-300">{post.summary || ''}</p>
-
+        {/* [수정] 4. 동적으로 결정된 line-clamp 클래스를 적용합니다. */}
+        <p className={`text-stone-500 text-sm mb-4 dark:text-stone-300 ${summaryLineClamp}`}>
+          {post.summary || ''}
+        </p>
+        
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-auto pt-4">
             {post.tags.map(tag => (

@@ -111,8 +111,13 @@ export default function Header() {
           ) : (
             // --- 로그아웃 상태 ---
             <>
-              <Link href="/login" className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400">로그인</Link>
-              <Link href="/signup" className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">회원가입</Link>
+              <Link href="/login" className="text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 text-sm font-medium">
+                로그인
+              </Link>
+              {/* [수정] 회원가입 버튼을 모바일에서는 숨깁니다. */}
+              <Link href="/signup" className="hidden sm:block px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                회원가입
+              </Link>
             </>
           )}
         </div>

@@ -39,7 +39,7 @@ body {
 
 /* [수정] prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
 .prose img {
-  max-height: 450px;
+  max-height: 400px;
   width: auto;
   display: block;
   margin-left: auto;

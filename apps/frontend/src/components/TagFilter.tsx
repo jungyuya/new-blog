@@ -19,7 +19,7 @@ export default function TagFilter() {
         <Link
           href={`/tags/${encodeURIComponent(tag.name)}`}
           key={tag.name}
-          className="px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-full text-sm hover:bg-gray-200 transition-colors dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+          className="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-full text-sm hover:bg-gray-300 transition-colors dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
         >
           # {tag.name}
         </Link>
