@@ -8,11 +8,14 @@ import ClientOnlyLocalDate from './ClientOnlyLocalDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
+// [수정] 1. isEditorPick prop을 추가합니다.
 interface PostCardProps {
   post: Post;
+  isEditorPick?: boolean; // 선택적 prop으로 추가
 }
 
-export default function PostCard({ post }: PostCardProps) {
+// [수정] 2. props에서 isEditorPick을 받습니다.
+export default function PostCard({ post, isEditorPick = false }: PostCardProps) {
   const { user } = useAuth();
   const isAdmin = user?.groups?.includes('Admins');
   const router = useRouter();
@@ -29,12 +32,12 @@ export default function PostCard({ post }: PostCardProps) {
   return (
     <div
       onClick={handleCardClick}
-      // [수정] 1. 카드 컨테이너에 다크 모드 스타일(배경, 테두리, hover 효과) 적용
       className="flex flex-col h-full bg-white group overflow-hidden rounded-lg shadow-lg transition-all duration-300 hover:shadow-2xl cursor-pointer dark:bg-stone-700 dark:shadow-none dark:border dark:border-gray-800 dark:hover:border-gray-600 dark:hover:bg-stone-600"
       role="link"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
+      {/* [수정] 3. 이미지 영역에 relative 클래스를 추가하고, 배지를 조건부 렌더링합니다. */}
       <div className="relative w-full aspect-video">
         <Image
           src={thumbnailUrl}
@@ -44,6 +47,11 @@ export default function PostCard({ post }: PostCardProps) {
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           unoptimized={true}
         />
+        {isEditorPick && (
+          <div className="absolute top-2 right-2 bg-indigo-600/80 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            Editor Pick
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col flex-1 p-6">

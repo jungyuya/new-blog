@@ -144,6 +144,118 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
+// --- [1.5] GET /featured - 추천 게시물 조회 (SITE_CONFIG 적용 최종본) ---
+postsRouter.get('/featured', tryCookieAuthMiddleware, async (c) => {
+  const TABLE_NAME = process.env.TABLE_NAME!;
+  const userGroups = c.get('userGroups');
+  const isAdmin = userGroups?.includes('Admins');
+
+  // 중복 로직을 함수로 분리하여 재사용성 및 가독성 향상
+  const enrichPost = async (post: any) => {
+    if (!post) return null;
+    let authorAvatarUrl = post.authorAvatarUrl;
+    if (!authorAvatarUrl && post.authorId) {
+      const profileCommand = new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${post.authorId}`, SK: 'PROFILE' },
+      });
+      const { Item: profile } = await ddbDocClient.send(profileCommand);
+      authorAvatarUrl = profile?.avatarUrl || '';
+    }
+
+    const commentCountCommand = new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `POST#${post.postId}`,
+        ':sk': 'COMMENT#',
+      },
+      Select: 'COUNT',
+    });
+    const { Count: commentCount } = await ddbDocClient.send(commentCountCommand);
+
+    return {
+      ...post,
+      authorAvatarUrl,
+      commentCount: commentCount || 0,
+      likeCount: post.likeCount || 0,
+    };
+  };
+
+  try {
+    // 1. SITE_CONFIG에서 heroPostId를 가져옵니다.
+    const configCommand = new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
+    });
+    const { Item: config } = await ddbDocClient.send(configCommand);
+    const heroPostId = config?.heroPostId;
+
+    // 2. heroPostId로 Hero 게시물의 데이터를 조회합니다.
+    const heroPostPromise = heroPostId
+      ? ddbDocClient.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `POST#${heroPostId}`, SK: 'METADATA' },
+      })).then(result => result.Item)
+      : Promise.resolve(null);
+
+    // 3. 'featured' 태그가 붙은 나머지 게시물(Editor's Picks)을 조회합니다.
+    // [핵심 수정] ExpressionAttributeValues를 isAdmin 상태에 따라 분기하여 생성합니다.
+    let expressionAttributeValues: Record<string, any> = {
+      ':pk': 'TAG#featured',
+    };
+    let filterExpression: string | undefined = undefined;
+    let expressionAttributeNames: Record<string, string> | undefined = undefined;
+
+    if (!isAdmin) {
+      filterExpression = '#status = :published AND #visibility = :public';
+      expressionAttributeNames = {
+        '#status': 'status',
+        '#visibility': 'visibility',
+      };
+      expressionAttributeValues[':published'] = 'published';
+      expressionAttributeValues[':public'] = 'public';
+    }
+
+    const picksCommandParams: QueryCommandInput = {
+      TableName: TABLE_NAME,
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'PK = :pk',
+      FilterExpression: filterExpression,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues, // 이제 이 객체는 타입이 확정되었습니다.
+      ScanIndexForward: false,
+    };
+
+    const picksPromise = ddbDocClient.send(new QueryCommand(picksCommandParams)).then(result => result.Items);
+    // 4. Hero 게시물과 Editor's Picks 조회를 병렬로 실행합니다.
+    const [heroPostItem, featuredItems] = await Promise.all([heroPostPromise, picksPromise]);
+
+    // 5. Hero 게시물을 제외하고, isDeleted가 아닌 게시물만 필터링하여 editorPicks를 구성합니다.
+    const editorPicksItems = featuredItems
+      ?.filter(p => p.postId !== heroPostId && !p.isDeleted)
+      .slice(0, 4) || [];
+
+    // 6. Hero 게시물과 Editor's Picks 게시물을 병렬로 enrichment 합니다.
+    const [enrichedHeroPost, enrichedEditorPicks] = await Promise.all([
+      heroPostItem && !heroPostItem.isDeleted ? enrichPost(heroPostItem) : Promise.resolve(null),
+      Promise.all(editorPicksItems.map(enrichPost))
+    ]);
+
+    // 7. 최종 데이터를 새로운 구조로 반환합니다.
+    return c.json({
+      heroPost: enrichedHeroPost,
+      editorPicks: enrichedEditorPicks.filter(p => p !== null) // null 값 제거
+    });
+
+  } catch (error: any) {
+    console.error('Get Featured Data Error:', error);
+    return c.json({ message: 'Internal Server Error fetching featured data.', error: error.message }, 500);
+  }
+});
+
+
+
 // --- [2] GET /:postId - 단일 게시물 조회 (v3.1 - '좋아요' 상태 포함) ---
 postsRouter.get('/:postId', tryCookieAuthMiddleware, tryAnonymousAuthMiddleware, async (c) => {
   const postId = c.req.param('postId');

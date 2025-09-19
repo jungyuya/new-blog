@@ -13,3 +13,4 @@ if (process.env.DYNAMODB_ENDPOINT) {
 const ddbClient = new DynamoDBClient(ddbClientOptions);
 // 이 ddbDocClient를 프로젝트 전역에서 재사용할 것입니다.
 export const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
+

@@ -13,6 +13,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -122,6 +123,43 @@ export class BlogStack extends Stack {
       // 기본 정보만 필요하므로 INCLUDE 타입을 사용합니다.
       projectionType: dynamodb.ProjectionType.INCLUDE,
       nonKeyAttributes: ['postId', 'title', 'thumbnailUrl', 'summary']
+    });
+
+        // --- [신규 추가] CDK를 사용하여 DynamoDB 초기 데이터(SITE_CONFIG) Seeding ---
+    new cr.AwsCustomResource(this, 'SiteConfigSeeder', {
+      onCreate: { // 스택이 처음 생성될 때 이 작업을 수행합니다.
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: postsTable.tableName,
+          Item: {
+            PK: { S: 'SITE_CONFIG' },
+            SK: { S: 'METADATA' },
+            // [중요] 여기에 Hero로 지정할 실제 postId를 입력하세요.
+            heroPostId: { S: '9a67ca18-a7e0-498b-a527-6efa7e4902b0' } 
+          }
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('SiteConfigSeeder-Initial-Data'),
+      },
+      onUpdate: { // 스택이 업데이트될 때도 동일한 작업을 수행하여 데이터가 유지되도록 합니다.
+        service: 'DynamoDB',
+        action: 'putItem',
+        parameters: {
+          TableName: postsTable.tableName,
+          Item: {
+            PK: { S: 'SITE_CONFIG' },
+            SK: { S: 'METADATA' },
+            heroPostId: { S: '9a67ca18-a7e0-498b-a527-6efa7e4902b0' }
+          }
+        },
+      },
+      // 이 커스텀 리소스가 DynamoDB 테이블에 PutItem 작업을 수행할 권한을 부여합니다.
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: ['dynamodb:PutItem'],
+          resources: [postsTable.tableArn],
+        }),
+      ]),
     });
 
     // --- 1.3. 이미지 S3저장소 리소스 ---

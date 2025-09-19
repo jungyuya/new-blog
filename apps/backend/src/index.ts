@@ -9,6 +9,7 @@ import authRouter from './routes/auth.router';
 import usersRouter from './routes/users.router';
 import tagsRouter from './routes/tags.router';
 import imagesRouter from './routes/images.router';
+import configRouter from './routes/config.router'; 
 import type { AppEnv } from './lib/types';
 import { commentsRouter, postCommentsRouter } from './routes/comments.router';
 
@@ -33,10 +34,9 @@ app.route('/auth', authRouter);
 app.route('/users', usersRouter);
 app.route('/tags', tagsRouter);
 app.route('/images', imagesRouter);
+app.route('/config', configRouter); // [추가] 새로운 라우터 등록
 // --- [신규] 댓글 라우터 등록 ---
-// 1. /api/comments/:commentId 와 같은 요청을 처리합니다.
 app.route('/comments', commentsRouter);
-// 2. /api/posts/:postId/comments 와 같은 중첩된 요청을 처리합니다.
 app.route('/posts/:postId/comments', postCommentsRouter);
 
 // --- [핵심 수정] Error Handling ---

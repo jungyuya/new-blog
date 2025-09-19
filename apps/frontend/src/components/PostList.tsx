@@ -15,11 +15,11 @@ const Spinner = () => (
 
 interface PostListProps {
   fallbackData: PaginatedPosts;
+  excludeIds?: string[]; // [추가] 제외할 게시물 ID 배열
 }
 
-export default function PostList({ fallbackData }: PostListProps) {
-  const { posts, error, isRefreshing, isReachingEnd, loadMore, size } = useInfinitePosts(fallbackData);
-
+export default function PostList({ fallbackData, excludeIds = [] }: PostListProps) {
+  const { posts, error, isRefreshing, isReachingEnd, loadMore, size } = useInfinitePosts(fallbackData, excludeIds);
   const { setTarget, entry } = useIntersectionObserver({
     rootMargin: '200px',
     threshold: 0.1,

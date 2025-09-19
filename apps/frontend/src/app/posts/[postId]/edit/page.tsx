@@ -20,6 +20,7 @@ function EditPostForm() {
   const router = useRouter();
   const params = useParams();
   const { user } = useAuth();
+  const isAdmin = user?.groups?.includes('Admins'); // [추가] 관리자 여부 확인
 
   // URL 파라미터에서 postId를 안전하게 추출합니다.
   const postId = typeof params.postId === 'string' ? params.postId : undefined;
@@ -111,6 +112,24 @@ function EditPostForm() {
     }
   };
 
+  // [추가] Hero로 지정하는 핸들러 함수
+  const handleSetAsHero = async () => {
+    if (!postId) {
+      alert('게시물 ID가 유효하지 않습니다.');
+      return;
+    }
+    if (window.confirm('정말로 이 게시물을 대표(Hero) 게시물로 지정하시겠습니까? 기존 Hero 게시물은 대체됩니다.')) {
+      try {
+        await api.updateHeroPost(postId);
+        alert('대표 게시물로 지정되었습니다!');
+      } catch (err) {
+        console.error('Failed to set hero post:', err);
+        alert('대표 게시물 지정에 실패했습니다.');
+      }
+    }
+  };
+
+
   if (isLoading) {
     return <div>게시물 정보를 불러오는 중...</div>;
   }
@@ -131,7 +150,6 @@ function EditPostForm() {
 
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* [수정] 페이지 제목에 다크 모드 색상 적용 */}
       <h1 className="text-4xl font-bold mb-8 dark:text-gray-100">글 수정하기</h1>
       <form onSubmit={handleSubmit}>
         <div className="mb-8">
@@ -167,9 +185,24 @@ function EditPostForm() {
         {/* [수정] 에러 메시지에 다크 모드 색상 적용 */}
         {error && <p className="text-red-500 text-center mb-4 dark:text-red-400">{error}</p>}
 
-        {/* [수정] 하단 고정 푸터에 다크 모드 스타일 적용 */}
+        {/* [수정] 하단 고정 푸터 영역 */}
         <footer className="sticky bottom-0 left-0 w-full bg-white/80 backdrop-blur-sm p-4 mt-8 border-t border-gray-200 dark:bg-stone-950/80 dark:border-gray-800">
-          <div className="container mx-auto flex justify-end max-w-4xl px-4">
+          {/* [수정] flex 컨테이너에 justify-between 추가 */}
+          <div className="container mx-auto flex justify-between items-center max-w-4xl px-4">
+            {/* 왼쪽: 관리자 전용 버튼 */}
+            <div>
+              {isAdmin && (
+                <button
+                  type="button" // form의 submit을 방지하기 위해 type="button"을 명시
+                  onClick={handleSetAsHero}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md shadow-sm hover:bg-green-700"
+                >
+                  🌟 Hero로 지정하기
+                </button>
+              )}
+            </div>
+
+            {/* 오른쪽: 기존 수정 완료 버튼 */}
             <button
               type="submit"
               disabled={isSubmitting}

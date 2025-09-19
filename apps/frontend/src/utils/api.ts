@@ -70,6 +70,12 @@ export interface PaginatedPosts {
   nextCursor: string | null;
 }
 
+// [추가] 추천 데이터 API의 새로운 응답 타입을 정의합니다.
+export interface FeaturedData {
+  heroPost: Post | null;
+  editorPicks: Post[];
+}
+
 const getApiBaseUrl = () => {
   if (typeof window === 'undefined') {
     return process.env.INTERNAL_API_ENDPOINT;
@@ -127,6 +133,7 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   return Promise.resolve({} as T);
 }
 
+
 export const api = {
   // --- Auth APIs ---
   login: (credentials: { email: string; password: string }): Promise<{ message: string }> => {
@@ -161,6 +168,9 @@ export const api = {
 
     return fetchWrapper(path, { method: 'GET' });
   },
+  fetchFeaturedPosts: (): Promise<FeaturedData> => {
+    return fetchWrapper('/posts/featured', { method: 'GET' });
+  },  // [추가] 추천 게시물을 가져오는 새로운 함수
   fetchPostById: (postId: string): Promise<{
     post: Post;
     prevPost: AdjacentPost | null;
@@ -255,8 +265,18 @@ export const api = {
   fetchSummary: (postId: string): Promise<{ summary: string; keywords: string[]; source: 'cache' | 'live' }> => {
     return fetchWrapper(`/posts/${postId}/summary`, { method: 'GET' });
   },
-
+  // --- Admin APIs ---
+  updateHeroPost: (postId: string): Promise<{ message: string }> => {
+    return fetchWrapper('/config/hero', {
+      method: 'PUT',
+      body: JSON.stringify({ postId }),
+    });
+  },
   deleteSummary: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}/summary`, { method: 'DELETE' });
+  },
+    // --- Tag APIs ---
+  fetchPopularTags: (): Promise<{ tags: { name: string; count: number }[] }> => {
+    return fetchWrapper('/tags/popular', { method: 'GET' });
   },
 };
