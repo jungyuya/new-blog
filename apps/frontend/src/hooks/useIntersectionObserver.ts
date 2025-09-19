@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/hooks/useIntersectionObserver.ts
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // 훅의 옵션 타입을 정의합니다.
 interface IntersectionObserverOptions {

@@ -95,9 +95,10 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
                             </code>
                         );
                     },
-                    img: ({ ...props }) => { 
+                    img: ({ ...props }) => {
                         const imageIndex = imageSources.findIndex(slide => slide.src === props.src);
                         return (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                                 {...props}
                                 onClick={() => setIndex(imageIndex)}

@@ -4,8 +4,6 @@ import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation';
 // [수정] CommentsSection import는 이제 PostDetailView에서 처리하므로 제거합니다.
 // import CommentsSection from "@/components/comments/CommentsSection"; 
-import type { Metadata, ResolvingMetadata } from 'next'
-
 export const dynamic = 'force-dynamic';
 
 type Props = {

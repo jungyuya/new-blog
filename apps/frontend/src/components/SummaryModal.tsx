@@ -6,15 +6,6 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext'; // [신규]
 import { api } from '@/utils/api'; // [신규]
 
-// 로딩 스켈레톤 UI
-const SummarySkeleton = () => (
-  <div className="space-y-3 animate-pulse">
-    <div className="h-4 bg-gray-200 rounded w-full"></div>
-    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-    <div className="h-4 bg-gray-200 rounded w-full"></div>
-  </div>
-);
-
 // 모달이 받을 props 타입 정의
 interface SummaryModalProps {
   isOpen: boolean;

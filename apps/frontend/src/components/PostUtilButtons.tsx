@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Post, AdjacentPost, api } from '@/utils/api';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLike } from '@/hooks/useLike';
 import { motion, AnimatePresence } from 'framer-motion';
 import SummaryModal from './SummaryModal'; // SummaryModal import
@@ -59,7 +58,6 @@ interface PostUtilButtonsProps {
 }
 
 export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilButtonsProps) {
-    const { user } = useAuth(); // 로그인 상태 확인
     const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL;
 
     // --- AI 요약 모달 관련 상태 관리 ---

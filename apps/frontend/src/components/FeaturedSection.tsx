@@ -4,7 +4,7 @@ import FeaturedPostCard from "./FeaturedPostCard";
 import PostCard from "./PostCard";
 import TagFilter from "./TagFilter";
 
-// [수정] 컴포넌트가 받을 props 타입을 새로운 구조에 맞게 변경합니다.
+// 컴포넌트가 받을 props 타입을 새로운 구조에 맞게 변경합니다.
 interface FeaturedSectionProps {
   heroPost: Post | null;
   editorPicks: Post[];
@@ -34,7 +34,7 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
       {/* Editor's Picks: editorPicks 배열에 아이템이 있을 경우에만 렌더링합니다. */}
       {editorPicks.length > 0 && (
         <section>
-          <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">Editor's Picks</h2>
+          <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">추천 게시물</h2>
           <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {editorPicks.map(post => (
               <PostCard key={post.postId} post={post} isEditorPick={true} />
