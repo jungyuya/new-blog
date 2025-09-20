@@ -99,7 +99,8 @@ export class BlogStack extends Stack {
       nonKeyAttributes: [
         'postId', 'title', 'authorNickname', 'status', 'visibility',
         'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio',
-        'authorAvatarUrl', 'createdAt', 'commentCount', 'likeCount', 'isDeleted'
+        'authorAvatarUrl', 'createdAt', 'commentCount', 'likeCount', 'isDeleted',
+        'content' 
       ]
     });
 
@@ -601,7 +602,7 @@ export class BlogStack extends Stack {
 
     // --- 5.8. API Gateway 라우팅 추가 ---
     httpApi.addRoutes({
-      path: '/search',
+      path: '/api/search',
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration('SearchIntegration', searchApiLambda),
     });

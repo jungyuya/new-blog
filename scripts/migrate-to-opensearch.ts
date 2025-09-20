@@ -2,7 +2,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, ScanCommandOutput } from '@aws-sdk/lib-dynamodb';
-import { Client } from '@opensearch-project/opensearch'; // [수정] OpenSearchClient -> Client
+import { Client } from '@opensearch-project/opensearch';
 import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -20,7 +20,7 @@ if (!DYNAMODB_TABLE_NAME || !OPENSEARCH_ENDPOINT) {
 }
 
 const dynamoDbClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
-const opensearchClient = new Client({ // [수정] OpenSearchClient -> Client
+const opensearchClient = new Client({
   ...AwsSigv4Signer({
     region: REGION,
     service: 'es',
@@ -32,7 +32,6 @@ async function migrate() {
   console.log(`Starting migration from DynamoDB table "${DYNAMODB_TABLE_NAME}" to OpenSearch index "${INDEX_NAME}"...`);
 
   let allPosts: Record<string, any>[] = [];
-  // [수정] lastEvaluatedKey에 명시적인 타입 추가
   let lastEvaluatedKey: Record<string, any> | undefined = undefined;
 
   console.log('Scanning DynamoDB table...');
@@ -44,7 +43,6 @@ async function migrate() {
       ExclusiveStartKey: lastEvaluatedKey,
     });
     
-    // [수정] 응답 객체에 명시적인 타입(ScanCommandOutput)을 적용하여 타입 오류 해결
     const response: ScanCommandOutput = await dynamoDbClient.send(scanCommand);
     
     if (response.Items) {
@@ -54,15 +52,19 @@ async function migrate() {
     console.log(`Scanned ${response.Count} items... Total items: ${allPosts.length}`);
   } while (lastEvaluatedKey);
 
-  console.log(`Found ${allPosts.length} posts to migrate.`);
+  console.log(`Found ${allPosts.length} total items in GSI3.`);
 
-  if (allPosts.length === 0) {
-    console.log('No posts to migrate. Exiting.');
+  // [핵심 수정] isDeleted가 true가 아닌, 즉 삭제되지 않은 게시물만 필터링합니다.
+  const activePosts = allPosts.filter(post => post.isDeleted !== true);
+  console.log(`Filtered ${activePosts.length} active posts to migrate.`);
+
+  if (activePosts.length === 0) {
+    console.log('No active posts to migrate. Exiting.');
     return;
   }
 
   const bulkOperations: any[] = [];
-  for (const post of allPosts) {
+  for (const post of activePosts) {
     const document = {
       postId: post.postId,
       title: post.title,
@@ -70,6 +72,10 @@ async function migrate() {
       tags: post.tags,
       authorNickname: post.authorNickname,
       createdAt: post.createdAt,
+      thumbnailUrl: post.thumbnailUrl,
+      status: post.status,
+      visibility: post.visibility,
+      isDeleted: post.isDeleted || false, // isDeleted 필드를 명시적으로 포함
     };
     bulkOperations.push({ index: { _index: INDEX_NAME, _id: document.postId } });
     bulkOperations.push(document);
@@ -87,7 +93,7 @@ async function migrate() {
       const failedItems = response.body.items.filter((item: any) => item.index?.error);
       console.error(JSON.stringify(failedItems, null, 2));
     } else {
-      console.log('✅ Migration successful! All documents have been indexed.');
+      console.log('✅ Migration successful! All active documents have been indexed.');
     }
   } catch (error) {
     console.error('An error occurred during the bulk request:', error);

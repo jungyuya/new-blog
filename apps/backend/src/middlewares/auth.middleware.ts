@@ -23,7 +23,7 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
   try {
     const token = getCookie(c, 'idToken');
     if (!token) {
-      return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
+      return c.json({ message: 'Unauthorized: ID토큰이 만료되었거나 없습니다.' }, 401);
     }
 
     const payload = await idTokenVerifier.verify(token);
