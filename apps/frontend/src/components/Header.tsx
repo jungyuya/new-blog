@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import ThemeToggleButton from './ThemeToggleButton';
+import Search from './Search'; // [추가]
 import { useState, useRef, useEffect } from 'react'; // [수정] 훅 추가
 import { motion, AnimatePresence } from 'framer-motion'; // [수정] 애니메이션 라이브러리 추가
 
@@ -53,6 +54,7 @@ export default function Header() {
 
         <div className="flex items-center space-x-2 sm:space-x-4">
           <ThemeToggleButton />
+          <Search />
 
           {isLoading ? (
             <div className="animate-pulse flex space-x-4">
@@ -60,7 +62,7 @@ export default function Header() {
               <div className="h-8 w-8 bg-gray-300 rounded-full"></div>
             </div>
           ) : user ? (
-            // --- [핵심 수정] 로그인 상태 UI 구조 변경 ---
+            // --- 로그인 상태 UI 구조 변경 ---
             <div className="relative" ref={menuRef}>
               {/* 1. 데스크탑 전용 전체 메뉴 */}
               <div className="hidden sm:flex items-center space-x-4">
