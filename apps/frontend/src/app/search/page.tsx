@@ -3,7 +3,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import { api, Post } from '@/utils/api';
+import { Post } from '@/utils/api';
 import PostCard from '@/components/PostCard';
 import PostCardSkeleton from '@/components/PostCardSkeleton';
 
@@ -77,7 +77,7 @@ export default function SearchPage() {
     return (
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-3xl font-bold mb-8 dark:text-gray-100">
-                <span className="text-indigo-500 dark:text-indigo-400">'{query}'</span>에 대한 검색 결과
+                <span className="text-indigo-500 dark:text-indigo-400">&apos;{query}&apos;</span>에 대한 검색 결과
                 <span className="text-lg ml-2 text-gray-500 dark:text-gray-400">
                     ({searchResults.length}개)
                 </span>
