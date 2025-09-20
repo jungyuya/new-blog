@@ -65,7 +65,7 @@ export default function SearchPage() {
                     무엇을 찾고 계신가요?
                 </h1>
                 <p className="mt-4 text-gray-600 dark:text-gray-400">
-                    헤더의 검색창을 이용해 블로그의 글을 찾아보세요.
+                    검색창을 이용해 블로그의 글을 찾아보세요.
                 </p>
             </div>
         );
