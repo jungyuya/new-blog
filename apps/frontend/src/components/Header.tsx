@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import ThemeToggleButton from './ThemeToggleButton';
-import Search from './Search';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SearchModal from './SearchModal';
@@ -80,6 +79,9 @@ export default function Header() {
           </Link>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
+
+            <ThemeToggleButton />
+
             {/* 기존 Search 컴포넌트를 motion.button으로 교체 */}
             <motion.button
               layoutId="search-box"
@@ -94,8 +96,9 @@ export default function Header() {
 
               {/* 메인 버튼 배경 */}
               <div className="relative bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 
-                  group-hover:border-transparent transition-colors duration-300">
-                <div className="p-2 text-gray-600 dark:text-gray-400 group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:via-purple-500 group-hover:to-pink-500 group-hover:bg-clip-text transition-all duration-300">
+    group-hover:border-transparent transition-colors duration-300">
+                {/* [수정] hover 시 색상이 바뀌도록 class를 변경합니다. */}
+                <div className="p-2 text-gray-600 dark:text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-all duration-300">
                   <SearchIcon />
                 </div>
               </div>
@@ -103,8 +106,6 @@ export default function Header() {
               {/* 반짝임 효과 */}
               <div className="absolute top-1 right-1 w-1 h-1 bg-white rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-pulse"></div>
             </motion.button>
-
-            <ThemeToggleButton />
 
             {isLoading ? (
               <div className="animate-pulse flex space-x-4">

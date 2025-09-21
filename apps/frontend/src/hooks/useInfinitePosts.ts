@@ -29,7 +29,7 @@ export function useInfinitePosts(fallbackData: PaginatedPosts, excludeIds: strin
     fetcher,
     {
       fallbackData: [fallbackData],
-      revalidateFirstPage: false,
+      revalidateFirstPage: true,
     }
   );
 

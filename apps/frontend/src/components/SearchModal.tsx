@@ -4,48 +4,20 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SearchIcon, ClockIcon, TrendingIcon, CloseIcon, ArrowRightIcon } from './Icons';
 
-// 아이콘 컴포넌트들 (변경 없음)
-const SearchIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-);
-
-const ClockIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-);
-
-const TrendingIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-    </svg>
-);
-
-const CloseIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-);
-
-const ArrowRightIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-);
 
 interface SearchModalProps {
     onClose: () => void;
 }
 
+// 인기검색어 : 현재는 트래픽이 없어 수동 관리하지만 추후 백엔드 로직 생성하여 실제 검색어 기능 구현 가능
 const TRENDING_SEARCHES = [
-    'React 19 새로운 기능',
-    'Next.js 15 업데이트',
-    'TypeScript 5.0',
-    'AI 프로그래밍 도구',
-    'Tailwind CSS 팁',
+    '다크 모드',
+    'AWS',
+    'Bedrock',
+    '최적화',
+    'Frontend',
 ];
 
 const RECENT_SEARCHES_KEY = 'recent-searches';
@@ -300,7 +272,7 @@ export default function SearchModal({ onClose }: SearchModalProps) {
                             query.length > 2 && (
                                 <motion.div key="search-prompt" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-8 text-center">
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded">Enter</kbd>를 눌러 "{query}" 검색
+                                        <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded">Enter</kbd>를 눌러 &quot;{query}&quot; 검색
                                     </p>
                                 </motion.div>
                             )
