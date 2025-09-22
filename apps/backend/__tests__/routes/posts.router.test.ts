@@ -80,12 +80,24 @@ describe('Posts API (/api/posts)', () => {
 
     it('should return 200 OK when the author accesses their private post', async () => {
       const mockPrivatePost = { postId: 'private-1', visibility: 'private', authorId: mockUserPayload.sub };
+      
+      // --- 리팩토링된 코드의 실제 DB 호출 순서와 횟수에 맞게 mock을 재설정합니다. ---
       (ddbDocClient.send as any)
-        .mockResolvedValueOnce({ Item: mockPrivatePost }) // 1. Get Post
-        .mockResolvedValueOnce({});                       // 2. Update View Count
+        // 1. postsRepository.findPostById(postId) 호출에 대한 응답
+        .mockResolvedValueOnce({ Item: mockPrivatePost }) 
+        // 2. postsRepository.incrementViewCount(postId) 호출에 대한 응답 (결과값은 중요하지 않음)
+        .mockResolvedValueOnce({}) 
+        // 3. likes.service.checkUserLikeStatus() 호출에 대한 응답 (좋아요 누르지 않은 상태)
+        .mockResolvedValueOnce({ Item: null }) 
+        // 4. postsRepository.findAllPostTitlesForNav(isAdmin) 호출에 대한 응답
+        .mockResolvedValueOnce({ Items: [{ postId: 'private-1', title: 'Private Post' }] });
+
       const response = await request(server).get('/api/posts/private-1').set('Cookie', 'idToken=fake-user-token');
+      
       expect(response.status).toBe(200);
       expect(response.body.post.postId).toBe('private-1');
+      expect(response.body).toHaveProperty('prevPost');
+      expect(response.body).toHaveProperty('nextPost');
     });
   });
 

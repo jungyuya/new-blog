@@ -13,6 +13,8 @@ import { togglePostLike, checkUserLikeStatus } from '../services/likes.service';
 import type { AppEnv } from '../lib/types';
 import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import type { Post } from '../lib/types';
+import * as postsService from '../services/posts.service';
+
 
 
 const CreatePostSchema = z.object({
@@ -41,105 +43,41 @@ const UpdatePostSchema = z.object({
 
 const postsRouter = new Hono<AppEnv>();
 
-// --- [1] GET / - 모든 게시물 조회 (v2.2 - 페이지네이션 적용) ---
+// --- [1] GET / - 모든 게시물 조회 (v4.0 - 서비스 계층 분리) ---
 postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
-  const TABLE_NAME = process.env.TABLE_NAME!;
   const userGroups = c.get('userGroups');
-  const isAdmin = userGroups?.includes('Admins');
 
-  // [핵심 수정] Zod 스키마에 .default()를 추가하여, 값이 없을 때의 기본값을 명시합니다.
-  const { limit, cursor } = z.object({
+  // Zod를 사용하여 쿼리 파라미터 유효성 검사 및 기본값 설정을 라우터에서 처리합니다.
+  const querySchema = z.object({
     limit: z.coerce.number().int().positive().default(12),
     cursor: z.string().optional(),
-  }).parse(c.req.query());
+  });
+  
+  const queryParseResult = querySchema.safeParse(c.req.query());
+
+  if (!queryParseResult.success) {
+    return c.json({ message: 'Invalid query parameters', errors: queryParseResult.error.issues }, 400);
+  }
+  
+  const { limit, cursor } = queryParseResult.data;
 
   try {
-    // 1. 기존 로직: GSI를 사용하여 모든 게시물의 기본 정보를 가져옵니다.
-    const commandParams: QueryCommandInput = {
-      TableName: TABLE_NAME,
-      IndexName: 'GSI3',
-      KeyConditionExpression: 'GSI3_PK = :pk',
-      ExpressionAttributeValues: { ':pk': 'POST#ALL' },
-      ScanIndexForward: false,
-      Limit: limit,
-    };
+    // 1. 모든 비즈니스 로직을 서비스 계층에 위임합니다.
+    const result = await postsService.getPostList({
+      limit,
+      cursor,
+      userGroups,
+    });
 
-    // [신규] cursor가 있으면, ExclusiveStartKey를 설정합니다.
-    if (cursor) {
-      try {
-        const decodedKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
-        commandParams.ExclusiveStartKey = decodedKey;
-      } catch (e) {
-        // 잘못된 형식의 커서는 400 에러를 반환하여 비정상적인 요청을 차단합니다.
-        return c.json({ message: 'Invalid cursor format.' }, 400);
-      }
-    }
-
-    if (!isAdmin) {
-      commandParams.FilterExpression = '#status = :published AND #visibility = :public';
-      commandParams.ExpressionAttributeNames = {
-        '#status': 'status',
-        '#visibility': 'visibility',
-      };
-      commandParams.ExpressionAttributeValues![':published'] = 'published';
-      commandParams.ExpressionAttributeValues![':public'] = 'public';
-    }
-
-    const command = new QueryCommand(commandParams);
-    const { Items, LastEvaluatedKey } = await ddbDocClient.send(command);
-    const activePosts = Items?.filter((i) => !i.isDeleted) || [];
-
-    // --- [핵심 수정] 각 게시물에 대한 추가 정보(아바타, 댓글 수)를 병렬로 조회합니다. ---
-    const enrichedPosts = await Promise.all(
-      activePosts.map(async (post) => {
-        // 2. authorAvatarUrl 조회
-        // 게시물 데이터에 authorAvatarUrl이 이미 있다면 그것을 사용하고, 없다면 DB에서 조회합니다.
-        // (참고: Post 생성/수정 시 authorAvatarUrl을 이미 비정규화했으므로, 대부분의 경우 추가 조회가 필요 없습니다.)
-        let authorAvatarUrl = post.authorAvatarUrl;
-        if (!authorAvatarUrl && post.authorId) {
-          const profileCommand = new GetCommand({
-            TableName: TABLE_NAME,
-            Key: { PK: `USER#${post.authorId}`, SK: 'PROFILE' },
-          });
-          const { Item: profile } = await ddbDocClient.send(profileCommand);
-          authorAvatarUrl = profile?.avatarUrl || '';
-        }
-
-        // 3. commentCount 조회
-        const commentCountCommand = new QueryCommand({
-          TableName: TABLE_NAME,
-          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-          ExpressionAttributeValues: {
-            ':pk': `POST#${post.postId}`,
-            ':sk': 'COMMENT#',
-          },
-          // [성능 최적화] 실제 아이템은 필요 없고, 개수만 필요합니다.
-          Select: 'COUNT',
-        });
-        const { Count: commentCount } = await ddbDocClient.send(commentCountCommand);
-
-        // 4. 기존 post 객체에 새로운 정보를 합쳐서 반환합니다.
-        return {
-          ...post,
-          authorAvatarUrl,
-          commentCount: commentCount || 0,
-          // GSI3 조회 시 이미 'post' 객체에 포함되어 있지만,
-          // 만약 값이 없는 경우(오래된 데이터 등)를 대비하여 기본값 0을 설정해줍니다.
-          // 이를 통해 프론트엔드는 항상 number 타입의 likeCount를 보장받을 수 있습니다.
-          likeCount: post.likeCount || 0,
-        };
-      })
-    );
-
-    // [신규] 다음 페이지를 위한 cursor를 생성합니다.
-    const nextCursor = LastEvaluatedKey
-      ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
-      : null;
-
-    return c.json({ posts: enrichedPosts, nextCursor: nextCursor, });
+    // 2. 서비스가 반환한 결과를 그대로 클라이언트에 전달합니다.
+    return c.json(result);
 
   } catch (error: any) {
     console.error('Get All Posts Error:', error);
+    // Repository에서 던진 'Invalid cursor format.' 에러를 여기서 처리합니다.
+    if (error.message === 'Invalid cursor format.') {
+      return c.json({ message: error.message }, 400);
+    }
     return c.json({ message: 'Internal Server Error fetching posts.', error: error.message }, 500);
   }
 });
@@ -254,97 +192,137 @@ postsRouter.get('/featured', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-
-
-// --- [2] GET /:postId - 단일 게시물 조회 (v3.1 - '좋아요' 상태 포함) ---
-postsRouter.get('/:postId', tryCookieAuthMiddleware, tryAnonymousAuthMiddleware, async (c) => {
-  const postId = c.req.param('postId');
+// --- [1.5-2] GET /latest - 추천을 제외한 최신 게시물 조회 ---
+postsRouter.get('/latest', tryCookieAuthMiddleware, async (c) => {
   const TABLE_NAME = process.env.TABLE_NAME!;
-  const currentUserId = c.get('userId');
   const userGroups = c.get('userGroups');
   const isAdmin = userGroups?.includes('Admins');
-  const anonymousId = c.get('anonymousId');
+
+  const { limit, cursor } = z.object({
+    limit: z.coerce.number().int().positive().default(12),
+    cursor: z.string().optional(),
+  }).parse(c.req.query());
 
   try {
-    // 1. 현재 게시물 정보를 가져옵니다.
-    const { Item } = await ddbDocClient.send(new GetCommand({
+    // 1. 먼저 모든 추천 게시물의 ID를 가져옵니다.
+    const configCommand = new GetCommand({
       TableName: TABLE_NAME,
-      Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-    }));
+      Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
+    });
+    const { Item: config } = await ddbDocClient.send(configCommand);
+    const heroPostId = config?.heroPostId;
 
-    if (!Item || Item.isDeleted) {
-      return c.json({ message: 'Post not found.' }, 404);
+    const picksCommand = new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'PK = :pk',
+      ExpressionAttributeValues: { ':pk': 'TAG#featured' },
+      ProjectionExpression: 'postId', // ID만 필요합니다.
+    });
+    const { Items: featuredItems } = await ddbDocClient.send(picksCommand);
+    
+    const excludeIds = featuredItems?.map(item => item.postId) || [];
+    if (heroPostId) {
+      excludeIds.push(heroPostId);
     }
+    // 중복 제거
+    const uniqueExcludeIds = [...new Set(excludeIds)];
 
-    // 2.  비밀글 접근 권한을 검사합니다.
-    if (Item.visibility === 'private') {
-      if (!currentUserId || Item.authorId !== currentUserId) {
-        return c.json({ message: 'Forbidden: You do not have permission to view this post.' }, 403);
-      }
-    }
-
-    // --- [핵심 수정 1] 현재 사용자가 이 게시물에 '좋아요'를 눌렀는지 확인합니다. ---
-    // anonymousId가 존재할 경우에만 서비스 함수를 호출하여 DB를 조회합니다.
-    const isLiked = anonymousId ? await checkUserLikeStatus(postId, anonymousId) : false;
-
-    // --- [핵심 수정 2] 이전 글 / 다음 글 정보를 조회합니다. (기존 로직과 동일) ---
-    const listCommandParams: QueryCommandInput = {
+    // 2. DynamoDB 쿼리를 구성합니다.
+    const commandParams: QueryCommandInput = {
       TableName: TABLE_NAME,
       IndexName: 'GSI3',
       KeyConditionExpression: 'GSI3_PK = :pk',
       ExpressionAttributeValues: { ':pk': 'POST#ALL' },
       ScanIndexForward: false,
-      ProjectionExpression: 'postId, title, isDeleted',
+      Limit: limit,
     };
-
+    
+    // 3. FilterExpression을 동적으로 구성합니다.
+    const filterExpressions: string[] = [];
+    const expressionAttributeNames: Record<string, string> = {};
+    
     if (!isAdmin) {
-      listCommandParams.FilterExpression = '#status = :published AND #visibility = :public';
-      listCommandParams.ExpressionAttributeNames = {
-        '#status': 'status',
-        '#visibility': 'visibility',
-      };
-      listCommandParams.ExpressionAttributeValues![':published'] = 'published';
-      listCommandParams.ExpressionAttributeValues![':public'] = 'public';
+      filterExpressions.push('#status = :published AND #visibility = :public');
+      expressionAttributeNames['#status'] = 'status';
+      expressionAttributeNames['#visibility'] = 'visibility';
+      commandParams.ExpressionAttributeValues![':published'] = 'published';
+      commandParams.ExpressionAttributeValues![':public'] = 'public';
     }
 
-    const listCommand = new QueryCommand(listCommandParams);
-    const { Items: allPosts } = await ddbDocClient.send(listCommand);
-    const activePosts = allPosts?.filter((p: any) => !p.isDeleted && p.postId) || [];
+    if (uniqueExcludeIds.length > 0) {
+      expressionAttributeNames['#postId'] = 'postId';
+      const excludePlaceholders = uniqueExcludeIds.map((_, index) => `:excludeId${index}`);
+      filterExpressions.push(`NOT (#postId IN (${excludePlaceholders.join(',')}))`);
+      uniqueExcludeIds.forEach((id, index) => {
+        commandParams.ExpressionAttributeValues![`:excludeId${index}`] = id;
+      });
+    }
+    
+    if (filterExpressions.length > 0) {
+      commandParams.FilterExpression = filterExpressions.join(' AND ');
+    }
+    if (Object.keys(expressionAttributeNames).length > 0) {
+      commandParams.ExpressionAttributeNames = expressionAttributeNames;
+    }
 
-    const currentIndex = activePosts.findIndex(p => p.postId === postId);
-    let prevPost = null;
-    let nextPost = null;
-    if (currentIndex !== -1) {
-      if (currentIndex + 1 < activePosts.length) {
-        prevPost = activePosts[currentIndex + 1];
-      }
-      if (currentIndex - 1 >= 0) {
-        nextPost = activePosts[currentIndex - 1];
+    if (cursor) {
+      try {
+        const decodedKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        commandParams.ExclusiveStartKey = decodedKey;
+      } catch (e) {
+        return c.json({ message: 'Invalid cursor format.' }, 400);
       }
     }
 
-    // --- [핵심 수정 3] 조회수를 1 증가시킵니다. (기존 로직과 동일) ---
-    ddbDocClient.send(new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-      UpdateExpression: 'SET viewCount = if_not_exists(viewCount, :start) + :inc',
-      ExpressionAttributeValues: { ':inc': 1, ':start': 0 },
-    }));
+    // 4. 쿼리를 실행합니다.
+    const command = new QueryCommand(commandParams);
+    const { Items, LastEvaluatedKey } = await ddbDocClient.send(command);
+    const activePosts = Items?.filter((i) => !i.isDeleted) || [];
 
-    // --- [핵심 수정 4] 최종 응답 객체에 isLiked와 likeCount를 포함시킵니다. ---
-    const postWithLikeStatus = {
-      ...Item,
-      isLiked: isLiked,
-      likeCount: Item.likeCount || 0, // DB에 likeCount가 없을 경우(초기 상태)를 대비해 기본값 0을 설정
-    };
+    // 5. 결과를 반환합니다. (기존 /posts 와 동일한 enrichment 로직은 생략하여 API를 단순화)
+    const nextCursor = LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
+      : null;
 
-    return c.json({
-      post: postWithLikeStatus,
-      prevPost,
-      nextPost,
-    });
+    return c.json({ posts: activePosts, nextCursor });
 
   } catch (error: any) {
+    console.error('Get Latest Posts Error:', error);
+    return c.json({ message: 'Internal Server Error fetching latest posts.', error: error.message }, 500);
+  }
+});
+
+// --- [2] GET /:postId - 단일 게시물 조회 (v4.0 - 서비스 계층 분리) ---
+postsRouter.get('/:postId', tryCookieAuthMiddleware, tryAnonymousAuthMiddleware, async (c) => {
+  const postId = c.req.param('postId');
+  const userGroups = c.get('userGroups');
+  const currentUserId = c.get('userId');
+  const anonymousId = c.get('anonymousId');
+
+  try {
+    // 1. 모든 비즈니스 로직을 서비스 계층에 위임합니다.
+    const result = await postsService.getPostDetails(
+      postId,
+      anonymousId,
+      userGroups,
+      currentUserId
+    );
+
+    // 2. 서비스의 결과에 따라 적절한 HTTP 응답을 보냅니다.
+    if (result === null) {
+      return c.json({ message: 'Post not found.' }, 404);
+    }
+
+    if (result === 'forbidden') {
+      return c.json({ message: 'Forbidden: You do not have permission to view this post.' }, 403);
+    }
+
+    // 성공적인 경우, 서비스가 조합해준 데이터를 그대로 반환합니다.
+    return c.json(result);
+
+  } catch (error: any) {
+    // 서비스 또는 리포지토리에서 예측하지 못한 에러가 발생한 경우
     console.error('Get Post Error:', error);
     return c.json({ message: 'Internal Server Error fetching post.', error: error.message }, 500);
   }

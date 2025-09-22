@@ -6,22 +6,20 @@ import { api, Post, PaginatedPosts } from '@/utils/api';
 
 const POSTS_PER_PAGE = 12;
 
+// [수정] fetcher가 이제 'api.fetchLatestPosts'를 사용합니다.
 const fetcher = (url: string) => {
   const params = new URLSearchParams(url.split('?')[1]);
   const cursor = params.get('cursor');
-  return api.fetchPosts(POSTS_PER_PAGE, cursor);
+  return api.fetchLatestPosts(POSTS_PER_PAGE, cursor);
 };
 
-/**
- * @param fallbackData - 서버 사이드에서 미리 렌더링된 첫 페이지 데이터
- * @param excludeIds - [신규] 목록에서 제외할 게시물 ID 배열
- */
-// [수정] 1. 두 번째 인자로 excludeIds를 받도록 훅의 시그니처를 변경합니다.
-export function useInfinitePosts(fallbackData: PaginatedPosts, excludeIds: string[] = []) {
+// [수정] excludeIds 파라미터를 제거합니다.
+export function useInfinitePosts(fallbackData: PaginatedPosts) {
   const getKey = (pageIndex: number, previousPageData: PaginatedPosts | null) => {
     if (previousPageData && !previousPageData.nextCursor) return null;
-    if (pageIndex === 0) return `/posts?limit=${POSTS_PER_PAGE}`;
-    return `/posts?limit=${POSTS_PER_PAGE}&cursor=${previousPageData!.nextCursor}`;
+    // [수정] 경로를 '/posts/latest'로 변경하고, 키에서 excludeIds를 제거합니다.
+    if (pageIndex === 0) return `/posts/latest?limit=${POSTS_PER_PAGE}`;
+    return `/posts/latest?limit=${POSTS_PER_PAGE}&cursor=${previousPageData!.nextCursor}`;
   };
 
   const { data, error, size, setSize, isLoading, isValidating } = useSWRInfinite<PaginatedPosts>(
@@ -29,14 +27,12 @@ export function useInfinitePosts(fallbackData: PaginatedPosts, excludeIds: strin
     fetcher,
     {
       fallbackData: [fallbackData],
-      revalidateFirstPage: true,
+      revalidateOnMount: true,
     }
   );
 
-  // [수정] 2. SWR 데이터를 펼친 후, excludeIds에 포함된 게시물을 필터링합니다.
-  const posts: Post[] = data
-    ? data.flatMap(page => page.posts).filter(post => !excludeIds.includes(post.postId))
-    : [];
+  // [수정] 클라이언트 사이드 필터링을 완전히 제거합니다.
+  const posts: Post[] = data ? data.flatMap(page => page.posts) : [];
   
   const isReachingEnd = data ? data[data.length - 1]?.nextCursor === null : false;
 

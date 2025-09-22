@@ -168,9 +168,26 @@ export const api = {
 
     return fetchWrapper(path, { method: 'GET' });
   },
+  // [추가] 추천 게시물을 가져오는 새로운 함수
   fetchFeaturedPosts: (): Promise<FeaturedData> => {
     return fetchWrapper('/posts/featured', { method: 'GET' });
-  },  // [추가] 추천 게시물을 가져오는 새로운 함수
+  },  
+  // --- [신규 추가] 추천을 제외한 최신 게시물을 가져오는 함수 ---
+  fetchLatestPosts: (limit: number | null, cursor: string | null): Promise<PaginatedPosts> => {
+    const params = new URLSearchParams();
+    if (limit && limit > 0) {
+      params.append('limit', String(limit));
+    }
+    if (cursor) {
+      params.append('cursor', cursor);
+    }
+    const queryString = params.toString();
+    // [핵심] '/posts'가 아닌 '/posts/latest'를 호출합니다.
+    const path = queryString ? `/posts/latest?${queryString}` : '/posts/latest';
+
+    return fetchWrapper(path, { method: 'GET' });
+  },
+
   fetchPostById: (postId: string): Promise<{
     post: Post;
     prevPost: AdjacentPost | null;
@@ -275,7 +292,7 @@ export const api = {
   deleteSummary: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}/summary`, { method: 'DELETE' });
   },
-    // --- Tag APIs ---
+  // --- Tag APIs ---
   fetchPopularTags: (): Promise<{ tags: { name: string; count: number }[] }> => {
     return fetchWrapper('/tags/popular', { method: 'GET' });
   },
