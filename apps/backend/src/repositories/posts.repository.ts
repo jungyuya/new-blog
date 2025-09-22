@@ -415,3 +415,4 @@ export async function syncTagsForPost(postId: string, tagsToDelete: string[], ta
 
   await ddbDocClient.send(command);
 }
+

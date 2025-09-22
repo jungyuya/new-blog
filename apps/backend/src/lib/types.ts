@@ -51,6 +51,7 @@ export interface Post {
   GSI1_SK?: string;
   GSI3_PK?: string;
   GSI3_SK?: string;
+  aiKeywords?: string[];
 };
 
 export interface PaginatedPosts {

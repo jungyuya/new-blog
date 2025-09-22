@@ -6,17 +6,16 @@ import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { z } from 'zod';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
+import { togglePostLike } from './likes.service';
 import * as postsRepository from '../repositories/posts.repository';
 import type { Post, UserContext } from '../lib/types';
+
 
 
 /**
  * 게시물과 관련된 비즈니스 로직을 처리하는 서비스 함수들의 모음입니다.
  * 데이터베이스 직접 접근, HTTP 요청/응답 처리는 여기서 하지 않습니다.
  */
-
-// 여기에 getPostDetails, createPost 등 함수가 추가될 예정입니다.
-
 
 /**
  * 특정 게시물의 상세 정보와 관련 데이터를 조회합니다.
@@ -440,4 +439,25 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
   const updatedPost = await postsRepository.updatePost(postId, finalUpdateData);
 
   return updatedPost;
+}
+
+/**
+ * 게시물의 '좋아요' 상태를 토글합니다.
+ * 이 함수는 likes.service의 함수를 호출하는 래퍼(wrapper) 역할을 합니다.
+ * @param postId 토글할 게시물의 ID
+ * @param anonymousId '좋아요'를 누른 사용자의 익명 ID
+ * @returns 업데이트된 likeCount와 isLiked 상태. 게시물이 없으면 'not_found'
+ */
+export async function toggleLikeForPost(postId: string, anonymousId: string) {
+  try {
+    const result = await togglePostLike(postId, anonymousId);
+    return result;
+  } catch (error: any) {
+    // likes.service에서 던진 'Post not found' 에러를 잡아 서비스 계층의 통일된 반환값으로 변환합니다.
+    if (error.message === 'Post not found') {
+      return 'not_found';
+    }
+    // 그 외의 예상치 못한 에러는 그대로 다시 던져서 상위 핸들러(라우터)가 처리하도록 합니다.
+    throw error;
+  }
 }
