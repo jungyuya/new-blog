@@ -45,8 +45,12 @@ export interface Post {
   isDeleted: boolean;
   likeCount?: number;
   commentCount?: number;
-  // --- AI 요약을 저장할 선택적 필드 ---
   aiSummary?: string;
+    // --- [핵심 수정] GSI 키들을 선택적 속성으로 추가합니다. ---
+  GSI1_PK?: string;
+  GSI1_SK?: string;
+  GSI3_PK?: string;
+  GSI3_SK?: string;
 };
 
 export interface PaginatedPosts {

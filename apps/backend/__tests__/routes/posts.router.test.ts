@@ -108,15 +108,38 @@ describe('Posts API (/api/posts)', () => {
       expect(response.status).toBe(403);
     });
 
-    it('should update a post successfully if user is an admin and the author', async () => {
-      const mockPost = { postId: '1', tags: [], authorId: mockAdminPayload.sub }; // 관리자가 작성자
+it('should update a post successfully if user is an admin and the author', async () => {
+      const mockPost = { 
+        postId: '1', 
+        tags: [], 
+        authorId: mockAdminPayload.sub,
+        // syncTagsForPost에서 postSnapshot을 생성하는 데 필요한 최소한의 속성들
+        title: 'Original Title', 
+        summary: 'Original Summary',
+        authorNickname: 'Admin',
+        createdAt: new Date().toISOString(),
+        status: 'published',
+        visibility: 'public',
+        viewCount: 0,
+      };
+      const updatedPostData = { ...mockPost, title: 'Updated Title' };
+
+      // --- [핵심 수정] 리팩토링된 코드의 실제 DB 호출 순서에 맞게 mock을 재설정합니다. ---
       (ddbDocClient.send as any)
-        .mockResolvedValueOnce({ Item: undefined }) // 1. Admin 프로필 조회
-        .mockResolvedValueOnce({ Item: mockPost }) // 2. Get Post
-        .mockResolvedValueOnce({ Item: undefined }) // 3. Admin 프로필 재조회
-        .mockResolvedValueOnce({}) // 4. BatchWrite Tags
-        .mockResolvedValueOnce({ Attributes: { title: 'Updated Title' } }); // 5. Update Post
-      const response = await request(server).put('/api/posts/1').set('Cookie', 'idToken=fake-admin-token').send({ title: 'Updated Title', tags: ['updated'] });
+        // 1. cookieAuthMiddleware의 Admin 프로필 조회
+        .mockResolvedValueOnce({ Item: { nickname: 'Admin' } })
+        // 2. service.updatePost -> repository.findPostById 호출에 대한 응답
+        .mockResolvedValueOnce({ Item: mockPost })
+        // 3. service.updatePost -> repository.syncTagsForPost 호출에 대한 응답
+        .mockResolvedValueOnce({}) // BatchWriteCommand는 반환값이 중요하지 않음
+        // 4. service.updatePost -> repository.updatePost 호출에 대한 응답
+        .mockResolvedValueOnce({ Attributes: updatedPostData });
+
+      const response = await request(server)
+        .put('/api/posts/1')
+        .set('Cookie', 'idToken=fake-admin-token')
+        .send({ title: 'Updated Title', tags: ['updated'] });
+        
       expect(response.status).toBe(200);
       expect(response.body.post.title).toBe('Updated Title');
     });

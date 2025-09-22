@@ -82,213 +82,48 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   }
 });
 
-// --- [1.5] GET /featured - 추천 게시물 조회 (SITE_CONFIG 적용 최종본) ---
+// --- [1.5] GET /featured - 추천 게시물 조회 (v4.0 - 서비스 계층 분리) ---
 postsRouter.get('/featured', tryCookieAuthMiddleware, async (c) => {
-  const TABLE_NAME = process.env.TABLE_NAME!;
   const userGroups = c.get('userGroups');
-  const isAdmin = userGroups?.includes('Admins');
-
-  // 중복 로직을 함수로 분리하여 재사용성 및 가독성 향상
-  const enrichPost = async (post: any) => {
-    if (!post) return null;
-    let authorAvatarUrl = post.authorAvatarUrl;
-    if (!authorAvatarUrl && post.authorId) {
-      const profileCommand = new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${post.authorId}`, SK: 'PROFILE' },
-      });
-      const { Item: profile } = await ddbDocClient.send(profileCommand);
-      authorAvatarUrl = profile?.avatarUrl || '';
-    }
-
-    const commentCountCommand = new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `POST#${post.postId}`,
-        ':sk': 'COMMENT#',
-      },
-      Select: 'COUNT',
-    });
-    const { Count: commentCount } = await ddbDocClient.send(commentCountCommand);
-
-    return {
-      ...post,
-      authorAvatarUrl,
-      commentCount: commentCount || 0,
-      likeCount: post.likeCount || 0,
-    };
-  };
 
   try {
-    // 1. SITE_CONFIG에서 heroPostId를 가져옵니다.
-    const configCommand = new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
-    });
-    const { Item: config } = await ddbDocClient.send(configCommand);
-    const heroPostId = config?.heroPostId;
-
-    // 2. heroPostId로 Hero 게시물의 데이터를 조회합니다.
-    const heroPostPromise = heroPostId
-      ? ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `POST#${heroPostId}`, SK: 'METADATA' },
-      })).then(result => result.Item)
-      : Promise.resolve(null);
-
-    // 3. 'featured' 태그가 붙은 나머지 게시물(추천 게시물)을 조회합니다.
-    // [핵심 수정] ExpressionAttributeValues를 isAdmin 상태에 따라 분기하여 생성합니다.
-    let expressionAttributeValues: Record<string, any> = {
-      ':pk': 'TAG#featured',
-    };
-    let filterExpression: string | undefined = undefined;
-    let expressionAttributeNames: Record<string, string> | undefined = undefined;
-
-    if (!isAdmin) {
-      filterExpression = '#status = :published AND #visibility = :public';
-      expressionAttributeNames = {
-        '#status': 'status',
-        '#visibility': 'visibility',
-      };
-      expressionAttributeValues[':published'] = 'published';
-      expressionAttributeValues[':public'] = 'public';
-    }
-
-    const picksCommandParams: QueryCommandInput = {
-      TableName: TABLE_NAME,
-      IndexName: 'GSI2',
-      KeyConditionExpression: 'PK = :pk',
-      FilterExpression: filterExpression,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues, // 이제 이 객체는 타입이 확정되었습니다.
-      ScanIndexForward: false,
-    };
-
-    const picksPromise = ddbDocClient.send(new QueryCommand(picksCommandParams)).then(result => result.Items);
-    // 4. Hero 게시물과 Editor's Picks 조회를 병렬로 실행합니다.
-    const [heroPostItem, featuredItems] = await Promise.all([heroPostPromise, picksPromise]);
-
-    // 5. Hero 게시물을 제외하고, isDeleted가 아닌 게시물만 필터링하여 editorPicks를 구성합니다.
-    const editorPicksItems = featuredItems
-      ?.filter(p => p.postId !== heroPostId && !p.isDeleted)
-      .slice(0, 4) || [];
-
-    // 6. Hero 게시물과 Editor's Picks 게시물을 병렬로 enrichment 합니다.
-    const [enrichedHeroPost, enrichedEditorPicks] = await Promise.all([
-      heroPostItem && !heroPostItem.isDeleted ? enrichPost(heroPostItem) : Promise.resolve(null),
-      Promise.all(editorPicksItems.map(enrichPost))
-    ]);
-
-    // 7. 최종 데이터를 새로운 구조로 반환합니다.
-    return c.json({
-      heroPost: enrichedHeroPost,
-      editorPicks: enrichedEditorPicks.filter(p => p !== null) // null 값 제거
-    });
-
+    const result = await postsService.getFeaturedPosts(userGroups);
+    return c.json(result);
   } catch (error: any) {
     console.error('Get Featured Data Error:', error);
     return c.json({ message: 'Internal Server Error fetching featured data.', error: error.message }, 500);
   }
 });
 
-// --- [1.5-2] GET /latest - 추천을 제외한 최신 게시물 조회 ---
+// --- [1.5-2] GET /latest - 추천을 제외한 최신 게시물 조회 (v4.0 - 서비스 계층 분리) ---
 postsRouter.get('/latest', tryCookieAuthMiddleware, async (c) => {
-  const TABLE_NAME = process.env.TABLE_NAME!;
   const userGroups = c.get('userGroups');
-  const isAdmin = userGroups?.includes('Admins');
 
-  const { limit, cursor } = z.object({
+  const querySchema = z.object({
     limit: z.coerce.number().int().positive().default(12),
     cursor: z.string().optional(),
-  }).parse(c.req.query());
+  });
+
+  const queryParseResult = querySchema.safeParse(c.req.query());
+
+  if (!queryParseResult.success) {
+    return c.json({ message: 'Invalid query parameters', errors: queryParseResult.error.issues }, 400);
+  }
+
+  const { limit, cursor } = queryParseResult.data;
 
   try {
-    // 1. 먼저 모든 추천 게시물의 ID를 가져옵니다.
-    const configCommand = new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
+    const result = await postsService.getLatestPosts({
+      limit,
+      cursor,
+      userGroups,
     });
-    const { Item: config } = await ddbDocClient.send(configCommand);
-    const heroPostId = config?.heroPostId;
-
-    const picksCommand = new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI2',
-      KeyConditionExpression: 'PK = :pk',
-      ExpressionAttributeValues: { ':pk': 'TAG#featured' },
-      ProjectionExpression: 'postId', // ID만 필요합니다.
-    });
-    const { Items: featuredItems } = await ddbDocClient.send(picksCommand);
-    
-    const excludeIds = featuredItems?.map(item => item.postId) || [];
-    if (heroPostId) {
-      excludeIds.push(heroPostId);
-    }
-    // 중복 제거
-    const uniqueExcludeIds = [...new Set(excludeIds)];
-
-    // 2. DynamoDB 쿼리를 구성합니다.
-    const commandParams: QueryCommandInput = {
-      TableName: TABLE_NAME,
-      IndexName: 'GSI3',
-      KeyConditionExpression: 'GSI3_PK = :pk',
-      ExpressionAttributeValues: { ':pk': 'POST#ALL' },
-      ScanIndexForward: false,
-      Limit: limit,
-    };
-    
-    // 3. FilterExpression을 동적으로 구성합니다.
-    const filterExpressions: string[] = [];
-    const expressionAttributeNames: Record<string, string> = {};
-    
-    if (!isAdmin) {
-      filterExpressions.push('#status = :published AND #visibility = :public');
-      expressionAttributeNames['#status'] = 'status';
-      expressionAttributeNames['#visibility'] = 'visibility';
-      commandParams.ExpressionAttributeValues![':published'] = 'published';
-      commandParams.ExpressionAttributeValues![':public'] = 'public';
-    }
-
-    if (uniqueExcludeIds.length > 0) {
-      expressionAttributeNames['#postId'] = 'postId';
-      const excludePlaceholders = uniqueExcludeIds.map((_, index) => `:excludeId${index}`);
-      filterExpressions.push(`NOT (#postId IN (${excludePlaceholders.join(',')}))`);
-      uniqueExcludeIds.forEach((id, index) => {
-        commandParams.ExpressionAttributeValues![`:excludeId${index}`] = id;
-      });
-    }
-    
-    if (filterExpressions.length > 0) {
-      commandParams.FilterExpression = filterExpressions.join(' AND ');
-    }
-    if (Object.keys(expressionAttributeNames).length > 0) {
-      commandParams.ExpressionAttributeNames = expressionAttributeNames;
-    }
-
-    if (cursor) {
-      try {
-        const decodedKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
-        commandParams.ExclusiveStartKey = decodedKey;
-      } catch (e) {
-        return c.json({ message: 'Invalid cursor format.' }, 400);
-      }
-    }
-
-    // 4. 쿼리를 실행합니다.
-    const command = new QueryCommand(commandParams);
-    const { Items, LastEvaluatedKey } = await ddbDocClient.send(command);
-    const activePosts = Items?.filter((i) => !i.isDeleted) || [];
-
-    // 5. 결과를 반환합니다. (기존 /posts 와 동일한 enrichment 로직은 생략하여 API를 단순화)
-    const nextCursor = LastEvaluatedKey
-      ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
-      : null;
-
-    return c.json({ posts: activePosts, nextCursor });
-
+    return c.json(result);
   } catch (error: any) {
     console.error('Get Latest Posts Error:', error);
+    if (error.message === 'Invalid cursor format.') {
+      return c.json({ message: error.message }, 400);
+    }
     return c.json({ message: 'Internal Server Error fetching latest posts.', error: error.message }, 500);
   }
 });
@@ -354,99 +189,28 @@ postsRouter.post('/:postId/like', tryAnonymousAuthMiddleware, async (c) => {
   }
 });
 
-// --- [3] POST / - 새 게시물 생성 (v3.0 - 백엔드 정제 로직 제거) ---
+// --- [3] POST / - 새 게시물 생성 (v4.0 - 서비스 계층 분리) ---
 postsRouter.post(
   '/',
-  cookieAuthMiddleware,
+  cookieAuthMiddleware, // 'user' 컨텍스트를 주입하기 위해 필수
   adminOnlyMiddleware,
-  zValidator('json', CreatePostSchema),
+  zValidator('json', CreatePostSchema), // CreatePostSchema는 라우터에 남아있어도 되고, 서비스로 옮겨도 됩니다.
   async (c) => {
     try {
-      const { title, content, tags = [], status = 'published', visibility = 'public' } = c.req.valid('json');
-      const userId = c.get('userId');
-      const userEmail = c.get('userEmail');
-      const postId = uuidv4();
-      const now = new Date().toISOString();
-      const TABLE_NAME = process.env.TABLE_NAME!;
-      const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+      const postInput = c.req.valid('json');
+      const authorContext = c.get('user'); // cookieAuthMiddleware가 주입해준 전체 사용자 컨텍스트
 
-      // --- [핵심 수정] 백엔드에서 content를 정제하거나 변환하는 로직을 모두 제거합니다. ---
-      // const sanitizedContent = sanitizeContent(content); // <- 이 라인을 완전히 삭제했습니다.
-
-      // 1. (기존 로직) 작성자 프로필 정보를 조회합니다.
-      const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
-      }));
-
-      // 2. (기존 로직) 최종 닉네임을 결정합니다.
-      const authorNickname = authorProfile?.nickname || userEmail?.split('@')[0] || '익명';
-      const authorBio = authorProfile?.bio || '';
-      const authorAvatarUrl = authorProfile?.avatarUrl || '';
-
-      // 3. [수정] 원본 마크다운(content)에서 첫 번째 이미지 URL을 찾습니다.
-      const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-      const firstImageMatch = content.match(imageUrlRegex); // 'sanitizedContent'를 'content'로 변경
-      let thumbnailUrl = '';
-      let imageUrl = '';
-      if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-        imageUrl = firstImageMatch[1];
-        thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
+      // 방어 코드: user 컨텍스트가 없는 비정상적인 경우를 대비
+      if (!authorContext) {
+        return c.json({ message: 'Unauthorized: User context is missing.' }, 401);
       }
 
-      // 4. [수정] 원본 마크다운(content)을 기반으로 summary를 생성합니다.
-      const summary = (content ?? '') // 'sanitizedContent'를 'content'로 변경
-        .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '') // 이미지 태그 제거
-        .replace(/<[^>]*>?/gm, ' ') // HTML 태그 제거
-        .replace(/[#*`_~=\->|]/g, '') // 마크다운 특수문자 제거
-        .replace(/\s+/g, ' ') // 연속된 공백을 하나로
-        .trim()
-        .substring(0, 150) + ((content?.length ?? 0) > 150 ? '...' : ''); // 'sanitizedContent'를 'content'로 변경
+      // 1. 모든 비즈니스 로직을 서비스 계층에 위임합니다.
+      const newPost = await postsService.createPost(authorContext, postInput);
 
-      // 5. Post 아이템 객체를 정의할 때, 원본 마크다운(content)을 저장합니다.
-      const postItem = {
-        PK: `POST#${postId}`, SK: 'METADATA', data_type: 'Post',
-        postId, title,
-        content: content, // 'sanitizedContent'를 'content'로 변경하여 원본 저장
-        summary, authorId: userId, authorEmail: userEmail,
-        createdAt: now, updatedAt: now, isDeleted: false, viewCount: 0,
-        status: status, visibility: visibility,
-        authorNickname: authorNickname,
-        authorBio: authorBio,
-        authorAvatarUrl: authorAvatarUrl,
-        tags: tags, thumbnailUrl: thumbnailUrl, imageUrl: imageUrl,
-        GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
-        GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
-      };
+      // 2. 서비스가 반환한 생성된 게시물 정보를 클라이언트에 전달합니다.
+      return c.json({ message: 'Post created successfully!', post: newPost }, 201);
 
-      const writeRequests: { PutRequest: { Item: Record<string, any> } }[] = [];
-      writeRequests.push({ PutRequest: { Item: postItem } });
-
-      // 6. (기존 로직) Tag 아이템을 생성합니다.
-      for (const tagName of tags) {
-        const normalizedTagName = tagName.trim().toLowerCase();
-        if (normalizedTagName) {
-          const tagItem = {
-            PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}`,
-            postId: postItem.postId, title: postItem.title, summary: postItem.summary,
-            authorNickname: postItem.authorNickname,
-            authorBio: postItem.authorBio,
-            authorAvatarUrl: postItem.authorAvatarUrl,
-            createdAt: postItem.createdAt, status: postItem.status,
-            visibility: postItem.visibility, thumbnailUrl: postItem.thumbnailUrl,
-            viewCount: postItem.viewCount, tags: postItem.tags,
-          };
-          writeRequests.push({ PutRequest: { Item: tagItem } });
-        }
-      }
-
-      if (writeRequests.length > 0) {
-        await ddbDocClient.send(new BatchWriteCommand({
-          RequestItems: { [TABLE_NAME]: writeRequests },
-        }));
-      }
-
-      return c.json({ message: 'Post created successfully!', post: postItem }, 201);
     } catch (error: any) {
       console.error('Create Post Error:', error.stack || error);
       return c.json({ message: 'Internal Server Error creating post.', error: error.message }, 500);
@@ -454,7 +218,7 @@ postsRouter.post(
   }
 );
 
-// --- [4] PUT /:postId - 게시물 수정 (v3.0 - 백엔드 정제 로직 제거) ---
+// --- [4] PUT /:postId - 게시물 수정 (v4.0 - 서비스 계층 분리) ---
 postsRouter.put(
   '/:postId',
   cookieAuthMiddleware,
@@ -462,119 +226,25 @@ postsRouter.put(
   zValidator('json', UpdatePostSchema),
   async (c) => {
     const postId = c.req.param('postId');
-    const updateData = c.req.valid('json');
+    const updateInput = c.req.valid('json');
     const userId = c.get('userId');
-    const now = new Date().toISOString();
-    const TABLE_NAME = process.env.TABLE_NAME!;
-    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+
+    if (!userId) {
+      return c.json({ message: 'Unauthorized: User ID is missing.' }, 401);
+    }
 
     try {
-      // 1. (기존 로직) 수정할 게시물의 원본 데이터를 가져옵니다.
-      const { Item } = await ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-      }));
+      const result = await postsService.updatePost(postId, userId, updateInput);
 
-      if (!Item || Item.isDeleted) return c.json({ message: 'Post not found.' }, 404);
-      if (Item.authorId !== userId) return c.json({ message: 'Forbidden.' }, 403);
-
-      const existingPost = Item as Post;
-
-      // 2. (기존 로직) 작성자의 최신 프로필 정보를 조회합니다.
-      const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${existingPost.authorId}`, SK: 'PROFILE' },
-      }));
-      const authorNickname = authorProfile?.nickname || existingPost.authorEmail?.split('@')[0] || '익명';
-      const authorBio = authorProfile?.bio || existingPost.authorBio || '';
-      const authorAvatarUrl = authorProfile?.avatarUrl || existingPost.authorAvatarUrl || '';
-
-      // 3. (기존 로직) 수정될 최종 게시물 상태를 미리 계산합니다.
-      const finalPostState: Partial<Post> = { ...updateData, updatedAt: now, authorNickname };
-
-      // --- [핵심 수정] content가 수정된 경우, 원본 마크다운을 기반으로 관련 속성을 재계산합니다. ---
-      if (updateData.content) {
-        // [삭제] content 정제 로직을 완전히 제거합니다.
-        // const sanitizedContent = sanitizeContent(updateData.content);
-        // finalPostState.content = sanitizedContent; // <- 이 라인도 필요 없습니다. finalPostState에 이미 updateData.content가 포함되어 있습니다.
-
-        // 3.1 [수정] 원본 마크다운(updateData.content)을 기반으로 summary를 재생성합니다.
-        finalPostState.summary = updateData.content
-          .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
-          .replace(/<[^>]*>?/gm, ' ')
-          .replace(/[#*`_~=\->|]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .substring(0, 150) + (updateData.content.length > 150 ? '...' : '');
-
-        // 3.2 [수정] 원본 마크다운(updateData.content)을 기반으로 썸네일을 재추출합니다.
-        const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
-        const firstImageMatch = updateData.content.match(imageUrlRegex); // 'sanitizedContent'를 'updateData.content'로 변경
-        if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
-          finalPostState.imageUrl = firstImageMatch[1];
-          finalPostState.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
-        } else {
-          finalPostState.imageUrl = '';
-          finalPostState.thumbnailUrl = '';
-        }
+      if (result === 'not_found') {
+        return c.json({ message: 'Post not found.' }, 404);
+      }
+      if (result === 'forbidden') {
+        return c.json({ message: 'Forbidden.' }, 403);
       }
 
-      // 4. (기존 로직) 태그 동기화 로직
-      if (finalPostState.tags) {
-        const oldTags: string[] = existingPost.tags || [];
-        const newTags: string[] = finalPostState.tags;
-        const tagsToDelete = oldTags.filter(t => !newTags.includes(t));
-        const writeRequests: any[] = [];
+      return c.json({ message: 'Post updated successfully!', post: result }, 200);
 
-        tagsToDelete.forEach(tagName => writeRequests.push({ DeleteRequest: { Key: { PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}` } } }));
-
-        newTags.forEach(tagName => {
-          const tagItem = {
-            PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
-            postId,
-            title: finalPostState.title || existingPost.title,
-            summary: finalPostState.summary || existingPost.summary,
-            authorNickname: authorNickname,
-            authorBio: authorBio,
-            authorAvatarUrl: authorAvatarUrl,
-            createdAt: existingPost.createdAt,
-            status: finalPostState.status || existingPost.status,
-            visibility: finalPostState.visibility || existingPost.visibility,
-            thumbnailUrl: finalPostState.thumbnailUrl === undefined ? existingPost.thumbnailUrl : finalPostState.thumbnailUrl,
-            viewCount: existingPost.viewCount,
-            tags: newTags,
-          };
-          writeRequests.push({ PutRequest: { Item: tagItem } });
-        });
-
-        if (writeRequests.length > 0) {
-          await ddbDocClient.send(new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: writeRequests } }));
-        }
-      }
-
-      // 5. (기존 로직) Post 아이템을 업데이트합니다.
-      const updateExpressionParts: string[] = [];
-      const expressionAttributeValues: Record<string, any> = {};
-      const expressionAttributeNames: Record<string, string> = {};
-      for (const [key, value] of Object.entries(finalPostState)) {
-        if (value !== undefined) {
-          updateExpressionParts.push(`#${key} = :${key}`);
-          expressionAttributeNames[`#${key}`] = key;
-          expressionAttributeValues[`:${key}`] = value;
-        }
-      }
-      if (updateExpressionParts.length > 0) {
-        const updateExpression = `SET ${updateExpressionParts.join(', ')}`;
-        const { Attributes } = await ddbDocClient.send(new UpdateCommand({
-          TableName: TABLE_NAME, Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-          UpdateExpression: updateExpression,
-          ExpressionAttributeNames: expressionAttributeNames,
-          ExpressionAttributeValues: expressionAttributeValues,
-          ReturnValues: ReturnValue.ALL_NEW,
-        }));
-        return c.json({ message: 'Post updated successfully!', post: Attributes }, 200);
-      } else {
-        return c.json({ message: 'No changes detected.', post: existingPost }, 200);
-      }
     } catch (error: any) {
       console.error('Update Post Error:', error);
       return c.json({ message: 'Internal Server Error updating post.', error: error.message }, 500);
@@ -582,7 +252,7 @@ postsRouter.put(
   }
 );
 
-// --- [5] DELETE /:postId - 게시물 삭제 (v2.2 - TAG 아이템 TTL 적용) ---
+// --- [5] DELETE /:postId - 게시물 삭제 (v4.0 - 서비스 계층 분리) ---
 postsRouter.delete(
   '/:postId',
   cookieAuthMiddleware,
@@ -590,97 +260,23 @@ postsRouter.delete(
   async (c) => {
     const postId = c.req.param('postId');
     const userId = c.get('userId');
-    const TABLE_NAME = process.env.TABLE_NAME!;
-    const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
-    const s3 = new S3Client({ region: process.env.REGION });
+
+    // 방어 코드: userId가 없는 비정상적인 경우
+    if (!userId) {
+      return c.json({ message: 'Unauthorized: User ID is missing.' }, 401);
+    }
 
     try {
-      // 1. (기존 로직) 삭제 전 원본 게시물을 가져옵니다.
-      const { Item: existingPost } = await ddbDocClient.send(new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-      }));
+      const result = await postsService.deletePost(postId, userId);
 
-      if (!existingPost || existingPost.isDeleted) {
+      if (result === 'not_found') {
         return c.json({ message: 'Post not found for deletion.' }, 404);
       }
-      if (existingPost.authorId !== userId) {
+      if (result === 'forbidden') {
         return c.json({ message: 'Forbidden: You are not the author.' }, 403);
       }
 
-      // 2. (기존 로직) S3 이미지 URL들을 추출하고 삭제합니다.
-      const content = existingPost.content || '';
-      // ... (S3 키 추출 및 삭제 로직은 변경 없음)
-      const imageUrlRegex = new RegExp(`https://${BUCKET_NAME}.s3.[^/]+/(images|thumbnails)/([^)]+)`, 'g');
-      const keysToDelete = new Set<string>();
-      let match;
-      while ((match = imageUrlRegex.exec(content)) !== null) {
-        const key = `${match[1]}/${match[2]}`;
-        keysToDelete.add(key);
-        if (match[1] === 'images') {
-          keysToDelete.add(`thumbnails/${match[2]}`);
-        } else {
-          keysToDelete.add(`images/${match[2]}`);
-        }
-      }
-      if (keysToDelete.size > 0) {
-        await s3.send(new DeleteObjectsCommand({
-          Bucket: BUCKET_NAME,
-          Delete: { Objects: Array.from(keysToDelete).map(key => ({ Key: key })), Quiet: true },
-        }));
-        console.log(`Deleted ${keysToDelete.size} objects from S3 for post ${postId}`);
-      }
-
-      const now = new Date();
-      const ttlInSeconds = Math.floor(now.getTime() / 1000) + (7 * 24 * 60 * 60);
-
-      const updatePromises: Promise<any>[] = [];
-
-      // 3.1 POST 아이템 업데이트 약속(Promise) 추가
-      const postUpdatePromise = ddbDocClient.send(new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `POST#${postId}`, SK: 'METADATA' },
-        // [수정] 'ttl'을 별명 '#ttl'으로 변경
-        UpdateExpression: 'set isDeleted = :d, updatedAt = :u, #ttl = :ttl',
-        // [신규] '#ttl'이 실제로는 'ttl' 속성임을 알려줍니다.
-        ExpressionAttributeNames: {
-          '#ttl': 'ttl',
-        },
-        ExpressionAttributeValues: {
-          ':d': true,
-          ':u': now.toISOString(),
-          ':ttl': ttlInSeconds,
-        },
-      }));
-      updatePromises.push(postUpdatePromise);
-
-      // 3.2 TAG 아이템 업데이트 약속(Promise)들 추가
-      if (existingPost.tags && existingPost.tags.length > 0) {
-        for (const tagName of existingPost.tags) {
-          const normalizedTagName = tagName.trim().toLowerCase();
-          if (normalizedTagName) {
-            const tagUpdatePromise = ddbDocClient.send(new UpdateCommand({
-              TableName: TABLE_NAME,
-              Key: { PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}` },
-              // [수정] 'ttl'을 별명 '#ttl'으로 변경
-              UpdateExpression: 'set isDeleted = :d, #ttl = :ttl',
-              // [신규] '#ttl'이 실제로는 'ttl' 속성임을 알려줍니다.
-              ExpressionAttributeNames: {
-                '#ttl': 'ttl',
-              },
-              ExpressionAttributeValues: {
-                ':d': true,
-                ':ttl': ttlInSeconds,
-              },
-            }));
-            updatePromises.push(tagUpdatePromise);
-          }
-        }
-      }
-
-      // 4. 모든 업데이트 작업을 병렬로 실행합니다.
-      await Promise.all(updatePromises);
-
+      // 성공 시 (result === true)
       return c.json({ message: 'Post and associated items soft-deleted successfully! TTL set for 7 days.' }, 200);
 
     } catch (error: any) {

@@ -1,8 +1,14 @@
 // 파일 위치: apps/backend/src/services/posts.service.ts
 
 import { checkUserLikeStatus } from './likes.service';
+import { v4 as uuidv4 } from 'uuid';
+import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { z } from 'zod';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { ddbDocClient } from '../lib/dynamodb';
 import * as postsRepository from '../repositories/posts.repository';
 import type { Post, UserContext } from '../lib/types';
+
 
 /**
  * 게시물과 관련된 비즈니스 로직을 처리하는 서비스 함수들의 모음입니다.
@@ -111,4 +117,327 @@ export async function getPostList({ limit, cursor, userGroups }: GetPostListOpti
   });
 
   return { posts: enrichedPosts, nextCursor };
+}
+
+/**
+ * 추천 게시물 데이터(Hero Post, Editor's Picks)를 조회합니다.
+ * @param userGroups 현재 사용자의 그룹 정보 (관리자 여부 확인용)
+ * @returns Hero Post와 Editor's Picks 목록
+ */
+export async function getFeaturedPosts(userGroups?: string[]) {
+  const isAdmin = userGroups?.includes('Admins') ?? false;
+
+  // 1. [데이터 조회] 사이트 설정과 'featured' 태그 게시물 목록을 병렬로 가져옵니다.
+  const [config, featuredItems] = await Promise.all([
+    postsRepository.findSiteConfig(),
+    postsRepository.findPostsByTag('featured', isAdmin),
+  ]);
+
+  const heroPostId = config?.heroPostId;
+
+  // 2. [데이터 필터링 및 가공] Hero 게시물과 Editor's Picks를 분리하고 필터링합니다.
+  let heroPostItem: Post | null = null;
+  if (heroPostId) {
+    // 'featured' 태그 목록에 Hero 게시물이 포함되어 있을 수 있으므로, DB를 다시 조회하는 대신 목록에서 찾습니다.
+    heroPostItem = featuredItems.find(p => p.postId === heroPostId) || null;
+    // 만약 featured 태그 목록에 없다면 (태그가 제거된 경우 등), DB에서 직접 조회합니다.
+    if (!heroPostItem) {
+      heroPostItem = await postsRepository.findPostById(heroPostId);
+    }
+  }
+
+  const editorPicksItems = featuredItems
+    .filter(p => p.postId !== heroPostId) // Hero 게시물 제외
+    .slice(0, 4); // 최대 4개만 선택
+
+  // 3. [데이터 보강] 보강이 필요한 모든 게시물 목록을 준비합니다.
+  const postsToEnrich = [...editorPicksItems];
+  if (heroPostItem) {
+    postsToEnrich.push(heroPostItem);
+  }
+
+  if (postsToEnrich.length === 0) {
+    return { heroPost: null, editorPicks: [] };
+  }
+
+  // 4. 댓글 수를 한 번에 조회하고, 각 게시물에 보강합니다.
+  const postIds = postsToEnrich.map(p => p.postId);
+  const commentCounts = await postsRepository.findCommentCounts(postIds);
+
+  const enrich = (post: Post): Post & { commentCount: number } => ({
+    ...post,
+    commentCount: commentCounts[post.postId] || 0,
+    likeCount: post.likeCount || 0,
+  });
+
+  const enrichedHeroPost = heroPostItem ? enrich(heroPostItem) : null;
+  const enrichedEditorPicks = editorPicksItems.map(enrich);
+
+  // 5. 최종 데이터 구조로 반환합니다.
+  return {
+    heroPost: enrichedHeroPost,
+    editorPicks: enrichedEditorPicks,
+  };
+}
+
+// 파일 위치: apps/backend/src/services/posts.service.ts
+// ... (기존 함수들) ...
+
+interface GetLatestPostsOptions {
+  limit: number;
+  cursor?: string;
+  userGroups?: string[];
+}
+
+/**
+ * 추천 게시물을 제외한 최신 게시물 목록을 조회합니다.
+ * @param options limit, cursor, userGroups를 포함하는 옵션 객체
+ * @returns 최신 게시물 배열과 다음 페이지를 위한 커서
+ */
+export async function getLatestPosts({ limit, cursor, userGroups }: GetLatestPostsOptions) {
+  const isAdmin = userGroups?.includes('Admins') ?? false;
+
+  // 1. 제외해야 할 추천 게시물 ID 목록을 가져옵니다.
+  const [config, featuredItems] = await Promise.all([
+    postsRepository.findSiteConfig(),
+    postsRepository.findPostsByTag('featured', true),
+  ]);
+
+  const excludeIds = new Set<string>();
+  if (config?.heroPostId) {
+    excludeIds.add(config.heroPostId);
+  }
+  featuredItems.forEach(item => excludeIds.add(item.postId));
+  
+  // 2. [핵심 수정] 확장된 findAllPosts 함수를 사용하여 DB 레벨에서 필터링합니다.
+  const { posts, nextCursor } = await postsRepository.findAllPosts({
+    limit,
+    cursor,
+    isAdmin,
+    excludeIds,
+  });
+
+  // 서비스 계층에서는 더 이상 비효율적인 필터링을 할 필요가 없습니다.
+  return { posts, nextCursor };
+}
+
+const CreatePostSchema = z.object({
+  title: z.string().min(1).max(100),
+  content: z.string().min(1),
+  tags: z.array(z.string()).optional(),
+  status: z.enum(['published', 'draft']).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+});
+type CreatePostInput = z.infer<typeof CreatePostSchema>;
+
+/**
+ * 새로운 게시물을 생성합니다.
+ * @param authorContext 게시물 작성자 정보
+ * @param postInput 게시물 생성에 필요한 데이터 (title, content 등)
+ * @returns 생성된 Post 아이템 객체
+ */
+export async function createPost(authorContext: UserContext, postInput: CreatePostInput): Promise<Post> {
+  const { userId, userEmail } = authorContext;
+  const { title, content, tags = [], status = 'published', visibility = 'public' } = postInput;
+  
+  const postId = uuidv4();
+  const now = new Date().toISOString();
+  const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+
+  // 1. [비즈니스 로직] 작성자 프로필 정보를 조회하여 닉네임, 바이오 등을 결정합니다.
+  // TODO: 이 로직은 추후 users.repository.ts로 이전되어야 합니다.
+  const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
+    TableName: process.env.TABLE_NAME!,
+    Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+  }));
+  const authorNickname = authorProfile?.nickname || userEmail?.split('@')[0] || '익명';
+  const authorBio = authorProfile?.bio || '';
+  const authorAvatarUrl = authorProfile?.avatarUrl || '';
+
+  // 2. [비즈니스 로직] content를 기반으로 thumbnailUrl, imageUrl, summary 등 파생 데이터를 생성합니다.
+  const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+  const firstImageMatch = content.match(imageUrlRegex);
+  let thumbnailUrl = '';
+  let imageUrl = '';
+  if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+    imageUrl = firstImageMatch[1];
+    thumbnailUrl = imageUrl.replace('/images/', '/thumbnails/');
+  }
+
+  const summary = content
+    .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
+    .replace(/<[^>]*>?/gm, ' ')
+    .replace(/[#*`_~=\->|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 150) + (content.length > 150 ? '...' : '');
+
+  // 3. [데이터 객체 생성] Repository에 전달할 Post 아이템과 Tag 아이템들을 준비합니다.
+  const postItem: Post = {
+    PK: `POST#${postId}`, SK: 'METADATA',
+    postId, title, content, summary, 
+    authorId: userId, authorEmail: userEmail,
+    createdAt: now, updatedAt: now, 
+    isDeleted: false, viewCount: 0,
+    status, visibility,
+    authorNickname, authorBio, authorAvatarUrl,
+    tags, thumbnailUrl, imageUrl,
+    // GSI Keys
+    GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
+    GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
+  };
+
+  const tagItems = tags.map(tagName => {
+    const normalizedTagName = tagName.trim().toLowerCase();
+    return {
+      PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}`,
+      // 태그 아이템에 비정규화하여 저장할 게시물 정보들
+      postId: postItem.postId, title: postItem.title, summary: postItem.summary,
+      authorNickname: postItem.authorNickname,
+      authorBio: postItem.authorBio,
+      authorAvatarUrl: postItem.authorAvatarUrl,
+      createdAt: postItem.createdAt, status: postItem.status,
+      visibility: postItem.visibility, thumbnailUrl: postItem.thumbnailUrl,
+      viewCount: postItem.viewCount, tags: postItem.tags,
+    };
+  });
+
+  // 4. [데이터 쓰기 위임] Repository를 호출하여 DB에 최종적으로 저장합니다.
+  await postsRepository.createPostWithTags(postItem, tagItems);
+
+  return postItem;
+}
+
+/**
+ * 게시물을 삭제합니다. (S3 이미지 삭제 포함)
+ * @param postId 삭제할 게시물의 ID
+ * @param currentUserId 삭제를 요청한 사용자의 ID (권한 확인용)
+ * @returns 삭제 성공 시 true, 게시물이 없으면 'not_found', 권한이 없으면 'forbidden'
+ */
+export async function deletePost(postId: string, currentUserId: string): Promise<boolean | 'not_found' | 'forbidden'> {
+  // 1. [데이터 조회] 삭제할 게시물이 실제로 존재하는지, 그리고 권한 확인을 위해 원본 데이터를 가져옵니다.
+  const post = await postsRepository.findPostById(postId);
+
+  if (!post) {
+    return 'not_found';
+  }
+
+  // 2. [비즈니스 로직] 삭제 권한을 확인합니다.
+  if (post.authorId !== currentUserId) {
+    return 'forbidden';
+  }
+
+  // 3. [외부 시스템 연동] S3에 업로드된 관련 이미지들을 삭제합니다.
+  const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+  const content = post.content || '';
+  const imageUrlRegex = new RegExp(`https://${BUCKET_NAME}.s3.[^/]+/(images|thumbnails)/([^)]+)`, 'g');
+  const keysToDelete = new Set<string>();
+  let match;
+  while ((match = imageUrlRegex.exec(content)) !== null) {
+    const key = `${match[1]}/${match[2]}`;
+    keysToDelete.add(key);
+    if (match[1] === 'images') {
+      keysToDelete.add(`thumbnails/${match[2]}`);
+    } else {
+      keysToDelete.add(`images/${match[2]}`);
+    }
+  }
+
+  if (keysToDelete.size > 0) {
+    const s3 = new S3Client({ region: process.env.REGION });
+    await s3.send(new DeleteObjectsCommand({
+      Bucket: BUCKET_NAME,
+      Delete: { Objects: Array.from(keysToDelete).map(key => ({ Key: key })), Quiet: true },
+    }));
+    console.log(`Deleted ${keysToDelete.size} objects from S3 for post ${postId}`);
+  }
+
+  // 4. [데이터 쓰기 위임] Repository를 호출하여 DB에서 논리적으로 삭제 처리합니다.
+  await postsRepository.softDeletePostAndTags(post);
+
+  return true;
+}
+
+const UpdatePostSchema = z.object({
+  title: z.string().min(1).max(100).optional(),
+  content: z.string().min(1).optional(),
+  tags: z.array(z.string()).optional(),
+  status: z.enum(['published', 'draft']).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+}).refine(data => Object.keys(data).length > 0, {
+  message: '수정할 내용을 하나 이상 제공해야 합니다.',
+});
+type UpdatePostInput = z.infer<typeof UpdatePostSchema>;
+
+/**
+ * 게시물을 수정합니다.
+ * @param postId 수정할 게시물의 ID
+ * @param currentUserId 수정를 요청한 사용자의 ID
+ * @param updateInput 수정할 데이터
+ * @returns 수정된 Post 객체, 또는 'not_found', 'forbidden'
+ */
+export async function updatePost(postId: string, currentUserId: string, updateInput: UpdatePostInput): Promise<Post | 'not_found' | 'forbidden'> {
+  // 1. [데이터 조회] 수정할 게시물의 원본 데이터를 가져옵니다.
+  const existingPost = await postsRepository.findPostById(postId);
+  if (!existingPost) {
+    return 'not_found';
+  }
+
+  // 2. [비즈니스 로직] 수정 권한을 확인합니다.
+  if (existingPost.authorId !== currentUserId) {
+    return 'forbidden';
+  }
+
+  const now = new Date().toISOString();
+  const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
+  const finalUpdateData: Partial<Post> = { ...updateInput, updatedAt: now };
+
+  // 3. [비즈니스 로직] content가 수정된 경우, 파생 데이터를 재계산합니다.
+  if (updateInput.content) {
+    const { content } = updateInput;
+    // Summary 재계산
+    finalUpdateData.summary = content
+      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ')
+      .replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim()
+      .substring(0, 150) + (content.length > 150 ? '...' : '');
+
+    // Thumbnail/Image URL 재계산
+    const imageUrlRegex = /!\[.*?\]\((https:\/\/[^)]+)\)/;
+    const firstImageMatch = content.match(imageUrlRegex);
+    if (firstImageMatch && firstImageMatch[1] && firstImageMatch[1].includes(BUCKET_NAME)) {
+      finalUpdateData.imageUrl = firstImageMatch[1];
+      finalUpdateData.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
+    } else {
+      finalUpdateData.imageUrl = '';
+      finalUpdateData.thumbnailUrl = '';
+    }
+  }
+
+  // 4. [비즈니스 로직] 태그 동기화 로직을 처리합니다.
+  if (updateInput.tags) {
+    const oldTags = new Set(existingPost.tags || []);
+    const newTags = new Set(updateInput.tags);
+    const tagsToDelete = [...oldTags].filter(t => !newTags.has(t));
+    const tagsToAdd = [...newTags].filter(t => !oldTags.has(t));
+    
+    // TODO: 작성자 프로필 정보(닉네임 등)가 변경되었을 경우를 대비해 모든 태그를 업데이트하는 것이 더 안정적일 수 있습니다.
+    // 우선 기존 로직과 동일하게, 추가되는 태그만 새로 생성합니다.
+    const postSnapshot = { ...existingPost, ...finalUpdateData };
+    const tagsToAddOrUpdate = updateInput.tags.map(tagName => ({
+      PK: `TAG#${tagName.trim().toLowerCase()}`, SK: `POST#${postId}`,
+      postId, title: postSnapshot.title, summary: postSnapshot.summary,
+      authorNickname: postSnapshot.authorNickname, authorBio: postSnapshot.authorBio,
+      authorAvatarUrl: postSnapshot.authorAvatarUrl, createdAt: postSnapshot.createdAt,
+      status: postSnapshot.status, visibility: postSnapshot.visibility,
+      thumbnailUrl: postSnapshot.thumbnailUrl, viewCount: postSnapshot.viewCount,
+      tags: postSnapshot.tags,
+    }));
+    
+    await postsRepository.syncTagsForPost(postId, tagsToDelete, tagsToAddOrUpdate);
+  }
+
+  // 5. [데이터 쓰기 위임] Repository를 호출하여 Post 아이템을 최종적으로 업데이트합니다.
+  const updatedPost = await postsRepository.updatePost(postId, finalUpdateData);
+
+  return updatedPost;
 }

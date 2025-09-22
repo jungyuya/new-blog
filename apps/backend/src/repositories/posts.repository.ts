@@ -1,6 +1,8 @@
 // 파일 위치: apps/backend/src/repositories/posts.repository.ts
 
 import { ddbDocClient } from '../lib/dynamodb';
+import { ReturnValue } from '@aws-sdk/client-dynamodb';
+import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import type { Post } from '../lib/types';
 import { 
   GetCommand, 
@@ -101,14 +103,15 @@ interface FindAllPostsOptions {
   limit: number;
   cursor?: string;
   isAdmin: boolean;
+  excludeIds?: Set<string>;
 }
 
 /**
  * 페이지네이션을 적용하여 게시물 목록을 조회합니다.
- * @param options limit, cursor, isAdmin을 포함하는 옵션 객체
+ * @param options limit, cursor, isAdmin, excludeIds를 포함하는 옵션 객체
  * @returns 게시물 배열과 다음 페이지를 위한 커서
  */
-export async function findAllPosts({ limit, cursor, isAdmin }: FindAllPostsOptions): Promise<{ posts: Post[], nextCursor: string | null }> {
+export async function findAllPosts({ limit, cursor, isAdmin, excludeIds }: FindAllPostsOptions): Promise<{ posts: Post[], nextCursor: string | null }> {
   const commandParams: QueryCommandInput = {
     TableName: TABLE_NAME,
     IndexName: 'GSI3',
@@ -118,23 +121,42 @@ export async function findAllPosts({ limit, cursor, isAdmin }: FindAllPostsOptio
     Limit: limit,
   };
 
+  const filterExpressions: string[] = [];
+  const expressionAttributeNames: Record<string, string> = {};
+
+  if (!isAdmin) {
+    filterExpressions.push('#status = :published AND #visibility = :public');
+    expressionAttributeNames['#status'] = 'status';
+    expressionAttributeNames['#visibility'] = 'visibility';
+    commandParams.ExpressionAttributeValues![':published'] = 'published';
+    commandParams.ExpressionAttributeValues![':public'] = 'public';
+  }
+  
+  // --- [핵심 수정] excludeIds가 있으면 FilterExpression을 동적으로 생성합니다. ---
+  if (excludeIds && excludeIds.size > 0) {
+    expressionAttributeNames['#postId'] = 'postId';
+    const excludeIdValues = Array.from(excludeIds);
+    const placeholders = excludeIdValues.map((_, index) => `:excludeId${index}`);
+    filterExpressions.push(`NOT (#postId IN (${placeholders.join(',')}))`);
+    excludeIdValues.forEach((id, index) => {
+      commandParams.ExpressionAttributeValues![`:excludeId${index}`] = id;
+    });
+  }
+
+  if (filterExpressions.length > 0) {
+    commandParams.FilterExpression = filterExpressions.join(' AND ');
+  }
+  if (Object.keys(expressionAttributeNames).length > 0) {
+    commandParams.ExpressionAttributeNames = expressionAttributeNames;
+  }
+  // --- 수정 끝 ---
+
   if (cursor) {
     try {
       commandParams.ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
     } catch (e) {
-      // 잘못된 형식의 커서는 서비스 계층에서 처리할 수 있도록 에러를 던집니다.
       throw new Error('Invalid cursor format.');
     }
-  }
-
-  if (!isAdmin) {
-    commandParams.FilterExpression = '#status = :published AND #visibility = :public';
-    commandParams.ExpressionAttributeNames = {
-      '#status': 'status',
-      '#visibility': 'visibility',
-    };
-    commandParams.ExpressionAttributeValues![':published'] = 'published';
-    commandParams.ExpressionAttributeValues![':public'] = 'public';
   }
 
   const { Items, LastEvaluatedKey } = await ddbDocClient.send(new QueryCommand(commandParams));
@@ -178,4 +200,218 @@ export async function findCommentCounts(postIds: string[]): Promise<Record<strin
 
   await Promise.all(promises);
   return counts;
+}
+
+/**
+ * 사이트의 메타데이터 설정을 조회합니다. (예: heroPostId)
+ * @returns 사이트 설정 객체 또는 null
+ */
+export async function findSiteConfig(): Promise<{ heroPostId?: string } | null> {
+  const command = new GetCommand({
+    TableName: TABLE_NAME,
+    Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
+  });
+  const { Item } = await ddbDocClient.send(command);
+  return Item || null;
+}
+
+/**
+ * 특정 태그가 붙은 게시물 목록을 GSI2를 통해 조회합니다.
+ * @param tagName 조회할 태그 이름
+ * @param isAdmin 관리자 여부
+ * @returns Post 배열
+ */
+export async function findPostsByTag(tagName: string, isAdmin: boolean): Promise<Post[]> {
+  const params: QueryCommandInput = {
+    TableName: TABLE_NAME,
+    IndexName: 'GSI2',
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: { ':pk': `TAG#${tagName}` },
+    ScanIndexForward: false,
+  };
+
+  if (!isAdmin) {
+    params.FilterExpression = '#status = :published AND #visibility = :public';
+    params.ExpressionAttributeNames = {
+      '#status': 'status',
+      '#visibility': 'visibility',
+    };
+    params.ExpressionAttributeValues![':published'] = 'published';
+    params.ExpressionAttributeValues![':public'] = 'public';
+  }
+
+  const { Items } = await ddbDocClient.send(new QueryCommand(params));
+  const activePosts = Items?.filter(post => !post.isDeleted) || [];
+  return activePosts as Post[];
+}
+
+/**
+ * 새로운 게시물과 관련 태그 아이템들을 BatchWriteCommand를 사용하여 한 번에 생성합니다.
+ * @param postItem 생성할 Post 아이템 객체
+ * @param tagItems 생성할 Tag 아이템 객체 배열
+ */
+export async function createPostWithTags(postItem: Post, tagItems: any[]): Promise<void> {
+  const writeRequests = [];
+
+  // 1. Post 아이템 추가
+  writeRequests.push({
+    PutRequest: {
+      Item: postItem,
+    },
+  });
+
+  // 2. Tag 아이템들 추가
+  for (const tagItem of tagItems) {
+    writeRequests.push({
+      PutRequest: {
+        Item: tagItem,
+      },
+    });
+  }
+
+  if (writeRequests.length === 0) {
+    return;
+  }
+
+  // DynamoDB BatchWrite는 최대 25개의 요청을 한 번에 처리할 수 있습니다.
+  // 현재 로직에서는 태그가 24개를 초과할 일이 거의 없으므로 분할 처리는 생략합니다.
+  const command = new BatchWriteCommand({
+    RequestItems: {
+      [TABLE_NAME]: writeRequests,
+    },
+  });
+
+  await ddbDocClient.send(command);
+}
+
+/**
+ * 특정 게시물과 관련된 모든 태그 아이템들을 논리적으로 삭제(soft-delete)합니다.
+ * isDeleted 플래그를 true로 설정하고, 7일 후 자동 삭제를 위한 TTL을 설정합니다.
+ * @param post 삭제할 Post 객체
+ */
+export async function softDeletePostAndTags(post: Post): Promise<void> {
+  const now = new Date();
+  const ttlInSeconds = Math.floor(now.getTime() / 1000) + (7 * 24 * 60 * 60); // 7 days from now
+
+  const updatePromises: Promise<any>[] = [];
+
+  // 1. Post 아이템 업데이트 Promise 추가
+  const postUpdatePromise = ddbDocClient.send(new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { PK: post.PK, SK: post.SK },
+    UpdateExpression: 'SET isDeleted = :d, updatedAt = :u, #ttl = :ttl',
+    ExpressionAttributeNames: { '#ttl': 'ttl' },
+    ExpressionAttributeValues: {
+      ':d': true,
+      ':u': now.toISOString(),
+      ':ttl': ttlInSeconds,
+    },
+  }));
+  updatePromises.push(postUpdatePromise);
+
+  // 2. Tag 아이템들 업데이트 Promise 추가
+  if (post.tags && post.tags.length > 0) {
+    for (const tagName of post.tags) {
+      const normalizedTagName = tagName.trim().toLowerCase();
+      if (normalizedTagName) {
+        const tagUpdatePromise = ddbDocClient.send(new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `TAG#${normalizedTagName}`, SK: `POST#${post.postId}` },
+          UpdateExpression: 'SET isDeleted = :d, #ttl = :ttl',
+          ExpressionAttributeNames: { '#ttl': 'ttl' },
+          ExpressionAttributeValues: {
+            ':d': true,
+            ':ttl': ttlInSeconds,
+          },
+        }));
+        updatePromises.push(tagUpdatePromise);
+      }
+    }
+  }
+
+  // 3. 모든 업데이트 작업을 병렬로 실행합니다.
+  await Promise.all(updatePromises);
+}
+
+/**
+ * 게시물 아이템의 속성을 업데이트합니다.
+ * @param postId 업데이트할 게시물의 ID
+ * @param updateData 업데이트할 데이터 객체
+ * @returns 업데이트된 Post 객체
+ */
+export async function updatePost(postId: string, updateData: Partial<Post>): Promise<Post> {
+  // 업데이트할 속성이 없으면 아무 작업도 하지 않고 에러를 던집니다.
+  if (Object.keys(updateData).length === 0) {
+    throw new Error('No update data provided.');
+  }
+
+  const updateExpressionParts: string[] = [];
+  const expressionAttributeValues: Record<string, any> = {};
+  const expressionAttributeNames: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(updateData)) {
+    if (value !== undefined) {
+      updateExpressionParts.push(`#${key} = :${key}`);
+      expressionAttributeNames[`#${key}`] = key;
+      expressionAttributeValues[`:${key}`] = value;
+    }
+  }
+
+  const updateExpression = `SET ${updateExpressionParts.join(', ')}`;
+
+  const command = new UpdateCommand({
+    TableName: TABLE_NAME,
+    Key: { PK: `POST#${postId}`, SK: 'METADATA' },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeNames: expressionAttributeNames,
+    ExpressionAttributeValues: expressionAttributeValues,
+    ReturnValues: ReturnValue.ALL_NEW,
+  });
+
+  const { Attributes } = await ddbDocClient.send(command);
+  return Attributes as Post;
+}
+
+/**
+ * 게시물 수정에 따른 태그 아이템들을 동기화합니다.
+ * (삭제할 태그는 삭제하고, 추가할 태그는 생성/업데이트합니다)
+ * @param postId 동기화할 게시물의 ID
+ * @param tagsToDelete 삭제할 태그 이름 배열
+ * @param tagsToAddOrUpdate 추가하거나 업데이트할 태그 아이템 객체 배열
+ */
+export async function syncTagsForPost(postId: string, tagsToDelete: string[], tagsToAddOrUpdate: any[]): Promise<void> {
+  const writeRequests: any[] = [];
+
+  // 1. 삭제할 태그 아이템 요청 추가
+  tagsToDelete.forEach(tagName => {
+    const normalizedTagName = tagName.trim().toLowerCase();
+    writeRequests.push({
+      DeleteRequest: {
+        Key: { PK: `TAG#${normalizedTagName}`, SK: `POST#${postId}` }
+      }
+    });
+  });
+
+  // 2. 추가/수정할 태그 아이템 요청 추가
+  tagsToAddOrUpdate.forEach(tagItem => {
+    writeRequests.push({
+      PutRequest: {
+        Item: tagItem
+      }
+    });
+  });
+
+  if (writeRequests.length === 0) {
+    return;
+  }
+
+  // BatchWrite는 최대 25개까지 가능하므로, 25개 이상일 경우 분할해서 처리해야 합니다.
+  // 여기서는 편의상 25개 이하라고 가정합니다.
+  const command = new BatchWriteCommand({
+    RequestItems: {
+      [TABLE_NAME]: writeRequests,
+    },
+  });
+
+  await ddbDocClient.send(command);
 }
