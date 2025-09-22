@@ -2,19 +2,11 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
-import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
-import { PutCommand, GetCommand, UpdateCommand, QueryCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { ReturnValue } from '@aws-sdk/client-dynamodb';
-import { ddbDocClient } from '../lib/dynamodb';
-import * as aiService from '../services/ai.service';
-import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware, tryAnonymousAuthMiddleware } from '../middlewares/auth.middleware';
-import { togglePostLike, checkUserLikeStatus } from '../services/likes.service';
-import type { AppEnv } from '../lib/types';
-import type { QueryCommandInput } from '@aws-sdk/lib-dynamodb';
-import type { Post } from '../lib/types';
-import * as postsService from '../services/posts.service';
 
+import { cookieAuthMiddleware, adminOnlyMiddleware, tryCookieAuthMiddleware, tryAnonymousAuthMiddleware } from '../middlewares/auth.middleware';
+import * as postsService from '../services/posts.service';
+import * as aiService from '../services/ai.service';
+import type { AppEnv } from '../lib/types';
 
 
 const CreatePostSchema = z.object({
