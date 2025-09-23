@@ -173,6 +173,7 @@ jobs:
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_API_ENDPOINT: /api
           NEXT_PUBLIC_GITHUB_URL: ${{ env.GITHUB_URL_FROM_SSM }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
           SENTRY_RELEASE: ${{ steps.set_release.outputs.release_id }}
 
         run: |          
