@@ -47,3 +47,8 @@ tmp
 !apps/frontend/.next/standalone/**
 !apps/frontend/.next/static/**
 !apps/frontend/public/**
+
+
+# .dockerignore
+# Sentry 소스맵 파일(.js.map)을 Docker 이미지에 포함시키지 않습니다.
+ **/*.js.map

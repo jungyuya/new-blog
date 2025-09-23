@@ -17,7 +17,7 @@ const TRENDING_SEARCHES = [
     'AWS',
     'Bedrock',
     '최적화',
-    'Frontend',
+    'Sentry',
 ];
 
 const RECENT_SEARCHES_KEY = 'recent-searches';
