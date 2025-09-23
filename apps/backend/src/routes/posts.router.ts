@@ -1,4 +1,4 @@
-// 파일 위치: apps/backend/src/routes/posts.router.ts (v1.1 - 모든 핸들러 로직 포함 최종본)
+// 파일 위치: apps/backend/src/routes/posts.router.ts (v4.0 - 서비스 계층 분리)
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
@@ -38,21 +38,16 @@ const postsRouter = new Hono<AppEnv>();
 // --- [1] GET / - 모든 게시물 조회 (v4.0 - 서비스 계층 분리) ---
 postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   const userGroups = c.get('userGroups');
-
-  // Zod를 사용하여 쿼리 파라미터 유효성 검사 및 기본값 설정을 라우터에서 처리합니다.
+  // Zod를 사용하여 쿼리 파라미터 유효성 검사 및 기본값 설정을 라우터에서 처리.
   const querySchema = z.object({
     limit: z.coerce.number().int().positive().default(12),
     cursor: z.string().optional(),
   });
-  
   const queryParseResult = querySchema.safeParse(c.req.query());
-
   if (!queryParseResult.success) {
     return c.json({ message: 'Invalid query parameters', errors: queryParseResult.error.issues }, 400);
-  }
-  
+  } 
   const { limit, cursor } = queryParseResult.data;
-
   try {
     // 1. 모든 비즈니스 로직을 서비스 계층에 위임합니다.
     const result = await postsService.getPostList({

@@ -108,6 +108,10 @@ jobs:
       id-token: write
       contents: read
       packages: write
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: 'deep-dive' # Sentry 설정 > General Settings 에서 확인
+      SENTRY_PROJECT: 'jungyu-blog-frontend'  
     steps:
       # --- 1악장: 준비 (Setup) ---
       - name: "Checkout code"
@@ -169,9 +173,16 @@ jobs:
           NEXT_PUBLIC_RELEASE_ID: "${{ steps.set_release.outputs.release_id }}"
           NEXT_PUBLIC_API_ENDPOINT: /api
           NEXT_PUBLIC_GITHUB_URL: ${{ env.GITHUB_URL_FROM_SSM }}
+          SENTRY_RELEASE: ${{ steps.set_release.outputs.release_id }}
+
         run: |          
           echo "🚀 Starting the single build..."
           pnpm --filter frontend run build
+
+      - name: "Upload Sourcemaps to Sentry"
+        uses: getsentry/action-release@v1
+        with:
+          sourcemaps: './apps/frontend/.next'
 
       - name: "Build Sharp Lambda Layer Artifact"
         if: ${{ needs.detect_changes.outputs.blog == 'true' || needs.detect_changes.outputs.common == 'true' || github.event_name == 'workflow_dispatch' }}

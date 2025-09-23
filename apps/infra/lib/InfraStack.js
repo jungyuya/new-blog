@@ -1,7 +1,5 @@
 "use strict";
 // apps/infra/lib/InfraStack.ts
-// [프로젝트 헌법] 제1조: 인프라 구성법 (Phase 5: 프론트엔드 통합 최종안)
-// 최종 수정일: 2025년 8월 4일
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
