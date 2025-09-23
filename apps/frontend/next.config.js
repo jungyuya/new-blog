@@ -47,36 +47,43 @@ module.exports = nextConfig;
 const { withSentryConfig } = require("@sentry/nextjs");
 
 module.exports = withSentryConfig(
+  // 첫 번째 인자는 우리가 위에서 정의한 nextConfig 객체입니다.
+  // module.exports를 그대로 사용하는 것이 안전합니다.
   module.exports,
+  
+  // 두 번째 인자는 Sentry Webpack Plugin 옵션입니다.
   {
     // For all available options, see:
-    // https://www.npmjs.com/package/@sentry/webpack-plugin#options
+    // https://github.com/getsentry/sentry-webpack-plugin#options
 
     org: "deep-dive",
     project: "jungyu-blog-frontend",
+    
+    // --- [핵심 수정] 빌드 시 Sentry의 자동 소스맵 업로드를 비활성화합니다. ---
+    // 이 옵션을 true로 설정하면, `next build`는 더 이상 소스맵을 업로드하지 않습니다.
+    // 제어권은 전적으로 우리의 CI/CD 워크플로우로 넘어갑니다.
+    disable: true,
+    // --- 수정 끝 ---
 
     // Only print logs for uploading source maps in CI
     silent: !process.env.CI,
+  },
 
+  // 세 번째 인자는 Sentry Next.js SDK 옵션입니다.
+  {
     // For all available options, see:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
     // Upload a larger set of source maps for prettier stack traces (increases build time)
     widenClientFileUpload: true,
 
-    // Uncomment to route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
-    // This can increase your server load as well as your hosting bill.
-    // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
-    // side errors will fail.
-    // tunnelRoute: "/monitoring",
+    // Hides source maps from generated client bundles
+    hideSourceMaps: true,
 
     // Automatically tree-shake Sentry logger statements to reduce bundle size
     disableLogger: true,
 
-    // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
+    // Enables automatic instrumentation of Vercel Cron Monitors.
     automaticVercelMonitors: true,
   }
 );
