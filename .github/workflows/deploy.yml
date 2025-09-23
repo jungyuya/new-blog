@@ -185,6 +185,18 @@ jobs:
         with:
           sourcemaps: './apps/frontend/.next'
 
+      # --- Sentry 공식 액션 대신, CLI를 직접 사용하여 백그라운드에서 실행합니다. ---
+      - name: "Upload Sourcemaps to Sentry (in Background)"
+        run: |
+          echo "Installing @sentry/cli..."
+          npm install -g @sentry/cli
+
+          echo "Starting Sentry sourcemap upload in the background..."
+          sentry-cli releases files ${{ env.SENTRY_RELEASE }} upload-sourcemaps ./apps/frontend/.next --org ${{ env.SENTRY_ORG }} --project ${{ env.SENTRY_PROJECT }} &
+
+          echo "✅ Sourcemap upload process has been started in the background."
+          echo "CI/CD pipeline will now proceed to the next step without waiting for the upload to complete."         
+
       - name: "Build Sharp Lambda Layer Artifact"
         if: ${{ needs.detect_changes.outputs.blog == 'true' || needs.detect_changes.outputs.common == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
