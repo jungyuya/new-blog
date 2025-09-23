@@ -180,10 +180,15 @@ jobs:
           echo "🚀 Starting the single build..."
           pnpm --filter frontend run build
 
-      - name: "Upload Sourcemaps to Sentry"
-        uses: getsentry/action-release@v1
-        with:
-          sourcemaps: './apps/frontend/.next'
+      - name: "Upload Sourcemaps to Sentry (in Background)"
+        run: |
+          echo "Installing @sentry/cli..."
+          npm install -g @sentry/cli
+          
+          echo "Starting Sentry sourcemap upload in the background..."
+          sentry-cli releases files ${{ env.SENTRY_RELEASE }} upload-sourcemaps ./apps/frontend/.next --org ${{ env.SENTRY_ORG }} --project ${{ env.SENTRY_PROJECT }} &
+          
+          echo "✅ Sourcemap upload process has been started in the background."
 
       # --- Sentry 공식 액션 대신, CLI를 직접 사용하여 백그라운드에서 실행합니다. ---
       - name: "Upload Sourcemaps to Sentry (in Background)"
