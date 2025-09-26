@@ -21,62 +21,68 @@ async function markdownToPlainText(markdown: string): Promise<string> {
 
 // 메인 핸들러 함수
 export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
-    console.log('Received DynamoDB Stream event:', JSON.stringify(event, null, 2));
+    // --- [핵심 수정 1] 핸들러 시작점에 무조건 로그를 남깁니다. ---
+    console.log(`SpeechSynthesisLambda invoked with ${event.Records.length} records.`);
 
     for (const record of event.Records) {
-        // INSERT 또는 MODIFY 이벤트만 처리
+        // --- [핵심 수정 2] 각 레코드 처리 시작 시 로그를 남깁니다. ---
+        console.log(`Processing record with eventName: ${record.eventName}`);
+
         if (record.eventName !== 'INSERT' && record.eventName !== 'MODIFY') {
+            console.log(`Skipping record because eventName is not INSERT or MODIFY.`);
             continue;
         }
 
-        // NewImage에서 Post 데이터 추출
         const newImage = record.dynamodb?.NewImage;
         if (!newImage) {
+            console.log(`Skipping record because NewImage is missing.`);
             continue;
         }
 
         const post = unmarshall(newImage as any) as Post;
 
-        // 1. 'published' 상태인 Post 아이템만 처리
+        // --- [핵심 수정 3] 필터링 조건과 값을 명확하게 로그로 남깁니다. ---
+        console.log(`Checking post: postId=${post.postId}, status=${post.status}, hasSpeechUrl=${!!post.speechUrl}`);
+
         if (post.status !== 'published' || !post.postId) {
-            console.log(`Skipping post ${post.postId || 'unknown'} with status: ${post.status}`);
+            console.log(`FILTERED: Skipping post due to status ('${post.status}') or missing postId.`);
             continue;
         }
 
-        // 2. content가 없거나 너무 짧으면 처리하지 않음
         if (!post.content || post.content.length < 50) {
-            console.log(`Skipping post ${post.postId} due to short or missing content.`);
+            console.log(`FILTERED: Skipping post due to short or missing content.`);
             continue;
         }
 
-        // 3. 이미 speechUrl이 있다면, 중복 생성을 방지하기 위해 처리하지 않음
         if (post.speechUrl) {
-            console.log(`Skipping post ${post.postId} as speechUrl already exists.`);
+            console.log(`FILTERED: Skipping post as speechUrl already exists.`);
             continue;
         }
 
-        console.log(`Processing post for speech synthesis: ${post.postId}`);
+        console.log(`PASSED FILTERS: Processing post for speech synthesis: ${post.postId}`);
 
         try {
             // 4. 마크다운 content를 순수 텍스트로 변환
             const plainText = await markdownToPlainText(post.content);
 
             // 5. Polly 비동기 음성 합성 작업 시작
+            const outputS3KeyPrefix = `speeches/${post.postId}/`;
+
             const command = new StartSpeechSynthesisTaskCommand({
-                Engine: 'neural', // 신경망 엔진 사용으로 자연스러운 음성 생성
+                Engine: 'neural',
                 LanguageCode: 'ko-KR',
                 OutputFormat: 'mp3',
                 OutputS3BucketName: SYNTHESIZED_SPEECH_BUCKET_NAME,
-                OutputS3KeyPrefix: `${post.postId}/`, // postId를 폴더처럼 사용
+                // 'OutputS3Key' 대신 올바른 파라미터인 'OutputS3KeyPrefix'를 사용합니다.
+                OutputS3KeyPrefix: outputS3KeyPrefix,
                 SnsTopicArn: SNS_TOPIC_ARN,
                 Text: plainText,
-                VoiceId: 'Seoyeon', // 한국어 여성 음성
-                // RoleArn: POLLY_S3_ACCESS_ROLE_ARN, // PassRole 패턴을 사용하지 않으므로 주석 처리
+                VoiceId: 'Seoyeon',
             });
 
             await pollyClient.send(command);
-            console.log(`Successfully started speech synthesis task for post: ${post.postId}`);
-
+            console.log(`Successfully started speech synthesis task for post: ${post.postId} with prefix: ${outputS3KeyPrefix}`);
+       
         } catch (error) {
             console.error(`Error processing post ${post.postId}:`, error);
             // DLQ로 보내기 위해 에러를 다시 던짐

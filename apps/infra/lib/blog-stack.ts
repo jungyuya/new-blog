@@ -221,6 +221,7 @@ export class BlogStack extends Stack {
       topicName: `blog-polly-completion-topic-${this.stackName}`,
     });
 
+
     // B 2.3: MP3 파일을 저장할 S3 Bucket ---
     const synthesizedSpeechBucket = new s3.Bucket(this, 'SynthesizedSpeechBucket', {
       bucketName: `blog-synthesized-speech-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
@@ -228,6 +229,14 @@ export class BlogStack extends Stack {
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // 프로덕션에서는 DESTROY를 사용하지 않도록 주의
       autoDeleteObjects: true, // 스택 삭제 시 버킷 안의 객체들을 자동으로 삭제
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET], // 오디오 파일은 GET 요청만 필요
+          allowedOrigins: ['http://localhost:3000', 'https://blog.jungyu.store'], // 허용할 출처
+          allowedHeaders: ['*'], // 모든 헤더 허용
+          maxAge: 3000,
+        },
+      ],
     });
 
     //  B 2.4: 파이프라인을 위한 IAM Roles & Policies ---
@@ -243,12 +252,19 @@ export class BlogStack extends Stack {
 
     // SpeechSynthesisLambda 역할에 필요한 권한들을 명시적으로 추가
     postsTable.grantStreamRead(speechSynthesisLambdaRole); // DynamoDB Stream 읽기 권한
+    // grantStreamRead에 포함되지 않을 수 있는 ListStreams 권한을 명시적으로 추가합니다.
+    speechSynthesisLambdaRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:ListStreams'],
+      resources: ['*'],
+    }));
     speechSynthesisLambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['polly:StartSpeechSynthesisTask'],
       resources: ['*'], // StartSpeechSynthesisTask는 특정 리소스를 지정할 수 없음
     }));
 
     synthesizedSpeechBucket.grantPut(speechSynthesisLambdaRole);
+
+    pollyCompletionTopic.grantPublish(speechSynthesisLambdaRole);
 
     // 2.4.3: UpdateSpeechUrlLambda를 위한 IAM Role
     const updateSpeechUrlLambdaRole = new iam.Role(this, 'UpdateSpeechUrlLambdaRole', {
@@ -435,24 +451,36 @@ export class BlogStack extends Stack {
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
         cacheBehaviors: [
-          // --- 음성 파일 경로(/speeches/*)에 대한 Cache Behavior 추가 ---
+          // 1. API 호출은 항상 최우선으로 BackendApiOrigin으로 라우팅합니다.
+          {
+            pathPattern: '/api/*',
+            targetOriginId: 'BackendApiOrigin',
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
+          },
+          // 2. 음성 파일 요청은 SynthesizedSpeechOrigin으로 라우팅합니다.
           {
             pathPattern: '/speeches/*',
-            targetOriginId: 'SynthesizedSpeechOrigin', // 위에서 추가한 Origin ID와 일치
-            viewerProtocolPolicy: 'redirect-to-https',
-            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-            cachedMethods: ['GET', 'HEAD'],
-            compress: true, // MP3 파일은 이미 압축되어 있지만, 혹시 모를 메타데이터 등을 위해 활성화
-            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
-          },
-          {
-            pathPattern: '/*.*', // 점(.)이 포함된 모든 파일 경로 (예: .webp, .ico, .png)
-            targetOriginId: 'FrontendAssetsOrigin', // S3 버킷으로 요청을 보냅니다.
+            targetOriginId: 'SynthesizedSpeechOrigin',
             viewerProtocolPolicy: 'redirect-to-https',
             allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
+          },
+          // 3. Next.js의 정적 에셋 경로들을 FrontendAssetsOrigin으로 라우팅합니다.
+          {
+            pathPattern: '/_next/static/*',
+            targetOriginId: 'FrontendAssetsOrigin',
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
           {
             pathPattern: '/*/_next/static/*',
@@ -462,18 +490,9 @@ export class BlogStack extends Stack {
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
-          // 기존 규칙들은 만약을 위해 유지하거나, 위 규칙으로 통합 후 삭제할 수 있습니다.
-          // 여기서는 안정성을 위해 유지합니다. 
-          {
-            pathPattern: '/_next/static/*',
-            targetOriginId: 'FrontendAssetsOrigin',
-            viewerProtocolPolicy: 'redirect-to-https',
-            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-            cachedMethods: ['GET', 'HEAD'],
-            compress: true,
-            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
-          },
+          // 4. public 폴더의 에셋 경로를 FrontendAssetsOrigin으로 라우팅합니다.
           {
             pathPattern: '/assets/*',
             targetOriginId: 'FrontendAssetsOrigin',
@@ -482,13 +501,17 @@ export class BlogStack extends Stack {
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
             cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+            originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
+          // 5. 그 외 점(.)이 포함된 모든 파일 경로(이미지 등)를 FrontendAssetsOrigin으로 라우팅합니다.
           {
-            pathPattern: '/api/*',
-            targetOriginId: 'BackendApiOrigin',
+            pathPattern: '/*.*',
+            targetOriginId: 'FrontendAssetsOrigin',
             viewerProtocolPolicy: 'redirect-to-https',
-            allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
-            cachePolicyId: cloudfront.CachePolicy.CACHING_DISABLED.cachePolicyId,
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true,
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
             originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
           },
         ],
@@ -526,8 +549,9 @@ export class BlogStack extends Stack {
       startingPosition: lambda.StartingPosition.LATEST,
       batchSize: 5,
       bisectBatchOnError: true,
-      onFailure: new cdk.aws_lambda_event_sources.SqsDlq(speechSynthesisDlq), // Step 2.1에서 만든 DLQ 연결
+      onFailure: new cdk.aws_lambda_event_sources.SqsDlq(speechSynthesisDlq),
       retryAttempts: 2,
+      enabled: true, // 트리거가 활성화된 상태로 생성되도록 명시
     }));
 
     // 2.5.2: 음성 합성 완료 후 URL을 업데이트하는 Lambda 함수
@@ -544,7 +568,8 @@ export class BlogStack extends Stack {
         NODE_ENV: 'production',
         TABLE_NAME: postsTable.tableName,
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-        // CfnDistribution에서 도메인 이름을 가져옵니다.
+        // --- [핵심 수정] 생성되는 URL에 '/speeches' 경로를 포함시킵니다. ---
+        // distribution.attrDomainName은 'dddz514o15lz8.cloudfront.net'과 같은 순수 도메인입니다.
         CLOUDFRONT_DOMAIN: `https://${distribution.attrDomainName}`,
       },
       bundling: {
@@ -578,6 +603,8 @@ export class BlogStack extends Stack {
       conditions: {
         StringEquals: {
           'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
+          // --- [핵심 수정] SourceAccount 조건을 추가하여 정책을 완성합니다. ---
+          'AWS:SourceAccount': this.account,
         },
       },
     }));

@@ -51,11 +51,6 @@ const GitHubIcon = () => (
 );
 
 // --- 오디오 플레이어를 위한 아이콘 추가 ---
-const HeadphoneIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-    </svg>
-);
 const PlayIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
@@ -263,18 +258,25 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         >
                             <Image src="/ai-summary-icon.svg" alt="AI 요약 아이콘" width={36} height={36} />
                         </button>
-                    </div>
 
-                    {/* --- '음성으로 듣기' 버튼 (조건부 렌더링) --- */}
-                    {post.speechUrl && (
-                        <button
-                            onClick={() => setShowPlayer(true)}
-                            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                            aria-label="음성으로 듣기"
-                        >
-                            <HeadphoneIcon />
-                        </button>
-                    )}
+                        {/* --- [핵심 수정] '음성으로 듣기' 버튼의 내용을 Image 컴포넌트로 교체합니다. --- */}
+                        {post.speechUrl && (
+                            <button
+                                onClick={() => setShowPlayer(true)}
+                                // 버튼의 패딩을 조정하여 이미지 주변에 적절한 여백을 줍니다.
+                                className="p-1.3 rounded-full hover:bg-gray-100 transition-colors duration-200 dark:hover:bg-gray-700"
+                                aria-label="음성으로 듣기 (Polly)"
+                            >
+                                <Image
+                                    src="/polly-tts-icon.png" // public 폴더에 추가한 파일 경로
+                                    alt="Polly 음성으로 듣기 아이콘"
+                                    width={36}  // 표시될 아이콘의 너비 (36px인 AI 요약 아이콘보다 약간 작게 설정)
+                                    height={36} // 표시될 아이콘의 높이
+                                    className="rounded-full" // 아이콘이 원형일 경우 가장자리를 부드럽게 처리
+                                />
+                            </button>
+                        )}
+                    </div>
 
                     {/* 오른쪽: 목록 버튼  */}
                     <Link

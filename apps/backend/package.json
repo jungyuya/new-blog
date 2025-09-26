@@ -43,6 +43,7 @@
     "@hono/zod-validator": "^0.7.2",
     "@opensearch-project/opensearch": "^3.5.1",
     "@sentry/node": "^10.13.0",
+    "@sentry/serverless": "^7.120.4",
     "@types/marked": "^6.0.0",
     "aws-jwt-verify": "^5.1.0",
     "hono": "^4.8.12",
