@@ -143,13 +143,54 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
 
-    const handlePlayPause = () => {
-        if (isPlaying) {
-            audioRef.current?.pause();
-        } else {
-            audioRef.current?.play();
+    const DEFAULT_RATE = 1;
+    const [playbackRate, setPlaybackRate] = useState<number>(DEFAULT_RATE);
+
+    const PLAYBACK_STORAGE_KEY = 'pollyPlaybackRate';
+
+    // 마운트 시 저장된 배속 복원
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem(PLAYBACK_STORAGE_KEY);
+            if (stored) {
+                const rate = Number(stored);
+                if (!Number.isNaN(rate) && rate > 0) {
+                    setPlaybackRate(rate);
+                }
+            }
+        } catch (e) {
+            // 무시
         }
-        setIsPlaying(!isPlaying);
+    }, []);
+
+    // playbackRate 변경 시 audio 요소에 적용 및 로컬저장
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.playbackRate = playbackRate;
+        }
+        try {
+            window.localStorage.setItem(PLAYBACK_STORAGE_KEY, String(playbackRate));
+        } catch (e) {
+            // 저장 실패 무시
+        }
+    }, [playbackRate]);
+
+    const handlePlayPause = async () => {
+        if (!audioRef.current) return;
+        try {
+            if (isPlaying) {
+                audioRef.current.pause();
+                setIsPlaying(false);
+            } else {
+                // 재생 전에 항상 현재 설정된 playbackRate를 적용
+                audioRef.current.playbackRate = playbackRate;
+                await audioRef.current.play();
+                setIsPlaying(true);
+            }
+        } catch (err) {
+            console.error('Audio play failed:', err);
+            setIsPlaying(false);
+        }
     };
 
     const handleTimeUpdate = () => {
@@ -164,6 +205,20 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         const minutes = Math.floor(time / 60);
         const seconds = Math.floor(time % 60);
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const setRate = (rate: number) => {
+        setPlaybackRate(rate);
+        if (audioRef.current && isPlaying) {
+            audioRef.current.playbackRate = rate;
+        }
+    };
+
+    const handleSeek = (value: number) => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = value;
+            setCurrentTime(value);
+        }
     };
 
     // [신규] likeCount의 자릿수에 따라 Tailwind 클래스를 반환하는 로직
@@ -273,6 +328,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                                     width={36}  // 표시될 아이콘의 너비 (36px인 AI 요약 아이콘보다 약간 작게 설정)
                                     height={36} // 표시될 아이콘의 높이
                                     className="rounded-full" // 아이콘이 원형일 경우 가장자리를 부드럽게 처리
+                                    unoptimized
                                 />
                             </button>
                         )}
@@ -318,6 +374,37 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                                         className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
                                     />
                                     <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{formatTime(duration)}</span>
+                                </div>
+                                {/* --- 배속 --- */}
+                                <div className="mt-4 flex items-center justify-between space-x-4">
+                                    <div className="flex items-center space-x-2">
+                                        {[0.75, 1, 1.25, 1.5, 2].map((r) => (
+                                            <button
+                                                key={r}
+                                                onClick={() => setRate(r)}
+                                                className={`px-2 py-1 rounded-md text-sm font-medium border ${playbackRate === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
+                                                aria-pressed={playbackRate === r}
+                                                aria-label={`${r}배속`}
+                                            >
+                                                {r}x
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center space-x-3 w-1/2">
+                                        <label htmlFor="speed" className="text-sm text-gray-600 dark:text-gray-400">속도</label>
+                                        <input
+                                            id="speed"
+                                            type="range"
+                                            min={0.5}
+                                            max={2.0}
+                                            step={0.1}
+                                            value={playbackRate}
+                                            onChange={(e) => setPlaybackRate(Number(e.target.value))}
+                                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                                            aria-label="재생 속도 조절"
+                                        />
+                                        <div className="text-sm font-mono text-gray-700 dark:text-gray-300">{playbackRate.toFixed(2)}x</div>
+                                    </div>
                                 </div>
                             </div>
                             <audio
