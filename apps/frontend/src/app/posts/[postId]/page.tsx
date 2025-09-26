@@ -7,18 +7,19 @@ import type { Metadata, ResolvingMetadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
+// [핵심 수정 1] Props 타입을 원본의 Promise<...> 형태로 되돌립니다.
 type Props = {
-  params: { postId: string }; // Promise를 제거하여 타입을 더 명확하게 합니다.
-  searchParams: { [key: string]: string | string[] | undefined };
+  params: Promise<{ postId: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-// --- [핵심 수정] generateMetadata 함수 구현 및 Open Graph 태그 추가 ---
 export async function generateMetadata(
   { params }: Props,
   _parent: ResolvingMetadata
 ): Promise<Metadata> {
   try {
-    const { postId } = params;
+    // [핵심 수정 2] params를 await하여 postId를 추출합니다.
+    const { postId } = await params;
     const { post } = await api.fetchPostById(postId);
 
     if (!post) {
@@ -28,7 +29,6 @@ export async function generateMetadata(
       };
     }
 
-    // thumbnailUrl이 있으면 사용하고, 없으면 기본 이미지 URL을 사용합니다.
     const imageUrl = post.thumbnailUrl || 'https://blog.jungyu.store/default-thumbnail.webp';
 
     return {
@@ -37,20 +37,19 @@ export async function generateMetadata(
       openGraph: {
         title: post.title,
         description: post.summary,
-        url: `https://blog.jungyu.store/posts/${postId}`, // 이 페이지의 공식 URL
-        siteName: 'JUNGYU\'s Blog', // 블로그 이름
+        url: `https://blog.jungyu.store/posts/${postId}`,
+        siteName: 'JUNGYU\'s Blog',
         images: [
           {
             url: imageUrl,
-            width: 1200, // 표준 OG 이미지 너비
-            height: 630, // 표준 OG 이미지 높이
+            width: 1200,
+            height: 630,
             alt: post.title,
           },
         ],
         locale: 'ko_KR',
-        type: 'article', // 이 페이지는 '웹사이트'가 아닌 '기사'임을 명시
+        type: 'article',
       },
-      // (선택) 트위터용 카드 설정
       twitter: {
         card: 'summary_large_image',
         title: post.title,
@@ -59,7 +58,9 @@ export async function generateMetadata(
       },
     };
   } catch (error) {
-    console.error(`Failed to generate metadata for post ${params.postId}:`, error);
+    // params가 Promise이므로, 에러 발생 시 postId를 얻기 위해 await 해야 합니다.
+    const awaitedParams = await params;
+    console.error(`Failed to generate metadata for post ${awaitedParams.postId}:`, error);
     return {
       title: '서버 에러',
       description: '메타데이터를 생성하는 중 오류가 발생했습니다.',
@@ -68,10 +69,11 @@ export async function generateMetadata(
 }
 
 export default async function PostDetailPage({ params }: Props) {
-  const { postId } = params;
-
   try {
+    // [핵심 수정 3] params를 await하여 postId를 추출합니다. (원본 로직 복원)
+    const { postId } = await params;
     const { post, prevPost, nextPost } = await api.fetchPostById(postId);
+    
     if (!post) {
       notFound();
     }
@@ -80,9 +82,10 @@ export default async function PostDetailPage({ params }: Props) {
       <div className="max-w-4xl mx-auto px-0 py-6 sm:px-6 lg:px-8 sm:py-8">
         <PostDetailView post={post} prevPost={prevPost} nextPost={nextPost} postId={postId} />
       </div>
-    );
+    ); 
   } catch (error) {
-    console.error(`Failed to fetch post ${postId}:`, error);
+    const awaitedParams = await params;
+    console.error(`Failed to fetch post ${awaitedParams.postId}:`, error);
     notFound();
   }
 }

@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/components/PostUtilButtons.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Post, AdjacentPost, api } from '@/utils/api';
@@ -47,6 +47,23 @@ const HeartIcon = ({ filled }: { filled: boolean }) => (
 const GitHubIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 16 16">
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
+    </svg>
+);
+
+// --- 오디오 플레이어를 위한 아이콘 추가 ---
+const HeadphoneIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    </svg>
+);
+const PlayIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+    </svg>
+);
+const PauseIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1H8zm4 0a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1h-1z" clipRule="evenodd" />
     </svg>
 );
 
@@ -121,6 +138,37 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         setDirection(isLiked ? -1 : 1);
         handleLike();
         setAnimationKey(prevKey => prevKey + 1);
+    };
+
+
+    // --- [신규] 오디오 플레이어 상태 관리 ---
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [showPlayer, setShowPlayer] = useState(false);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+
+    const handlePlayPause = () => {
+        if (isPlaying) {
+            audioRef.current?.pause();
+        } else {
+            audioRef.current?.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    const handleTimeUpdate = () => {
+        setCurrentTime(audioRef.current?.currentTime || 0);
+    };
+
+    const handleLoadedMetadata = () => {
+        setDuration(audioRef.current?.duration || 0);
+    };
+
+    const formatTime = (time: number) => {
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
     // [신규] likeCount의 자릿수에 따라 Tailwind 클래스를 반환하는 로직
@@ -217,6 +265,17 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         </button>
                     </div>
 
+                    {/* --- '음성으로 듣기' 버튼 (조건부 렌더링) --- */}
+                    {post.speechUrl && (
+                        <button
+                            onClick={() => setShowPlayer(true)}
+                            className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                            aria-label="음성으로 듣기"
+                        >
+                            <HeadphoneIcon />
+                        </button>
+                    )}
+
                     {/* 오른쪽: 목록 버튼  */}
                     <Link
                         href="/"
@@ -227,6 +286,49 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         <ListIcon />
                     </Link>
                 </div>
+
+                {/* --- [신규] 오디오 플레이어 UI (조건부 렌더링) --- */}
+                <AnimatePresence>
+                    {showPlayer && post.speechUrl && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg overflow-hidden"
+                        >
+                            <div className="flex items-center space-x-4">
+                                <button onClick={handlePlayPause} className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+                                    {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                                </button>
+                                <div className="flex-grow flex items-center space-x-2">
+                                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{formatTime(currentTime)}</span>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={duration || 0}
+                                        value={currentTime}
+                                        onChange={(e) => {
+                                            if (audioRef.current) {
+                                                audioRef.current.currentTime = Number(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{formatTime(duration)}</span>
+                                </div>
+                            </div>
+                            <audio
+                                ref={audioRef}
+                                src={post.speechUrl}
+                                onTimeUpdate={handleTimeUpdate}
+                                onLoadedMetadata={handleLoadedMetadata}
+                                onEnded={() => setIsPlaying(false)}
+                                className="hidden"
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* 이전/다음 글 네비게이션  */}
                 {(prevPost || nextPost) && (

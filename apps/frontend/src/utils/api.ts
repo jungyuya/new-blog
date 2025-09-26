@@ -27,9 +27,9 @@ export interface Post {
   commentCount?: number;
   likeCount?: number;
   isLiked?: boolean;
-  // --- AI 요약 관련 필드를 Post 타입에 추가합니다. ---
   aiSummary?: string;
   aiKeywords?: string[];
+  speechUrl?: string;
 }
 
 export interface UserProfile {
@@ -171,7 +171,7 @@ export const api = {
   // [추가] 추천 게시물을 가져오는 새로운 함수
   fetchFeaturedPosts: (): Promise<FeaturedData> => {
     return fetchWrapper('/posts/featured', { method: 'GET' });
-  },  
+  },
   // --- [신규 추가] 추천을 제외한 최신 게시물을 가져오는 함수 ---
   fetchLatestPosts: (limit: number | null, cursor: string | null): Promise<PaginatedPosts> => {
     const params = new URLSearchParams();

@@ -96,7 +96,7 @@ export class BlogStack extends Stack {
         'postId', 'title', 'authorNickname', 'status', 'visibility',
         'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio',
         'authorAvatarUrl', 'createdAt', 'commentCount', 'likeCount', 'isDeleted',
-        'content' 
+        'content'
       ]
     });
 
@@ -200,13 +200,67 @@ export class BlogStack extends Stack {
           expiration: cdk.Duration.days(1),
           enabled: true,
         },
-        // (선택 사항) 나중에 images/나 thumbnails/ 폴더의 고아 객체도 정리할 수 있습니다.
+        // images/나 thumbnails/ 폴더의 고아 객체도 정리용 임시 주석.
         // {
         //   description: 'Delete incomplete multipart uploads after 7 days',
         //   abortIncompleteMultipartUploadAfter: cdk.Duration.days(7)
         // }
       ],
     });
+
+    // --- [Polly] 1.3-B. 음성 합성 파이프라인 리소스 ---
+
+    // B 2.1: 음성 합성 실패 이벤트를 수집할 SQS Dead-Letter Queue
+    const speechSynthesisDlq = new sqs.Queue(this, 'SpeechSynthesisDLQ', {
+      queueName: `blog-speech-synthesis-dlq-${this.stackName}`,
+      retentionPeriod: Duration.days(14),
+    });
+
+    // B 2.2: Polly 작업 완료 알림을 수신할 SNS Topic ---
+    const pollyCompletionTopic = new cdk.aws_sns.Topic(this, 'PollyCompletionTopic', {
+      topicName: `blog-polly-completion-topic-${this.stackName}`,
+    });
+
+    // B 2.3: MP3 파일을 저장할 S3 Bucket ---
+    const synthesizedSpeechBucket = new s3.Bucket(this, 'SynthesizedSpeechBucket', {
+      bucketName: `blog-synthesized-speech-${this.stackName.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // 비공개 버킷으로 설정
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // 프로덕션에서는 DESTROY를 사용하지 않도록 주의
+      autoDeleteObjects: true, // 스택 삭제 시 버킷 안의 객체들을 자동으로 삭제
+    });
+
+    //  B 2.4: 파이프라인을 위한 IAM Roles & Policies ---
+
+    // 2.4.2: SpeechSynthesisLambda를 위한 IAM Role
+    const speechSynthesisLambdaRole = new iam.Role(this, 'SpeechSynthesisLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'IAM role for the Speech Synthesis Lambda function.',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // SpeechSynthesisLambda 역할에 필요한 권한들을 명시적으로 추가
+    postsTable.grantStreamRead(speechSynthesisLambdaRole); // DynamoDB Stream 읽기 권한
+    speechSynthesisLambdaRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['polly:StartSpeechSynthesisTask'],
+      resources: ['*'], // StartSpeechSynthesisTask는 특정 리소스를 지정할 수 없음
+    }));
+
+    synthesizedSpeechBucket.grantPut(speechSynthesisLambdaRole);
+
+    // 2.4.3: UpdateSpeechUrlLambda를 위한 IAM Role
+    const updateSpeechUrlLambdaRole = new iam.Role(this, 'UpdateSpeechUrlLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'IAM role for the Lambda function that updates the speech URL in DynamoDB.',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // UpdateSpeechUrlLambda 역할에 DynamoDB 테이블 쓰기 권한 부여
+    postsTable.grantWriteData(updateSpeechUrlLambdaRole);
 
     // --- 1.4 백엔드 컴퓨팅 리소스 ---
     const backendApiLambda = new NodejsFunction(this, 'BackendApiLambda', {
@@ -365,6 +419,12 @@ export class BlogStack extends Stack {
             domainName: cdk.Fn.select(0, cdk.Fn.split('/', cdk.Fn.select(1, cdk.Fn.split('://', httpApi.url!)))),
             customOriginConfig: { originProtocolPolicy: 'https-only', originSslProtocols: ['TLSv1.2'] },
           },
+          {
+            id: 'SynthesizedSpeechOrigin',
+            domainName: synthesizedSpeechBucket.bucketRegionalDomainName,
+            originAccessControlId: s3Oac.attrId, // 기존 S3 Assets용 OAC 재사용
+            s3OriginConfig: {},
+          },
         ],
         defaultCacheBehavior: {
           targetOriginId: 'FrontendServerOrigin',
@@ -375,6 +435,16 @@ export class BlogStack extends Stack {
           originRequestPolicyId: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER.originRequestPolicyId,
         },
         cacheBehaviors: [
+          // --- 음성 파일 경로(/speeches/*)에 대한 Cache Behavior 추가 ---
+          {
+            pathPattern: '/speeches/*',
+            targetOriginId: 'SynthesizedSpeechOrigin', // 위에서 추가한 Origin ID와 일치
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD'],
+            compress: true, // MP3 파일은 이미 압축되어 있지만, 혹시 모를 메타데이터 등을 위해 활성화
+            cachePolicyId: cloudfront.CachePolicy.CACHING_OPTIMIZED.cachePolicyId,
+          },
           {
             pathPattern: '/*.*', // 점(.)이 포함된 모든 파일 경로 (예: .webp, .ico, .png)
             targetOriginId: 'FrontendAssetsOrigin', // S3 버킷으로 요청을 보냅니다.
@@ -425,6 +495,67 @@ export class BlogStack extends Stack {
       },
     });
 
+    // --- Step 2.5: 파이프라인을 위한 Lambda Functions ---
+
+    // 2.5.1: 음성 합성을 시작하는 Lambda 함수
+    const speechSynthesisLambda = new NodejsFunction(this, 'SpeechSynthesisLambda', {
+      functionName: `blog-speech-synthesis-handler-${this.stackName}`,
+      entry: path.join(projectRoot, 'apps', 'backend', 'src', 'speech-synthesis-handler.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      role: speechSynthesisLambdaRole, // Step 2.4에서 만든 역할 할당
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: 256,
+      timeout: Duration.seconds(30),
+      environment: {
+        NODE_ENV: 'production',
+        SNS_TOPIC_ARN: pollyCompletionTopic.topicArn,
+        // POLLY_S3_ACCESS_ROLE_ARN는 더 이상 필요 없으므로 제거
+        SYNTHESIZED_SPEECH_BUCKET_NAME: synthesizedSpeechBucket.bucketName,
+        REGION: this.region,
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+      },
+      bundling: {
+        minify: true,
+        externalModules: ['@aws-sdk/*'],
+      },
+    });
+
+    // DynamoDB Stream을 Lambda의 이벤트 소스로 설정
+    speechSynthesisLambda.addEventSource(new DynamoEventSource(postsTable, {
+      startingPosition: lambda.StartingPosition.LATEST,
+      batchSize: 5,
+      bisectBatchOnError: true,
+      onFailure: new cdk.aws_lambda_event_sources.SqsDlq(speechSynthesisDlq), // Step 2.1에서 만든 DLQ 연결
+      retryAttempts: 2,
+    }));
+
+    // 2.5.2: 음성 합성 완료 후 URL을 업데이트하는 Lambda 함수
+    const updateSpeechUrlLambda = new NodejsFunction(this, 'UpdateSpeechUrlLambda', {
+      functionName: `blog-update-speech-url-handler-${this.stackName}`,
+      entry: path.join(projectRoot, 'apps', 'backend', 'src', 'update-speech-url-handler.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      role: updateSpeechUrlLambdaRole, // Step 2.4에서 만든 역할 할당
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: 128,
+      timeout: Duration.seconds(15),
+      environment: {
+        NODE_ENV: 'production',
+        TABLE_NAME: postsTable.tableName,
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        // CfnDistribution에서 도메인 이름을 가져옵니다.
+        CLOUDFRONT_DOMAIN: `https://${distribution.attrDomainName}`,
+      },
+      bundling: {
+        minify: true,
+        externalModules: ['@aws-sdk/*'],
+      },
+    });
+
+    // SNS Topic을 Lambda의 이벤트 소스로 설정 (구독)
+    pollyCompletionTopic.addSubscription(new cdk.aws_sns_subscriptions.LambdaSubscription(updateSpeechUrlLambda));
+
     assetsBucket.addToResourcePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['s3:GetObject'],
@@ -434,6 +565,19 @@ export class BlogStack extends Stack {
         StringEquals: {
           'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
           'AWS:SourceAccount': this.account,
+        },
+      },
+    }));
+
+    // --- synthesizedSpeechBucket에 CloudFront OAC 접근 권한 부여 ---
+    synthesizedSpeechBucket.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject'],
+      resources: [synthesizedSpeechBucket.arnForObjects('*')],
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      conditions: {
+        StringEquals: {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.ref}`,
         },
       },
     }));

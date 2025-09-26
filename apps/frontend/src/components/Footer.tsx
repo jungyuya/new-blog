@@ -30,7 +30,7 @@ export default function Footer() {
         </div>
 
         {/* [수정] 2. 저작권 텍스트에 다크 모드 색상 적용 */}
-        <div className="text-sm text-gray-100 text-center dark:text-gray-300">
+        <div className="text-sm text-gray-700 text-center dark:text-gray-300">
           © {new Date().getFullYear()} LEE JUNGYU. All Rights Reserved.
         </div>
 
