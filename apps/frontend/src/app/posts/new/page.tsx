@@ -111,6 +111,9 @@ function NewPostForm() {
           <PostMetadataEditor
             initialData={metadata}
             onMetadataChange={handleMetadataChange}
+            onGenerateSpeech={() => { }}
+            onDeleteSpeech={() => { }}
+            isSpeechProcessing={false}
           />
         </div>
 

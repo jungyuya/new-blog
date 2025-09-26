@@ -2,14 +2,16 @@
 
 import { checkUserLikeStatus } from './likes.service';
 import { v4 as uuidv4 } from 'uuid';
-import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectsCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { z } from 'zod';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { ddbDocClient } from '../lib/dynamodb';
 import { togglePostLike } from './likes.service';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import * as postsRepository from '../repositories/posts.repository';
 import type { Post, UserContext } from '../lib/types';
 
+const lambdaClient = new LambdaClient({ region: process.env.REGION });
 
 
 /**
@@ -461,3 +463,114 @@ export async function toggleLikeForPost(postId: string, anonymousId: string) {
     throw error;
   }
 }
+
+/**
+ * [신규] 특정 게시물에 대한 음성 생성을 시작합니다.
+ * @param postId 음성을 생성할 게시물의 ID
+ * @param authorContext 요청을 보낸 사용자의 정보 (권한 확인용)
+ */
+export async function generateSpeechForPost(postId: string, authorContext: UserContext) {
+  // 1. 게시물 조회 및 상태 확인
+  const post = await postsRepository.findPostById(postId);
+
+  if (!post) {
+    return { status: 'not_found', message: 'Post not found.' };
+  }
+
+  // 2. 중복 실행 방지
+  if (post.speechStatus === 'PENDING') {
+    return { status: 'conflict', message: 'Speech generation is already in progress.' };
+  }
+  // (선택) 이미 완료된 경우, 재생성을 허용할지 결정. 여기서는 허용하지 않음.
+  if (post.speechStatus === 'COMPLETED') {
+    return { status: 'conflict', message: 'Speech has already been generated.' };
+  }
+
+  // 3. DB 상태를 'PENDING'으로 업데이트
+  try {
+    await postsRepository.updatePost(postId, { speechStatus: 'PENDING' });
+  } catch (error) {
+    console.error(`Failed to update post status to PENDING for postId: ${postId}`, error);
+    throw new Error('Failed to set post status before starting generation.');
+  }
+
+  // 4. SpeechSynthesisLambda 비동기 호출
+  const functionName = `blog-speech-synthesis-handler-${process.env.STACK_NAME || 'BlogInfraStack'}`;
+  const payload = {
+    postId: post.postId,
+    content: post.content,
+  };
+
+  const command = new InvokeCommand({
+    FunctionName: functionName,
+    Payload: JSON.stringify(payload),
+    InvocationType: 'Event', // 비동기 호출 (응답을 기다리지 않음)
+  });
+
+  try {
+    await lambdaClient.send(command);
+    console.log(`Successfully invoked ${functionName} for post: ${postId}`);
+    return { status: 'accepted', message: 'Speech generation task has been started.' };
+  } catch (error) {
+    console.error(`Failed to invoke SpeechSynthesisLambda for postId: ${postId}`, error);
+    // 롤백: Lambda 호출에 실패했으므로, DB 상태를 다시 원상 복구 시도
+    await postsRepository.updatePost(postId, { speechStatus: null } as any).catch(rbError => {
+      console.error(`CRITICAL: Failed to rollback PENDING status for postId: ${postId}`, rbError);
+    });
+    throw new Error('Failed to invoke the speech generation lambda.');
+  }
+}
+
+/**
+ * [신규] 특정 게시물의 생성된 음성을 삭제합니다.
+ * @param postId 음성을 삭제할 게시물의 ID
+ * @param authorContext 요청을 보낸 사용자의 정보 (권한 확인용)
+ */
+export async function deleteSpeechForPost(postId: string, authorContext: UserContext) {
+  // 1. 게시물 조회
+  const post = await postsRepository.findPostById(postId);
+
+  if (!post) {
+    return { status: 'not_found', message: 'Post not found.' };
+  }
+
+  // 2. 권한 확인 (향후 관리자 외 작성자 본인도 삭제 가능하도록 확장 가능)
+  // 현재는 adminOnlyMiddleware에서 이미 확인했지만, 서비스 계층에서도 방어적으로 확인
+  if (!authorContext.userGroups.includes('Admins')) {
+      return { status: 'forbidden', message: 'You are not authorized to perform this action.' };
+  }
+
+  // 3. speechUrl이 없으면 삭제할 것도 없으므로 성공 처리
+  if (!post.speechUrl) {
+    console.log(`Speech data for post ${postId} does not exist. Nothing to delete.`);
+    return { status: 'no_content', message: 'Speech data does not exist.' };
+  }
+
+  // 4. S3에서 MP3 파일 삭제
+  try {
+    const url = new URL(post.speechUrl);
+    const key = url.pathname.substring(1); // 맨 앞의 '/' 제거 (예: speeches/post-id/speech.mp3)
+    
+    const s3 = new S3Client({ region: process.env.REGION });
+    const command = new DeleteObjectCommand({
+      Bucket: process.env.SYNTHESIZED_SPEECH_BUCKET_NAME!,
+      Key: key,
+    });
+    await s3.send(command);
+    console.log(`Successfully deleted speech file from S3: ${key}`);
+  } catch (error) {
+    console.error(`Failed to delete speech file from S3 for post ${postId}. Continuing with DB cleanup.`, error);
+    // S3 파일 삭제에 실패하더라도 DB 정리는 시도하는 것이 좋습니다.
+  }
+
+  // 5. DynamoDB에서 speechUrl과 speechStatus 속성 제거
+  // 이전 Step에서 개선한 repository 함수를 사용합니다.
+  await postsRepository.updatePost(postId, {
+    speechUrl: null,
+    speechStatus: null,
+  } as any);
+
+  console.log(`Successfully removed speech attributes from DynamoDB for post ${postId}`);
+  return { status: 'success', message: 'Speech data deleted successfully.' };
+}
+

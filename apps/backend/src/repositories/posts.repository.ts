@@ -334,37 +334,50 @@ export async function softDeletePostAndTags(post: Post): Promise<void> {
 }
 
 /**
- * 게시물 아이템의 속성을 업데이트합니다.
+ * 게시물 아이템의 속성을 업데이트하거나 제거합니다.
  * @param postId 업데이트할 게시물의 ID
- * @param updateData 업데이트할 데이터 객체
+ * @param updateData 업데이트할 데이터 객체. 값으로 'null'을 주면 해당 속성을 제거합니다.
  * @returns 업데이트된 Post 객체
  */
 export async function updatePost(postId: string, updateData: Partial<Post>): Promise<Post> {
-  // 업데이트할 속성이 없으면 아무 작업도 하지 않고 에러를 던집니다.
   if (Object.keys(updateData).length === 0) {
     throw new Error('No update data provided.');
   }
 
-  const updateExpressionParts: string[] = [];
+  const setParts: string[] = [];
+  const removeParts: string[] = [];
   const expressionAttributeValues: Record<string, any> = {};
   const expressionAttributeNames: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(updateData)) {
-    if (value !== undefined) {
-      updateExpressionParts.push(`#${key} = :${key}`);
+    if (value === null) {
+      // 값이 null이면 REMOVE 액션으로 처리
+      removeParts.push(`#${key}`);
+      expressionAttributeNames[`#${key}`] = key;
+    } else if (value !== undefined) {
+      // 값이 undefined가 아니면 SET 액션으로 처리
+      setParts.push(`#${key} = :${key}`);
       expressionAttributeNames[`#${key}`] = key;
       expressionAttributeValues[`:${key}`] = value;
     }
   }
 
-  const updateExpression = `SET ${updateExpressionParts.join(', ')}`;
+  let updateExpression = '';
+  if (setParts.length > 0) {
+    updateExpression += `SET ${setParts.join(', ')}`;
+  }
+  if (removeParts.length > 0) {
+    updateExpression += ` REMOVE ${removeParts.join(', ')}`;
+  }
+  updateExpression = updateExpression.trim();
 
   const command = new UpdateCommand({
     TableName: TABLE_NAME,
     Key: { PK: `POST#${postId}`, SK: 'METADATA' },
     UpdateExpression: updateExpression,
     ExpressionAttributeNames: expressionAttributeNames,
-    ExpressionAttributeValues: expressionAttributeValues,
+    // ExpressionAttributeValues가 비어있으면 undefined를 전달해야 함
+    ExpressionAttributeValues: Object.keys(expressionAttributeValues).length > 0 ? expressionAttributeValues : undefined,
     ReturnValues: ReturnValue.ALL_NEW,
   });
 

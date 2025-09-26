@@ -250,13 +250,9 @@ export class BlogStack extends Stack {
       ],
     });
 
-    // SpeechSynthesisLambda 역할에 필요한 권한들을 명시적으로 추가
-    postsTable.grantStreamRead(speechSynthesisLambdaRole); // DynamoDB Stream 읽기 권한
-    // grantStreamRead에 포함되지 않을 수 있는 ListStreams 권한을 명시적으로 추가합니다.
-    speechSynthesisLambdaRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:ListStreams'],
-      resources: ['*'],
-    }));
+
+    postsTable.grantWriteData(speechSynthesisLambdaRole);
+
     speechSynthesisLambdaRole.addToPolicy(new iam.PolicyStatement({
       actions: ['polly:StartSpeechSynthesisTask'],
       resources: ['*'], // StartSpeechSynthesisTask는 특정 리소스를 지정할 수 없음
@@ -353,6 +349,8 @@ export class BlogStack extends Stack {
     this.imageBucket.grantPut(backendApiLambda, 'uploads/*');
     this.imageBucket.grantDelete(backendApiLambda, 'images/*');
     this.imageBucket.grantDelete(backendApiLambda, 'thumbnails/*');
+
+
 
     // ===================================================================================
     // SECTION 3: 프론트엔드 리소스 정의 (정화된 최종 완성본)
@@ -543,16 +541,6 @@ export class BlogStack extends Stack {
         externalModules: ['@aws-sdk/*'],
       },
     });
-
-    // DynamoDB Stream을 Lambda의 이벤트 소스로 설정
-    speechSynthesisLambda.addEventSource(new DynamoEventSource(postsTable, {
-      startingPosition: lambda.StartingPosition.LATEST,
-      batchSize: 5,
-      bisectBatchOnError: true,
-      onFailure: new cdk.aws_lambda_event_sources.SqsDlq(speechSynthesisDlq),
-      retryAttempts: 2,
-      enabled: true, // 트리거가 활성화된 상태로 생성되도록 명시
-    }));
 
     // 2.5.2: 음성 합성 완료 후 URL을 업데이트하는 Lambda 함수
     const updateSpeechUrlLambda = new NodejsFunction(this, 'UpdateSpeechUrlLambda', {
@@ -774,6 +762,14 @@ export class BlogStack extends Stack {
       integration: new HttpLambdaIntegration('SearchIntegration', searchApiLambda),
     });
 
+
+    // ===================================================================================
+    // FINAL SECTION: Grant Additional Permissions
+    // 모든 리소스가 정의된 후, 리소스 간의 추가 권한을 여기서 부여합니다.
+    // ===================================================================================
+    // backendApiLambda가 speechSynthesisLambda를 호출할 수 있는 권한
+
+    speechSynthesisLambda.grantInvoke(backendApiLambda);
 
     // ===================================================================================
     // SECTION 6: 스택 출력 및 모니터링 (기존 SECTION 4에서 이름 변경 및 내용 추가 & 통합)

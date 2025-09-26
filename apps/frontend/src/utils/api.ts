@@ -30,6 +30,7 @@ export interface Post {
   aiSummary?: string;
   aiKeywords?: string[];
   speechUrl?: string;
+  speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
 }
 
 export interface UserProfile {
@@ -248,7 +249,7 @@ export const api = {
     });
   },
 
-  // --- [신규] Comment APIs ---
+  // --- Comment APIs ---
   fetchCommentsByPostId: (postId: string): Promise<Comment[]> => {
     return fetchWrapper(`/posts/${postId}/comments`, { method: 'GET' });
   },
@@ -266,7 +267,7 @@ export const api = {
       body: JSON.stringify(commentData),
     });
   },
-  // --- [신규] Comment APIs ---
+  // --- Comment APIs ---
   updateComment: (commentId: string, commentData: { content: string; postId: string }) =>
     fetchWrapper(`/comments/${commentId}`, {
       method: 'PUT',
@@ -291,6 +292,18 @@ export const api = {
   },
   deleteSummary: (postId: string): Promise<{ message: string }> => {
     return fetchWrapper(`/posts/${postId}/summary`, { method: 'DELETE' });
+  },
+  // --- 음성 생성 제어 API 클라이언트 ---
+  generateSpeech: (postId: string): Promise<{ message: string }> => {
+    return fetchWrapper(`/posts/${postId}/speech`, {
+      method: 'POST',
+    });
+  },
+
+  deleteSpeech: (postId: string): Promise<{ message: string }> => {
+    return fetchWrapper(`/posts/${postId}/speech`, {
+      method: 'DELETE',
+    });
   },
   // --- Tag APIs ---
   fetchPopularTags: (): Promise<{ tags: { name: string; count: number }[] }> => {

@@ -313,4 +313,54 @@ postsRouter.delete(
   }
 );
 
+
+// --- 음성 생성 제어 API ---
+
+// POST /api/posts/:postId/speech - 음성 생성 시작
+postsRouter.post(
+  '/:postId/speech',
+  cookieAuthMiddleware,
+  adminOnlyMiddleware,
+  async (c) => {
+    const postId = c.req.param('postId');
+    const authorContext = c.get('user');
+
+    if (!authorContext) {
+      return c.json({ message: 'Unauthorized: User context is missing.' }, 401);
+    }
+
+    try {
+      const result = await postsService.generateSpeechForPost(postId, authorContext);
+      return c.json(result, 202); // 202 Accepted: 요청이 접수되었으나 처리가 완료되지 않음
+    } catch (error: any) {
+      console.error(`Error generating speech for post ${postId}:`, error);
+      return c.json({ message: 'Failed to start speech generation.', error: error.message }, 500);
+    }
+  }
+);
+
+// DELETE /api/posts/:postId/speech - 생성된 음성 삭제
+postsRouter.delete(
+  '/:postId/speech',
+  cookieAuthMiddleware,
+  adminOnlyMiddleware,
+  async (c) => {
+    const postId = c.req.param('postId');
+    const authorContext = c.get('user');
+
+    if (!authorContext) {
+      return c.json({ message: 'Unauthorized: User context is missing.' }, 401);
+    }
+
+    try {
+      const result = await postsService.deleteSpeechForPost(postId, authorContext);
+      return c.json(result, 200);
+    } catch (error: any) {
+      console.error(`Error deleting speech for post ${postId}:`, error);
+      return c.json({ message: 'Failed to delete speech.', error: error.message }, 500);
+    }
+  }
+);
+
+
 export default postsRouter;

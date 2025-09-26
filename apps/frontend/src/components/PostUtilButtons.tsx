@@ -158,7 +158,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                     setPlaybackRate(rate);
                 }
             }
-        } catch (e) {
+        } catch (_e) {
             // 무시
         }
     }, []);
@@ -170,7 +170,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         }
         try {
             window.localStorage.setItem(PLAYBACK_STORAGE_KEY, String(playbackRate));
-        } catch (e) {
+        } catch (_e) {
             // 저장 실패 무시
         }
     }, [playbackRate]);
@@ -211,13 +211,6 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         setPlaybackRate(rate);
         if (audioRef.current && isPlaying) {
             audioRef.current.playbackRate = rate;
-        }
-    };
-
-    const handleSeek = (value: number) => {
-        if (audioRef.current) {
-            audioRef.current.currentTime = value;
-            setCurrentTime(value);
         }
     };
 

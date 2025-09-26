@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api } from '@/utils/api';
+import { api, type Post } from '@/utils/api';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
@@ -20,34 +20,35 @@ function EditPostForm() {
   const router = useRouter();
   const params = useParams();
   const { user } = useAuth();
-  const isAdmin = user?.groups?.includes('Admins'); // [추가] 관리자 여부 확인
+  const isAdmin = user?.groups?.includes('Admins');
 
-  // URL 파라미터에서 postId를 안전하게 추출합니다.
   const postId = typeof params.postId === 'string' ? params.postId : undefined;
 
-  // 상태 관리
+  // --- [수정] post 전체 데이터를 상태로 관리 ---
+  const [post, setPost] = useState<Post | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [metadata, setMetadata] = useState<PostMetadata>({
-    tags: [],
-    status: 'published',
-    visibility: 'public',
-  });
+  const [metadata, setMetadata] = useState<Partial<PostMetadata>>({}); // 초기값은 비어있도록 변경
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleMetadataChange = useCallback((newMetadata: PostMetadata) => {
-    setMetadata(newMetadata);
+  // --- [신규] 음성 API 호출 상태 관리 ---
+  const [isSpeechProcessing, setIsSpeechProcessing] = useState(false);
+
+  const handleMetadataChange = useCallback((newMetadata: Pick<PostMetadata, 'tags' | 'status' | 'visibility'>) => {
+    setMetadata(prev => ({ ...prev, ...newMetadata }));
   }, []);
 
-  // 게시물 데이터를 불러오는 함수
   const fetchPost = useCallback(async () => {
     if (!postId) {
       setIsLoading(false);
       setError('유효하지 않은 게시물 ID입니다.');
       return;
     }
+    // 데이터를 다시 불러올 때 로딩 상태를 표시
+    setIsLoading(true);
     try {
       const { post: fetchedPost } = await api.fetchPostById(postId);
 
@@ -57,10 +58,10 @@ function EditPostForm() {
         return;
       }
 
-      // [핵심 수정] 불러온 데이터로 모든 상태를 올바르게 초기화합니다.
+      // [수정] 불러온 post 전체를 상태에 저장
+      setPost(fetchedPost);
       setTitle(fetchedPost.title);
       setContent(fetchedPost.content ?? '');
-      // PostMetadataEditor가 사용할 초기 데이터를 설정합니다.
       setMetadata({
         tags: fetchedPost.tags || [],
         status: fetchedPost.status || 'published',
@@ -75,9 +76,7 @@ function EditPostForm() {
     }
   }, [postId, user, router]);
 
-  // 컴포넌트 마운트 시 게시물 데이터를 불러옵니다.
   useEffect(() => {
-    // user 정보가 로드된 후에 fetchPost를 호출하여 소유권 검증을 정확하게 합니다.
     if (user) {
       fetchPost();
     }
@@ -112,7 +111,44 @@ function EditPostForm() {
     }
   };
 
-  // [추가] Hero로 지정하는 핸들러 함수
+  // --- 음성 생성 핸들러 ---
+  const handleGenerateSpeech = async () => {
+    if (!postId) return;
+    setIsSpeechProcessing(true);
+    try {
+      await api.generateSpeech(postId);
+      alert('음성 생성 작업이 시작되었습니다. 잠시 후 상태가 업데이트됩니다.');
+      // 잠시 후 데이터를 다시 불러와 상태를 갱신 (PENDING 상태 확인)
+      setTimeout(() => fetchPost(), 3000);
+    } catch (error) {
+      console.error('Failed to generate speech:', error);
+      alert('음성 생성 시작에 실패했습니다.');
+    } finally {
+      // API 호출이 끝나면 즉시 false로 설정 (실제 작업은 비동기)
+      setIsSpeechProcessing(false);
+    }
+  };
+
+  // --- 음성 삭제 핸들러 ---
+  const handleDeleteSpeech = async () => {
+    if (!postId) return;
+    if (!window.confirm('정말로 생성된 음성 파일을 삭제하시겠습니까?')) return;
+
+    setIsSpeechProcessing(true);
+    try {
+      await api.deleteSpeech(postId);
+      alert('음성 파일이 삭제되었습니다.');
+      // 데이터를 즉시 다시 불러와 상태를 갱신
+      fetchPost();
+    } catch (error) {
+      console.error('Failed to delete speech:', error);
+      alert('음성 파일 삭제에 실패했습니다.');
+    } finally {
+      setIsSpeechProcessing(false);
+    }
+  };
+
+  // Hero로 지정하는 핸들러 함수
   const handleSetAsHero = async () => {
     if (!postId) {
       alert('게시물 ID가 유효하지 않습니다.');
@@ -177,8 +213,20 @@ function EditPostForm() {
 
         <div className="mb-8">
           <PostMetadataEditor
-            initialData={metadata}
+            // [수정] post 객체에서 필요한 모든 데이터를 initialData로 전달
+            initialData={{
+              postId: post?.postId,
+              tags: post?.tags || [],
+              status: post?.status || 'published',
+              visibility: post?.visibility || 'public',
+              speechUrl: post?.speechUrl,
+              speechStatus: post?.speechStatus,
+            }}
             onMetadataChange={handleMetadataChange}
+            // [신규] 핸들러와 상태 전달
+            onGenerateSpeech={handleGenerateSpeech}
+            onDeleteSpeech={handleDeleteSpeech}
+            isSpeechProcessing={isSpeechProcessing}
           />
         </div>
 
