@@ -1,13 +1,14 @@
 // 파일 위치: apps/frontend/src/components/PostUtilButtons.tsx
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react'; 
 import Link from 'next/link';
 import Image from 'next/image';
 import { Post, AdjacentPost, api } from '@/utils/api';
 import { useLike } from '@/hooks/useLike';
 import { motion, AnimatePresence } from 'framer-motion';
 import SummaryModal from './SummaryModal'; // SummaryModal import
+import AudioPlayer from './AudioPlayer';
 
 
 
@@ -47,18 +48,6 @@ const HeartIcon = ({ filled }: { filled: boolean }) => (
 const GitHubIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 16 16">
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
-    </svg>
-);
-
-// --- 오디오 플레이어를 위한 아이콘 추가 ---
-const PlayIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-    </svg>
-);
-const PauseIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1H8zm4 0a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1h-1z" clipRule="evenodd" />
     </svg>
 );
 
@@ -136,83 +125,8 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
     };
 
 
-    // --- [신규] 오디오 플레이어 상태 관리 ---
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [isPlaying, setIsPlaying] = useState(false);
+    // --- 오디오 플레이어 상태 관리 ---
     const [showPlayer, setShowPlayer] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-
-    const DEFAULT_RATE = 1;
-    const [playbackRate, setPlaybackRate] = useState<number>(DEFAULT_RATE);
-
-    const PLAYBACK_STORAGE_KEY = 'pollyPlaybackRate';
-
-    // 마운트 시 저장된 배속 복원
-    useEffect(() => {
-        try {
-            const stored = window.localStorage.getItem(PLAYBACK_STORAGE_KEY);
-            if (stored) {
-                const rate = Number(stored);
-                if (!Number.isNaN(rate) && rate > 0) {
-                    setPlaybackRate(rate);
-                }
-            }
-        } catch (_e) {
-            // 무시
-        }
-    }, []);
-
-    // playbackRate 변경 시 audio 요소에 적용 및 로컬저장
-    useEffect(() => {
-        if (audioRef.current) {
-            audioRef.current.playbackRate = playbackRate;
-        }
-        try {
-            window.localStorage.setItem(PLAYBACK_STORAGE_KEY, String(playbackRate));
-        } catch (_e) {
-            // 저장 실패 무시
-        }
-    }, [playbackRate]);
-
-    const handlePlayPause = async () => {
-        if (!audioRef.current) return;
-        try {
-            if (isPlaying) {
-                audioRef.current.pause();
-                setIsPlaying(false);
-            } else {
-                // 재생 전에 항상 현재 설정된 playbackRate를 적용
-                audioRef.current.playbackRate = playbackRate;
-                await audioRef.current.play();
-                setIsPlaying(true);
-            }
-        } catch (err) {
-            console.error('Audio play failed:', err);
-            setIsPlaying(false);
-        }
-    };
-
-    const handleTimeUpdate = () => {
-        setCurrentTime(audioRef.current?.currentTime || 0);
-    };
-
-    const handleLoadedMetadata = () => {
-        setDuration(audioRef.current?.duration || 0);
-    };
-
-    const formatTime = (time: number) => {
-        const minutes = Math.floor(time / 60);
-        const seconds = Math.floor(time % 60);
-        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    const setRate = (rate: number) => {
-        setPlaybackRate(rate);
-        if (audioRef.current && isPlaying) {
-            audioRef.current.playbackRate = rate;
-        }
-    };
 
     // [신규] likeCount의 자릿수에 따라 Tailwind 클래스를 반환하는 로직
     const getWidthClass = (count: number): string => {
@@ -222,6 +136,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
         return 'w-10';
     };
     const widthClass = getWidthClass(likeCount);
+
     return (
         <>
             {/* [수정] 1. 최상위 컨테이너의 상단 테두리에 다크 모드 색상 적용 */}
@@ -307,10 +222,10 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                             <Image src="/ai-summary-icon.svg" alt="AI 요약 아이콘" width={36} height={36} />
                         </button>
 
-                        {/* --- [핵심 수정] '음성으로 듣기' 버튼의 내용을 Image 컴포넌트로 교체합니다. --- */}
+                        {/* --- '음성으로 듣기' 버튼 --- */}
                         {post.speechUrl && (
                             <button
-                                onClick={() => setShowPlayer(true)}
+                                onClick={() => setShowPlayer(!showPlayer)} // [수정] 플레이어 표시를 토글
                                 // 버튼의 패딩을 조정하여 이미지 주변에 적절한 여백을 줍니다.
                                 className="p-1.3 rounded-full hover:bg-gray-100 transition-colors duration-200 dark:hover:bg-gray-700"
                                 aria-label="음성으로 듣기 (Polly)"
@@ -339,78 +254,7 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                 </div>
 
                 {/* --- [신규] 오디오 플레이어 UI (조건부 렌더링) --- */}
-                <AnimatePresence>
-                    {showPlayer && post.speechUrl && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg overflow-hidden"
-                        >
-                            <div className="flex items-center space-x-4">
-                                <button onClick={handlePlayPause} className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
-                                    {isPlaying ? <PauseIcon /> : <PlayIcon />}
-                                </button>
-                                <div className="flex-grow flex items-center space-x-2">
-                                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{formatTime(currentTime)}</span>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max={duration || 0}
-                                        value={currentTime}
-                                        onChange={(e) => {
-                                            if (audioRef.current) {
-                                                audioRef.current.currentTime = Number(e.target.value);
-                                            }
-                                        }}
-                                        className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{formatTime(duration)}</span>
-                                </div>
-                                {/* --- 배속 --- */}
-                                <div className="mt-4 flex items-center justify-between space-x-4">
-                                    <div className="flex items-center space-x-2">
-                                        {[0.75, 1, 1.25, 1.5, 2].map((r) => (
-                                            <button
-                                                key={r}
-                                                onClick={() => setRate(r)}
-                                                className={`px-2 py-1 rounded-md text-sm font-medium border ${playbackRate === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}
-                                                aria-pressed={playbackRate === r}
-                                                aria-label={`${r}배속`}
-                                            >
-                                                {r}x
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center space-x-3 w-1/2">
-                                        <label htmlFor="speed" className="text-sm text-gray-600 dark:text-gray-400">속도</label>
-                                        <input
-                                            id="speed"
-                                            type="range"
-                                            min={0.5}
-                                            max={2.0}
-                                            step={0.1}
-                                            value={playbackRate}
-                                            onChange={(e) => setPlaybackRate(Number(e.target.value))}
-                                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
-                                            aria-label="재생 속도 조절"
-                                        />
-                                        <div className="text-sm font-mono text-gray-700 dark:text-gray-300">{playbackRate.toFixed(2)}x</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <audio
-                                ref={audioRef}
-                                src={post.speechUrl}
-                                onTimeUpdate={handleTimeUpdate}
-                                onLoadedMetadata={handleLoadedMetadata}
-                                onEnded={() => setIsPlaying(false)}
-                                className="hidden"
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                <AudioPlayer post={post} showPlayer={showPlayer} />
 
                 {/* 이전/다음 글 네비게이션  */}
                 {(prevPost || nextPost) && (
