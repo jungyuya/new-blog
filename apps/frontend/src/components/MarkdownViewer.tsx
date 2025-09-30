@@ -92,17 +92,11 @@ export default function MarkdownViewer({ content, headings }: MarkdownViewerProp
                 components={{
                     p: (props) => {
                         const { node } = props;
-                        // p 태그의 자식 노드가 '[toc]' 또는 '[목차]' 텍스트인지 확인
                         if (node && node.children[0] && 'value' in node.children[0] && (node.children[0].value === '[toc]' || node.children[0].value === '[목차]')) {
-                            // 일치하면, 목차 컴포넌트를 렌더링
-                            return (
-                                <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 my-4">
-                                    <h2 className="text-xl font-semibold mb-3">목차</h2>
-                                    <TableOfContents headings={headings} activeId="" />
-                                </div>
-                            );
+                            // --- [핵심 수정] 감싸는 div와 h2 제목을 제거합니다. ---
+                            // 기존: <div className="..."><h2 ...>목차</h2><TableOfContents ... /></div>
+                            return <TableOfContents headings={headings} activeId="" />;
                         }
-                        // 일치하지 않으면, 기본 p 태그를 렌더링
                         return <p>{props.children}</p>;
                     },
                     code(props: ComponentProps<'code'>) {
