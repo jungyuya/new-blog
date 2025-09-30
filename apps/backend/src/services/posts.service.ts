@@ -209,7 +209,7 @@ export async function getLatestPosts({ limit, cursor, userGroups }: GetLatestPos
     excludeIds.add(config.heroPostId);
   }
   featuredItems.forEach(item => excludeIds.add(item.postId));
-  
+
   // 2. [핵심 수정] 확장된 findAllPosts 함수를 사용하여 DB 레벨에서 필터링합니다.
   const { posts, nextCursor } = await postsRepository.findAllPosts({
     limit,
@@ -228,6 +228,7 @@ const CreatePostSchema = z.object({
   tags: z.array(z.string()).optional(),
   status: z.enum(['published', 'draft']).optional(),
   visibility: z.enum(['public', 'private']).optional(),
+  showToc: z.boolean().optional(),
 });
 type CreatePostInput = z.infer<typeof CreatePostSchema>;
 
@@ -240,7 +241,7 @@ type CreatePostInput = z.infer<typeof CreatePostSchema>;
 export async function createPost(authorContext: UserContext, postInput: CreatePostInput): Promise<Post> {
   const { userId, userEmail } = authorContext;
   const { title, content, tags = [], status = 'published', visibility = 'public' } = postInput;
-  
+
   const postId = uuidv4();
   const now = new Date().toISOString();
   const BUCKET_NAME = process.env.IMAGE_BUCKET_NAME!;
@@ -276,9 +277,9 @@ export async function createPost(authorContext: UserContext, postInput: CreatePo
   // 3. [데이터 객체 생성] Repository에 전달할 Post 아이템과 Tag 아이템들을 준비합니다.
   const postItem: Post = {
     PK: `POST#${postId}`, SK: 'METADATA',
-    postId, title, content, summary, 
+    postId, title, content, summary,
     authorId: userId, authorEmail: userEmail,
-    createdAt: now, updatedAt: now, 
+    createdAt: now, updatedAt: now,
     isDeleted: false, viewCount: 0,
     status, visibility,
     authorNickname, authorBio, authorAvatarUrl,
@@ -365,6 +366,7 @@ const UpdatePostSchema = z.object({
   tags: z.array(z.string()).optional(),
   status: z.enum(['published', 'draft']).optional(),
   visibility: z.enum(['public', 'private']).optional(),
+  showToc: z.boolean().optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: '수정할 내용을 하나 이상 제공해야 합니다.',
 });
@@ -420,7 +422,7 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
     const newTags = new Set(updateInput.tags);
     const tagsToDelete = [...oldTags].filter(t => !newTags.has(t));
     const tagsToAdd = [...newTags].filter(t => !oldTags.has(t));
-    
+
     // TODO: 작성자 프로필 정보(닉네임 등)가 변경되었을 경우를 대비해 모든 태그를 업데이트하는 것이 더 안정적일 수 있습니다.
     // 우선 기존 로직과 동일하게, 추가되는 태그만 새로 생성합니다.
     const postSnapshot = { ...existingPost, ...finalUpdateData };
@@ -433,7 +435,7 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
       thumbnailUrl: postSnapshot.thumbnailUrl, viewCount: postSnapshot.viewCount,
       tags: postSnapshot.tags,
     }));
-    
+
     await postsRepository.syncTagsForPost(postId, tagsToDelete, tagsToAddOrUpdate);
   }
 
@@ -537,7 +539,7 @@ export async function deleteSpeechForPost(postId: string, authorContext: UserCon
   // 2. 권한 확인 (향후 관리자 외 작성자 본인도 삭제 가능하도록 확장 가능)
   // 현재는 adminOnlyMiddleware에서 이미 확인했지만, 서비스 계층에서도 방어적으로 확인
   if (!authorContext.userGroups.includes('Admins')) {
-      return { status: 'forbidden', message: 'You are not authorized to perform this action.' };
+    return { status: 'forbidden', message: 'You are not authorized to perform this action.' };
   }
 
   // 3. speechUrl이 없으면 삭제할 것도 없으므로 성공 처리
@@ -550,7 +552,7 @@ export async function deleteSpeechForPost(postId: string, authorContext: UserCon
   try {
     const url = new URL(post.speechUrl);
     const key = url.pathname.substring(1); // 맨 앞의 '/' 제거 (예: speeches/post-id/speech.mp3)
-    
+
     const s3 = new S3Client({ region: process.env.REGION });
     const command = new DeleteObjectCommand({
       Bucket: process.env.SYNTHESIZED_SPEECH_BUCKET_NAME!,

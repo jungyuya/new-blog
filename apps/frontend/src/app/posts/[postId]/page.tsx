@@ -1,6 +1,7 @@
 // 파일 위치: apps/frontend/src/app/posts/[postId]/page.tsx
 
 import { api } from "@/utils/api";
+import { generateToc } from '@/utils/toc'; // [신규] generateToc 유틸리티 import
 import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation';
 import type { Metadata, ResolvingMetadata } from 'next';
@@ -78,9 +79,17 @@ export default async function PostDetailPage({ params }: Props) {
       notFound();
     }
 
+    const headings = generateToc(post.content || '');
+
     return (
       <div className="max-w-4xl mx-auto px-0 py-6 sm:px-6 lg:px-8 sm:py-8">
-        <PostDetailView post={post} prevPost={prevPost} nextPost={nextPost} postId={postId} />
+        <PostDetailView 
+          post={post} 
+          prevPost={prevPost} 
+          nextPost={nextPost} 
+          postId={postId}
+          headings={headings}
+        />
       </div>
     ); 
   } catch (error) {

@@ -4,9 +4,13 @@
 import { Post, AdjacentPost } from '@/utils/api';
 import PostHeader from './PostHeader';
 import PostContent from './PostContent';
-import PostUtilButtons from './PostUtilButtons'; 
+import { Heading } from '@/utils/toc';
+import PostUtilButtons from './PostUtilButtons';
 import PostAuthorProfile from './PostAuthorProfile';
 import dynamic from 'next/dynamic'; // [추가]
+import { useEffect } from "react";
+
+
 
 // [추가] CommentsSection을 동적으로 import 합니다.
 const CommentsSection = dynamic(
@@ -24,15 +28,20 @@ const CommentsSection = dynamic(
   }
 );
 
-// [수정] postId를 추가로 받도록 props 타입을 변경합니다.
 interface PostDetailViewProps {
   post: Post | null;
   prevPost: AdjacentPost | null;
   nextPost: AdjacentPost | null;
-  postId: string; // CommentsSection에 전달하기 위해 postId를 받습니다.
+  postId: string;
+  headings: Heading[];
 }
 
-export default function PostDetailView({ post, prevPost, nextPost, postId }: PostDetailViewProps) {
+export default function PostDetailView({ post, prevPost, nextPost, postId, headings }: PostDetailViewProps) {
+  // --- [디버깅용 코드] headings 데이터를 콘솔에 출력 ---
+  useEffect(() => {
+    console.log('Generated Headings:', headings);
+  }, [headings]);
+  // --- 디버깅용 코드 끝 ---
   if (!post) {
     return (
       <div className="text-center py-12">
@@ -43,13 +52,12 @@ export default function PostDetailView({ post, prevPost, nextPost, postId }: Pos
   }
 
   return (
-    // [수정] div 대신 Fragment(<></>)를 사용하여 불필요한 div 래퍼를 제거합니다.
     <>
       <PostHeader post={post} />
-      <PostContent content={post.content!} />
+      {/* --- [수정] PostContent에 headings prop 전달 --- */}
+      <PostContent content={post.content!} headings={headings} />
       <PostAuthorProfile post={post} />
       <PostUtilButtons post={post} prevPost={prevPost} nextPost={nextPost} />
-      {/* [추가] CommentsSection을 이곳에서 렌더링합니다. */}
       <CommentsSection postId={postId} />
     </>
   );

@@ -4,12 +4,15 @@
 import MarkdownViewer from './MarkdownViewer';
 import { useTheme } from 'next-themes'; // [추가]
 import { useState, useEffect } from 'react'; // [추가]
+import type { Heading } from '@/utils/toc'; // [신규] Heading 타입 import
+
 
 interface PostContentProps {
   content: string;
+  headings: Heading[];
 }
 
-export default function PostContent({ content }: PostContentProps) {
+export default function PostContent({ content, headings }: PostContentProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -33,7 +36,7 @@ export default function PostContent({ content }: PostContentProps) {
 
   return (
     <article className={articleClassName}>
-      {content && <MarkdownViewer content={content} />}
+      {content && <MarkdownViewer content={content} headings={headings} />}
     </article>
   );
 }

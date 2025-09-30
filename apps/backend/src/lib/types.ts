@@ -54,6 +54,7 @@ export interface Post {
   aiKeywords?: string[];
   speechUrl?: string;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
+  showToc?: boolean;
 };
 
 export interface PaginatedPosts {

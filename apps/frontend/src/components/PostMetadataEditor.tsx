@@ -16,11 +16,12 @@ export interface PostMetadata {
   postId?: string;
   speechUrl?: string | null;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
+  showToc?: boolean;
 }
 
 interface PostMetadataEditorProps {
   initialData: Partial<PostMetadata>;
-  onMetadataChange: (metadata: Pick<PostMetadata, 'tags' | 'status' | 'visibility'>) => void;
+  onMetadataChange: (metadata: PostMetadata) => void;
   // 음성 제어 핸들러 추가
   onGenerateSpeech: () => void;
   onDeleteSpeech: () => void;
@@ -38,14 +39,18 @@ export default function PostMetadataEditor({
   const [currentTag, setCurrentTag] = useState('');
   const [status, setStatus] = useState<'published' | 'draft'>(initialData.status || 'published');
   const [visibility, setVisibility] = useState<'public' | 'private'>(initialData.visibility || 'public');
+  const [showToc, setShowToc] = useState<boolean>(initialData.showToc ?? true);
+
 
   // --- [신규] 미니 오디오 플레이어 상태 ---
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    onMetadataChange({ tags, status, visibility });
-  }, [tags, status, visibility, onMetadataChange]);
+    onMetadataChange({
+      tags, status, visibility, showToc, postId: initialData.postId, speechUrl: initialData.speechUrl, speechStatus: initialData.speechStatus
+    });
+  }, [tags, status, visibility, showToc, onMetadataChange, initialData.postId, initialData.speechUrl, initialData.speechStatus]);
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -170,6 +175,27 @@ export default function PostMetadataEditor({
             <span className="ml-2">비밀글</span>
           </label>
         </div>
+      </div>
+
+      {/* --- [수정] '발행 상태' 섹션 바로 위에 새로운 섹션 추가 --- */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">목차 설정</label>
+        <label htmlFor="show-toc-toggle" className="flex items-center cursor-pointer">
+          <div className="relative">
+            <input
+              type="checkbox"
+              id="show-toc-toggle"
+              className="sr-only"
+              checked={showToc}
+              onChange={() => setShowToc(!showToc)}
+            />
+            <div className="block bg-gray-200 w-14 h-8 rounded-full dark:bg-gray-600"></div>
+            <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${showToc ? 'translate-x-6 bg-indigo-500' : ''}`}></div>
+          </div>
+          <div className="ml-3 text-gray-700 font-medium dark:text-gray-300">
+            목차 표시하기
+          </div>
+        </label>
       </div>
 
       <div>

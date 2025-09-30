@@ -5,14 +5,20 @@ import { useState, useEffect, ComponentProps } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-// [수정] 1. Prism 대신 PrismLight를 import 합니다.
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+
 // 스타일 테마 import
 import { materialDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CSSProperties } from 'react';
 import { useTheme } from 'next-themes';
 
-// [추가] 2. 필요한 언어 파서들만 개별적으로 import 합니다.
+// 목차 import
+import TableOfContents from './TableOfContents'; // [신규] TableOfContents 컴포넌트 import
+import type { Heading } from '@/utils/toc'; // [신규] Heading 타입 import
+
+// 코드하이라이팅 필요한 언어 파서들만 개별적으로 import 합니다.
 import ts from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
 import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx';
 import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -50,9 +56,10 @@ SyntaxHighlighter.registerLanguage('docker', docker);
 
 interface MarkdownViewerProps {
     content: string;
+    headings: Heading[];
 }
 
-export default function MarkdownViewer({ content }: MarkdownViewerProps) {
+export default function MarkdownViewer({ content, headings }: MarkdownViewerProps) {
     const [index, setIndex] = useState(-1);
     const { theme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -71,8 +78,33 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
         <div className="toastui-editor-contents">
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
+                rehypePlugins={[
+                    rehypeRaw,
+                    rehypeSlug,
+                    [
+                        rehypeAutolinkHeadings,
+                        {
+                            behavior: 'append', // 'wrap' 대신 'append' 또는 'prepend'를 사용
+                            content: () => (<span></span>) // 아이콘을 숨기기 위해 빈 span을 렌더링
+                        }
+                    ]
+                ]}
                 components={{
+                    p: (props) => {
+                        const { node } = props;
+                        // p 태그의 자식 노드가 '[toc]' 또는 '[목차]' 텍스트인지 확인
+                        if (node && node.children[0] && 'value' in node.children[0] && (node.children[0].value === '[toc]' || node.children[0].value === '[목차]')) {
+                            // 일치하면, 목차 컴포넌트를 렌더링
+                            return (
+                                <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 my-4">
+                                    <h2 className="text-xl font-semibold mb-3">목차</h2>
+                                    <TableOfContents headings={headings} activeId="" />
+                                </div>
+                            );
+                        }
+                        // 일치하지 않으면, 기본 p 태그를 렌더링
+                        return <p>{props.children}</p>;
+                    },
                     code(props: ComponentProps<'code'>) {
                         const { children, className, ...rest } = props;
                         const match = /language-(\w+)/.exec(className || '');

@@ -1,14 +1,13 @@
 // 파일 위치: apps/frontend/src/app/posts/new/page.tsx (v1.1 - Editor 적용 최종본)
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { api } from '@/utils/api';
 import dynamic from 'next/dynamic';
 import PostMetadataEditor, { type PostMetadata } from '@/components/PostMetadataEditor';
-
-
+import { useAutosave, autosaveManager } from '@/hooks/useAutosave';
 
 // [추가] Editor 컴포넌트를 동적으로 import 합니다.
 const Editor = dynamic(() => import('@/components/Editor'), {
@@ -28,19 +27,34 @@ function NewPostForm() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  // [추가] 메타데이터를 위한 새로운 상태 변수
   const [metadata, setMetadata] = useState<PostMetadata>({
     tags: [],
     status: 'published',
     visibility: 'public',
+    showToc: true, // 기본값 true로 설정
   });
-  // [추가] PostMetadataEditor로부터 변경 사항을 받을 콜백 함수
   const handleMetadataChange = useCallback((newMetadata: PostMetadata) => {
     setMetadata(newMetadata);
   }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- [핵심 수정 1] 자동 저장 훅을 사용합니다. ---
+  // title 또는 content가 변경될 때마다 2초 후에 자동 저장됩니다.
+  useAutosave({ title, content });
+
+  // --- [핵심 수정 2] 페이지 로드 시 임시 저장된 글을 불러오는 로직 ---
+  useEffect(() => {
+    const savedData = autosaveManager.load();
+    if (savedData) {
+      if (confirm('임시 저장된 글이 있습니다. 불러오시겠습니까?')) {
+        setTitle(savedData.title);
+        setContent(savedData.content);
+        // TODO: metadata도 저장했다면 여기서 불러옵니다.
+        // setMetadata(savedData.metadata);
+      }
+    }
+  }, []); // [] 의존성 배열은 이 effect가 컴포넌트 마운트 시 한 번만 실행되도록 합니다.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,10 +76,15 @@ function NewPostForm() {
         tags: metadata.tags,
         status: metadata.status,
         visibility: metadata.visibility,
+        showToc: metadata.showToc, // 이 라인 추가
       };
 
       const result = await api.createNewPost(newPostData);
       console.log('Post created successfully:', result);
+
+      // --- [핵심 수정 3] 글 발행 성공 시, 임시 저장 데이터를 삭제합니다. ---
+      autosaveManager.clear();
+
       router.push(`/posts/${result.post.postId}`);
     } catch (err) {
       console.error('Failed to create post:', err);
