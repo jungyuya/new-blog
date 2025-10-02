@@ -267,6 +267,7 @@ export async function createPost(authorContext: UserContext, postInput: CreatePo
   }
 
   const summary = content
+    .replace(/\[toc\]|\[목차\]/g, '') // [toc] 또는 [목차] 제거
     .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '')
     .replace(/<[^>]*>?/gm, ' ')
     .replace(/[#*`_~=\->|]/g, '')
@@ -400,6 +401,7 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
     const { content } = updateInput;
     // Summary 재계산
     finalUpdateData.summary = content
+      .replace(/\[toc\]|\[목차\]/g, '') // [toc] 또는 [목차] 제거
       .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '').replace(/<[^>]*>?/gm, ' ')
       .replace(/[#*`_~=\->|]/g, '').replace(/\s+/g, ' ').trim()
       .substring(0, 150) + (content.length > 150 ? '...' : '');
