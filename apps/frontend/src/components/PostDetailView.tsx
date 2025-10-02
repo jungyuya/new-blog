@@ -8,7 +8,7 @@ import { Heading } from '@/utils/toc';
 import PostUtilButtons from './PostUtilButtons';
 import PostAuthorProfile from './PostAuthorProfile';
 import dynamic from 'next/dynamic'; // [추가]
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, } from 'react';
 import TableOfContents from './TableOfContents';
 
 

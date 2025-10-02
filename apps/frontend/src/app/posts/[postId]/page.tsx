@@ -5,8 +5,6 @@ import { generateToc } from '@/utils/toc'; // [신규] generateToc 유틸리티 
 import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation';
 import type { Metadata, ResolvingMetadata } from 'next';
-import TableOfContents from '@/components/TableOfContents'; // [신규] TableOfContents import
-
 
 export const dynamic = 'force-dynamic';
 

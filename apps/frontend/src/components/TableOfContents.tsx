@@ -43,7 +43,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
   }, [activeIndex, headings.length]);
 
   // 부드러운 스크롤 핸들러
-  const handleLinkClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+  const handleLinkClick = useCallback((e: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>, id: string) => {
     e.preventDefault();
     const element = document.getElementById(id);
     if (element) {
@@ -424,7 +424,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
         <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <button
-              onClick={(e) => handleLinkClick(e as any, headings[0].id)}
+              onClick={(e) => handleLinkClick(e, headings[0].id)}
               className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -434,7 +434,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
             </button>
             <span className="text-gray-400 dark:text-gray-600">•</span>
             <button
-              onClick={(e) => handleLinkClick(e as any, headings[headings.length - 1].id)}
+              onClick={(e) => handleLinkClick(e, headings[headings.length - 1].id)}
               className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
             >
               끝으로
