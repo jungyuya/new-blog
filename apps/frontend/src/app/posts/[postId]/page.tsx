@@ -5,6 +5,8 @@ import { generateToc } from '@/utils/toc'; // [신규] generateToc 유틸리티 
 import PostDetailView from "@/components/PostDetailView";
 import { notFound } from 'next/navigation';
 import type { Metadata, ResolvingMetadata } from 'next';
+import TableOfContents from '@/components/TableOfContents'; // [신규] TableOfContents import
+
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +73,6 @@ export async function generateMetadata(
 
 export default async function PostDetailPage({ params }: Props) {
   try {
-    // [핵심 수정 3] params를 await하여 postId를 추출합니다. (원본 로직 복원)
     const { postId } = await params;
     const { post, prevPost, nextPost } = await api.fetchPostById(postId);
     
@@ -81,8 +82,9 @@ export default async function PostDetailPage({ params }: Props) {
 
     const headings = generateToc(post.content || '');
 
+    // --- [핵심 수정] 전체 레이아웃을 2단 구조로 변경합니다. ---
     return (
-      <div className="max-w-4xl mx-auto px-0 py-6 sm:px-6 lg:px-8 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <PostDetailView 
           post={post} 
           prevPost={prevPost} 

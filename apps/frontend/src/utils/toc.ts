@@ -16,7 +16,7 @@ export interface Heading {
  */
 export function generateToc(markdownContent: string): Heading[] {
     const headings: Heading[] = [];
-    const headingRegex = /^(#{1,3})\s+(.*)/gm;
+    const headingRegex = /^(#{1,5})\s+(.*)/gm;
 
     // Slugger 인스턴스를 생성합니다. 이 인스턴스는 ID 중복을 내부적으로 관리합니다.
     const slugger = new Slugger();

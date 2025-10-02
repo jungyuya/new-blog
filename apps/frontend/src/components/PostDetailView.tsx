@@ -8,11 +8,11 @@ import { Heading } from '@/utils/toc';
 import PostUtilButtons from './PostUtilButtons';
 import PostAuthorProfile from './PostAuthorProfile';
 import dynamic from 'next/dynamic'; // [추가]
-import { useEffect } from "react";
+import { useState, useEffect, useRef } from 'react';
+import TableOfContents from './TableOfContents';
 
 
-
-// [추가] CommentsSection을 동적으로 import 합니다.
+// CommentsSection을 동적으로 import 합니다.
 const CommentsSection = dynamic(
   () => import('@/components/comments/CommentsSection'),
   {
@@ -37,11 +37,38 @@ interface PostDetailViewProps {
 }
 
 export default function PostDetailView({ post, prevPost, nextPost, postId, headings }: PostDetailViewProps) {
-  // --- [디버깅용 코드] headings 데이터를 콘솔에 출력 ---
-  useEffect(() => {
-    console.log('Generated Headings:', headings);
-  }, [headings]);
-  // --- 디버깅용 코드 끝 ---
+  const [activeId, setActiveId] = useState<string>('');
+
+    useEffect(() => {
+    // headings가 없으면 아무 작업도 하지 않음
+    if (headings.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveId(entry.target.id);
+          }
+        });
+      },
+      // rootMargin: 화면 상단을 기준으로 -40% ~ -60% 영역에 들어왔을 때를 감지
+      // 이렇게 하면 제목이 화면 중앙 부근에 왔을 때 활성화되어 더 자연스러움
+      { rootMargin: '-40% 0px -60% 0px' }
+    );
+
+    // 모든 제목 요소들을 선택하여 관찰 시작
+    const headingElements = document.querySelectorAll(
+      'h1, h2, h3, h4, h5, h6'
+    );
+    headingElements.forEach((el) => observer.observe(el));
+
+    // 컴포넌트가 언마운트될 때 observer를 정리
+    return () => {
+      headingElements.forEach((el) => observer.unobserve(el));
+      observer.disconnect();
+    };
+  }, [headings]); 
+
   if (!post) {
     return (
       <div className="text-center py-12">
@@ -52,13 +79,26 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
   }
 
   return (
-    <>
-      <PostHeader post={post} />
-      {/* --- [수정] PostContent에 headings prop 전달 --- */}
-      <PostContent content={post.content!} headings={headings} />
-      <PostAuthorProfile post={post} />
-      <PostUtilButtons post={post} prevPost={prevPost} nextPost={nextPost} />
-      <CommentsSection postId={postId} />
-    </>
+    <div className="flex justify-center gap-12">
+      {/* 1. 메인 콘텐츠 영역 (왼쪽) */}
+      <div className="w-full max-w-4xl">
+        <PostHeader post={post} />
+        <PostContent content={post.content!} headings={headings} />
+        <PostAuthorProfile post={post} />
+        <PostUtilButtons post={post} prevPost={prevPost} nextPost={nextPost} />
+        <CommentsSection postId={postId} />
+      </div>
+
+      {/* 2. 따라다니는 목차 영역 (오른쪽) */}
+      {/* headings가 있고, post.showToc가 false가 아닐 때만 렌더링 */}
+      {headings.length > 0 && post.showToc !== false && (
+        <aside className="hidden lg:block w-64 flex-shrink-0">
+          <div className="sticky top-24">
+            {/* activeId 상태를 prop으로 전달 */}
+            <TableOfContents headings={headings} activeId={activeId} />
+          </div>
+        </aside>
+      )}
+    </div>
   );
 }

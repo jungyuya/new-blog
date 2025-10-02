@@ -192,3 +192,18 @@ body {
 .liquid-purple::before {
     background: #8b5cf6; /* 보라색 */
 }
+
+
+/* ================================================================ */
+/* Custom Override for Toast UI Editor Viewer Styles              */
+/* ================================================================ */
+
+/* 
+  Toast UI Editor의 기본 뷰어 스타일(.toastui-editor-contents)이 
+  h1, h2 태그에 적용하는 밑줄(border-bottom)을 제거합니다.
+  !important를 사용하여 다른 모든 스타일보다 우선 적용되도록 합니다.
+*/
+.toastui-editor-contents h1,
+.toastui-editor-contents h2 {
+  border-bottom: none !important;
+}

@@ -46,6 +46,7 @@ export const handler = async (event: SNSEvent): Promise<void> => {
 
             await postsRepository.updatePost(postId, {
                 speechUrl: speechUrl,
+                speechStatus: 'COMPLETED',
             });
 
             console.log(`Successfully updated speechUrl for post ${postId}`);

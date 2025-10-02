@@ -31,6 +31,7 @@ export interface Post {
   aiKeywords?: string[];
   speechUrl?: string;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
+  showToc?: boolean;
 }
 
 export interface UserProfile {
