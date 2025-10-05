@@ -1,19 +1,11 @@
 // 파일 위치: apps/frontend/src/utils/api.ts (v4.5 - Final Verified Code)
 
 import { getAnonymousId } from './anonymousId';
-// --- [신규] X-Ray SDK import ---
-import * as AWSXRay from 'aws-xray-sdk';
-import http from 'http';
-import https from 'https';
+import { captureXRayTrace } from './xray.server';
 
-// --- 서버 환경에서만 HTTP/HTTPS 클라이언트를 캡처합니다. ---
-// 이 코드는 파일이 처음 import될 때 한 번만 실행됩니다.
 if (typeof window === 'undefined') {
-  AWSXRay.captureHTTPsGlobal(http);
-  AWSXRay.captureHTTPsGlobal(https);
-  AWSXRay.capturePromise();
+  captureXRayTrace();
 }
-
 
 export interface Post {
   PK: string;
