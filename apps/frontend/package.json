@@ -17,6 +17,7 @@
     "@toast-ui/react-editor": "^3.2.3",
     "@types/github-slugger": "^2.0.0",
     "@types/uuid": "^10.0.0",
+    "aws-xray-sdk": "^3.10.3",
     "framer-motion": "^12.23.12",
     "github-slugger": "^2.0.0",
     "lucide-react": "^0.544.0",

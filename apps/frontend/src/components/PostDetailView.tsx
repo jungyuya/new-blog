@@ -92,7 +92,7 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
       {/* 2. 따라다니는 목차 영역 (오른쪽) */}
       {/* headings가 있고, post.showToc가 false가 아닐 때만 렌더링 */}
       {headings.length > 0 && post.showToc !== false && (
-        <aside className="hidden lg:block w-64 flex-shrink-0">
+        <aside className="hidden lg:block w-72 flex-shrink-0">
           <div className="sticky top-24">
             {/* activeId 상태를 prop으로 전달 */}
             <TableOfContents headings={headings} activeId={activeId} />

@@ -47,6 +47,7 @@
     "@sentry/serverless": "^7.120.4",
     "@types/marked": "^6.0.0",
     "aws-jwt-verify": "^5.1.0",
+    "aws-xray-sdk": "^3.10.3",
     "hono": "^4.8.12",
     "marked": "^16.2.1",
     "remark": "^15.0.1",

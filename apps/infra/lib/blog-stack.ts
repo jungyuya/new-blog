@@ -12,6 +12,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { HttpApi, HttpMethod, CorsHttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -26,8 +27,6 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-
-
 
 export class BlogStack extends Stack {
   public readonly imageBucket: s3.IBucket;
@@ -115,7 +114,7 @@ export class BlogStack extends Stack {
       ],
     });
 
-    // --- [신규 추가] GSI 4 ('좋아요' 기능 전용) ---
+    // --- GSI 4 ('좋아요' 기능 전용) ---
     // 특정 사용자가 '좋아요'를 누른 모든 게시물을 효율적으로 조회하기 위한 인덱스입니다.
     postsTable.addGlobalSecondaryIndex({
       indexName: 'GSI4',
@@ -301,6 +300,9 @@ export class BlogStack extends Stack {
       },
     });
 
+    // --- [신규] BackendApiLambda의 X-Ray 쓰기 권한 부여 ---
+    backendApiLambda.role?.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'));
+
     // --- Lambda 함수에 비용 추적을 위한 태그를 추가 ---
     cdk.Tags.of(backendApiLambda).add('blog-project-cost', 'bedrock-caller');
 
@@ -318,6 +320,8 @@ export class BlogStack extends Stack {
       },
       defaultIntegration: new HttpLambdaIntegration('DefaultIntegration', backendApiLambda),
     });
+
+
 
     // ===================================================================================
     // SECTION 2: 권한 부여 및 관계 설정 (Grant permissions and define relationships)
@@ -391,8 +395,14 @@ export class BlogStack extends Stack {
         NEXT_PUBLIC_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         NEXT_PUBLIC_GITHUB_URL: githubUrlParameter,
       },
+      // **X-Ray tracing 활성화**
+      tracing: lambda.Tracing.ACTIVE,
     });
     this.imageBucket.grantRead(serverLambda);
+
+
+    // Frontend Server Lambda의 X-Ray 쓰기 권한 부여
+    serverLambda.role?.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'));
 
     cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(serverLambda).add('Tier', 'Frontend');

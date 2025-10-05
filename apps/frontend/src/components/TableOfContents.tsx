@@ -17,7 +17,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
 
   useEffect(() => {
     setIsMounted(true);
-    
+
     // 스크롤 진행도 계산
     const handleScroll = () => {
       const scrollTop = window.scrollY;
@@ -37,8 +37,8 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
 
   // 읽기 진행률 계산
   const readingProgress = useMemo(() => {
-    return activeIndex >= 0 
-      ? Math.round((activeIndex + 1) / headings.length * 100) 
+    return activeIndex >= 0
+      ? Math.round((activeIndex + 1) / headings.length * 100)
       : 0;
   }, [activeIndex, headings.length]);
 
@@ -49,7 +49,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
     if (element) {
       const offset = 100;
       const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-      
+
       window.scrollTo({
         top: elementPosition - offset,
         behavior: 'smooth',
@@ -59,7 +59,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
       element.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
       element.style.backgroundColor = 'rgba(99, 102, 241, 0.1)';
       element.style.transform = 'scale(1.02)';
-      
+
       setTimeout(() => {
         element.style.backgroundColor = 'transparent';
         element.style.transform = 'scale(1)';
@@ -271,7 +271,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </div>
-            
+
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 목차
@@ -312,12 +312,11 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
               className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               aria-label={isExpanded ? "목차 접기" : "목차 펼치기"}
             >
-              <svg 
-                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform duration-300 ${
-                  isExpanded ? 'rotate-0' : 'rotate-180'
-                }`} 
-                fill="none" 
-                viewBox="0 0 24 24" 
+              <svg
+                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-0' : 'rotate-180'
+                  }`}
+                fill="none"
+                viewBox="0 0 24 24"
                 stroke="currentColor"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -328,7 +327,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
 
         {/* 전체 스크롤 진행 바 */}
         <div className="relative w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div 
+          <div
             className="progress-bar h-full rounded-full transition-all duration-300 ease-out"
             style={{ width: `${scrollProgress}%` }}
           />
@@ -336,23 +335,23 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
       </div>
 
       {/* 목차 리스트 - 향상된 애니메이션 */}
-      <div className={`compact-transition transition-all duration-300 ease-in-out overflow-hidden ${
-        isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
-      }`}>
-        <ul className={`space-y-0.5 ${isCompact ? 'pl-4' : 'pl-6'}`}>
+      <div className={`compact-transition transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+        }`}>
+        <ul className={`space-y-0.5 ${isCompact ? 'pl-4' : ''}`}>
           {headings.map(({ id, level, text }, index) => {
             const isActive = activeId === id;
             const isHovered = hoveredId === id;
             const isNextActive = index > 0 && headings[index - 1]?.id === activeId;
             const isPrevActive = index < headings.length - 1 && headings[index + 1]?.id === activeId;
-            
+
             return (
               <li
                 key={`${id}-${index}`}
                 className="toc-item relative group"
-                style={{ 
+                style={{
                   paddingLeft: `${(level - 1) * (isCompact ? 0.8 : 1.2)}rem`,
                   animationDelay: `${index * 0.03}s`,
+                  listStyle: 'none'
                 }}
                 onMouseEnter={() => setHoveredId(id)}
                 onMouseLeave={() => setHoveredId(null)}
@@ -368,13 +367,14 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
                   className={`
                     toc-link relative block ${isCompact ? 'py-1.5 px-2' : 'py-2 px-3'} rounded-lg transition-all duration-200
                     ${isActive
-                      ? 'active bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 text-indigo-600 dark:text-indigo-400 shadow-sm border border-indigo-200 dark:border-indigo-800/50'
+                      ? 'active bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 text-indigo-700 dark:text-indigo-300 shadow-sm border border-indigo-200 dark:border-indigo-800/50'
                       : isNextActive || isPrevActive
-                      ? 'text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-800/30'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                        ? 'text-gray-600 dark:text-gray-300 bg-gray-50/50 dark:bg-gray-800/30'
+                        // --- [수정] 기본 및 호버 색상 변경 ---
+                        : 'text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }
-                    ${getHeadingStyles(level, isActive)}
-                  `}
+                      ${getHeadingStyles(level, isActive)}
+                    `}
                 >
                   <div className="flex items-center justify-between">
                     <span className="relative z-10 line-clamp-1 flex items-center gap-2">
@@ -386,7 +386,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
                       )}
                       {text}
                     </span>
-                    
+
                     {/* 활성 상태 인디케이터 */}
                     {isActive && (
                       <div className="flex items-center gap-1 ml-2">
@@ -419,8 +419,8 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
         </ul>
       </div>
 
-      {/* 빠른 네비게이션 (선택적 - 너무 복잡하면 제거 가능) */}
-      {isExpanded && headings.length > 10 && (
+      {/* 빠른 네비게이션 */}
+      {isExpanded && headings.length > 5 && (
         <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <button
