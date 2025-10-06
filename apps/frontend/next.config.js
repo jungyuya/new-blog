@@ -14,9 +14,6 @@ let nextConfig = {
   // 프로덕션 빌드에서만 소스맵을 생성하도록 설정합니다.
   productionBrowserSourceMaps: true,
 
-  experimental: {
-    instrumentationHook: true,
-  },
 
   assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || '',
   env: {

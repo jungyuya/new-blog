@@ -1,28 +1,31 @@
 // 파일 위치: apps/frontend/src/instrumentation.ts
 
 export async function register() {
-  // Next.js 서버 런타임 환경에서만 이 코드가 실행되도록 보장합니다.
   if (process.env.NEXT_RUNTIME !== 'nodejs') {
     return;
   }
 
   try {
-    // CommonJS-style의 require를 사용하여 빌드 시점의 정적 분석 문제를 최소화합니다.
     const AWSXRay = require('aws-xray-sdk-core');
     const http = require('http');
-    const https = require('https');
+    const https = require('https-');
 
-    // 1. 기존 http/https 모듈을 패치합니다.
     AWSXRay.captureHTTPsGlobal(http);
     AWSXRay.captureHTTPsGlobal(https);
     AWSXRay.capturePromise();
 
-    // 2. 글로벌 fetch 함수를 래핑(wrapping)하여 X-Ray 헤더를 주입합니다.
-    const globalAny = global as any;
-    if (typeof globalAny.fetch === 'function' && !globalAny.fetch.__xrayPatched) {
-      const originalFetch = globalAny.fetch.bind(globalAny);
+    // --- [핵심 수정] 'any' 타입을 사용하지 않고 global 타입을 확장합니다. ---
+    type GlobalWithFetch = typeof global & {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+      __xrayPatched?: boolean;
+    };
 
-      globalAny.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const globalWithFetch = global as GlobalWithFetch;
+
+    if (typeof globalWithFetch.fetch === 'function' && !globalWithFetch.__xrayPatched) {
+      const originalFetch = globalWithFetch.fetch.bind(globalWithFetch);
+
+      globalWithFetch.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         const segment = AWSXRay.getSegment();
         let modifiedInit = init ? { ...init } : {};
 
@@ -38,8 +41,7 @@ export async function register() {
         return originalFetch(input, modifiedInit);
       };
       
-      // 중복 패치를 방지하기 위한 플래그
-      globalAny.fetch.__xrayPatched = true;
+      globalWithFetch.__xrayPatched = true;
       console.log('[X-Ray] Global fetch function has been patched.');
     }
     
