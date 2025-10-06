@@ -2,17 +2,19 @@
 
 import { getAnonymousId } from './anonymousId';
 
+
+// XRay 캡처 여부를 확인하기 위한 타입 정의
+// http 모듈의 타입을 확장하여 __xrayCaptured 속성을 인식시킵니다.
+type HttpModuleWithXRay = typeof import('http') & { __xrayCaptured?: boolean };
+
 async function initializeXRay() {
-  // 이 함수는 서버 환경에서만 호출될 것입니다.
   if (typeof window === 'undefined') {
     try {
-      // require()를 사용하여 실행 시점에 모듈을 동적으로 로드합니다.
       const AWSXRay = require('aws-xray-sdk');
-      const http = require('http');
-      const https = require('https');
+      const http = require('http') as HttpModuleWithXRay;
+      const https = require('https') as HttpModuleWithXRay;
       
-      // captureHTTPsGlobal은 한 번만 호출되어야 합니다.
-      if (!(http as any).__xrayCaptured) {
+      if (!http.__xrayCaptured) {
         console.log('[X-Ray] Initializing server-side HTTP capture...');
         AWSXRay.captureHTTPsGlobal(http);
         AWSXRay.captureHTTPsGlobal(https);
