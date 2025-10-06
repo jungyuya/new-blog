@@ -1,10 +1,27 @@
 // 파일 위치: apps/frontend/src/utils/api.ts (v4.5 - Final Verified Code)
 
 import { getAnonymousId } from './anonymousId';
-import { captureXRayTrace } from './xray.server';
 
-if (typeof window === 'undefined') {
-  captureXRayTrace();
+async function initializeXRay() {
+  // 이 함수는 서버 환경에서만 호출될 것입니다.
+  if (typeof window === 'undefined') {
+    try {
+      // require()를 사용하여 실행 시점에 모듈을 동적으로 로드합니다.
+      const AWSXRay = require('aws-xray-sdk');
+      const http = require('http');
+      const https = require('https');
+      
+      // captureHTTPsGlobal은 한 번만 호출되어야 합니다.
+      if (!(http as any).__xrayCaptured) {
+        console.log('[X-Ray] Initializing server-side HTTP capture...');
+        AWSXRay.captureHTTPsGlobal(http);
+        AWSXRay.captureHTTPsGlobal(https);
+        AWSXRay.capturePromise();
+      }
+    } catch (err) {
+      console.error('Failed to initialize X-Ray:', err);
+    }
+  }
 }
 
 export interface Post {
