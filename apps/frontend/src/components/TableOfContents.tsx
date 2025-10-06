@@ -1,3 +1,4 @@
+// apps/frontend/src/components/TableOfContents.tsx (isActive 제거)
 'use client';
 
 import type { Heading } from '@/utils/toc';
@@ -68,7 +69,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
   }, []);
 
   // 헤딩 레벨에 따른 스타일 반환
-  const getHeadingStyles = useCallback((level: number, isActive: boolean) => {
+  const getHeadingStyles = useCallback((level: number) => {
     const baseStyles = {
       1: 'font-bold text-[18px]', // H1
       2: 'font-medium text-[15px]', // H2
@@ -76,7 +77,6 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
       4: 'font-light text-[12px]', // H4
     };
 
-    // 컴팩트 모드일 때는 크기를 줄임
     const compactStyles = {
       1: 'font-semibold text-[14px]',
       2: 'font-medium text-[12px]',
@@ -373,7 +373,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
                         // --- [수정] 기본 및 호버 색상 변경 ---
                         : 'text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }
-                      ${getHeadingStyles(level, isActive)}
+                      ${getHeadingStyles(level)}
                     `}
                 >
                   <div className="flex items-center justify-between">
