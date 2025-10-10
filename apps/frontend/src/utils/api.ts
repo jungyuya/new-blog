@@ -2,40 +2,6 @@
 
 import { getAnonymousId } from './anonymousId';
 
-
-// --- [핵심 수정] 동료 검토 의견을 반영한 안전한 X-Ray 연동 로직 ---
-
-// 1. 내부 API 호출에만 추적 헤더를 주입하기 위한 호스트 화이트리스트
-//    getApiBaseUrl()이 서버/클라이언트에서 다른 값을 반환하므로, 서버에서만 사용될 호스트를 확인합니다.
-let internalApiHostname: string | null = null;
-if (typeof window === 'undefined') {
-  try {
-    const internalEndpoint = process.env.INTERNAL_API_ENDPOINT;
-    if (internalEndpoint) {
-      internalApiHostname = new URL(internalEndpoint).hostname;
-    }
-  } catch (e) {
-    console.error("Failed to parse INTERNAL_API_ENDPOINT:", e);
-  }
-}
-
-// 2. X-Ray SDK를 요청마다 require하지 않도록 캐싱하는 변수
-let XRaySDK: any = null;
-let xrayInitAttempted = false;
-
-function ensureXRayIsLoaded() {
-  if (XRaySDK || xrayInitAttempted) return XRaySDK;
-  xrayInitAttempted = true;
-  try {
-    // 동적 require는 빌드 시점에 클라이언트 번들에 포함되는 것을 방지합니다.
-    XRaySDK = require('aws-xray-sdk-core');
-  } catch (e) {
-    console.warn('[X-Ray] require failed (likely running in client bundle):', (e as Error).message);
-    XRaySDK = null;
-  }
-  return XRaySDK;
-}
-
 export interface Post {
   PK: string;
   SK: string;
@@ -126,30 +92,8 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
 
-  // --- [수정 2] 모든 API 요청에 익명 ID 헤더를 자동으로 추가합니다. ---
-  // --- 서버 환경에서만 실행되는 로직 ---
+  // 서버 환경에서 쿠키 전달
   if (typeof window === 'undefined') {
-    // X-Ray 헤더 주입
-    try {
-      const targetUrl = new URL(url);
-      // 내부 API 호출일 경우에만 헤더를 주입 (보안 강화)
-      if (internalApiHostname && targetUrl.hostname === internalApiHostname) {
-        const AWSXRay = ensureXRayIsLoaded();
-        if (AWSXRay) {
-          const segment = AWSXRay.getSegment();
-          if (segment) {
-            const traceHeader = `Root=${segment.trace_id};Parent=${segment.id};Sampled=${segment.notTraced ? '0' : '1'}`;
-            headers.set('X-Amzn-Trace-Id', traceHeader);
-          } else {
-            console.debug('[X-Ray] No active segment found. Trace header not attached.');
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[X-Ray] Failed to attach trace header:', err);
-    }
-
-    // 쿠키 전달 로직
     const { cookies } = await import('next/headers');
     const cookieStore = await cookies();
     const allCookies = cookieStore.getAll();
@@ -159,8 +103,10 @@ async function fetchWrapper<T>(path: string, options: RequestInit = {}): Promise
         .join('; ');
       headers.set('Cookie', cookieHeader);
     }
-  } else {
-    // 브라우저 환경
+  }
+
+  // 브라우저 환경에서 익명 ID 전달
+  if (typeof window !== 'undefined') {
     const anonymousId = getAnonymousId();
     if (anonymousId) {
       headers.set('X-Anonymous-Id', anonymousId);
