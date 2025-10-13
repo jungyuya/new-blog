@@ -2,8 +2,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { ArrowUp, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronUp } from 'lucide-react';
 
 // Throttle 유틸리티 함수 (성능 최적화)
 const throttle = (func: (...args: any[]) => void, delay: number) => {
@@ -31,7 +31,6 @@ export default function BackToTopButton() {
   const [isNearTop, setIsNearTop] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  // 스크롤 위치를 계산하는 함수
   const updateScrollProgress = useCallback(() => {
     const scrollPx = window.scrollY;
     const winHeightPx = document.documentElement.scrollHeight - document.documentElement.clientHeight;
@@ -41,35 +40,23 @@ export default function BackToTopButton() {
       setScrollProgress(scrolled);
     }
     
-    // 300px 이상 스크롤했을 때 버튼 표시
     setIsVisible(scrollPx > 300);
-    // 상단 근처(500px 이내)인지 체크
     setIsNearTop(scrollPx < 500 && scrollPx > 0);
   }, []);
 
-  // 스크롤 이벤트에 throttle을 적용하여 리스너 등록
   useEffect(() => {
     const handleScroll = throttle(updateScrollProgress, 100);
     window.addEventListener('scroll', handleScroll, { passive: true });
-    updateScrollProgress(); // 초기 로드 시 한 번 실행
+    updateScrollProgress();
     
     return () => window.removeEventListener('scroll', handleScroll);
   }, [updateScrollProgress]);
 
-  // 최상단으로 스크롤하는 함수 (easing 추가)
   const scrollToTop = () => {
-    const scrollStep = -window.scrollY / 25;
-    const scrollInterval = setInterval(() => {
-      if (window.scrollY !== 0) {
-        window.scrollBy(0, scrollStep);
-      } else {
-        clearInterval(scrollInterval);
-      }
-    }, 15);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Progress circle dimensions
-  const size = 56; // 버튼 크기 증가
+  const size = 56;
   const strokeWidth = 2.5;
   const center = size / 2;
   const radius = center - strokeWidth;
@@ -81,26 +68,13 @@ export default function BackToTopButton() {
       {isVisible && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8, y: 100 }}
-          animate={{ 
-            opacity: 1, 
-            scale: 1, 
-            y: 0,
-          }}
-          exit={{ 
-            opacity: 0, 
-            scale: 0.8, 
-            y: 100,
-          }}
-          transition={{ 
-            type: "spring",
-            stiffness: 260,
-            damping: 20,
-          }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.8, y: 100 }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
           className="fixed bottom-8 right-8 z-50 group"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Glow effect background */}
           <motion.div
             className="absolute inset-0 rounded-full opacity-30 blur-xl"
             animate={{
@@ -162,7 +136,6 @@ export default function BackToTopButton() {
                 : undefined,
             }}
           >
-            {/* Animated background gradient */}
             <motion.div
               className="absolute inset-0 opacity-50"
               animate={{
@@ -179,13 +152,11 @@ export default function BackToTopButton() {
               }}
             />
 
-            {/* Progress circle SVG */}
             <svg 
               className="absolute inset-0 -rotate-90" 
               width={size} 
               height={size}
             >
-              {/* Background circle */}
               <circle 
                 cx={center} 
                 cy={center} 
@@ -196,7 +167,6 @@ export default function BackToTopButton() {
                 className="text-gray-400/40 dark:text-gray-600/20" 
               />
               
-              {/* Progress circle */}
               <motion.circle
                 cx={center}
                 cy={center}
@@ -223,7 +193,6 @@ export default function BackToTopButton() {
               />
             </svg>
 
-            {/* Icon container with animation */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               animate={{
@@ -241,7 +210,6 @@ export default function BackToTopButton() {
               />
             </motion.div>
 
-            {/* Percentage text (appears on hover) */}
             <AnimatePresence>
               {isHovered && (
                 <motion.div
@@ -258,7 +226,6 @@ export default function BackToTopButton() {
             </AnimatePresence>
           </motion.button>
           
-          {/* Enhanced tooltip */}
           <motion.div
             className="absolute right-full mr-4 top-1/2 -translate-y-1/2"
             initial={{ opacity: 0, x: 10 }}
@@ -269,10 +236,8 @@ export default function BackToTopButton() {
             transition={{ duration: 0.2 }}
           >
             <div className="relative">
-              {/* Tooltip arrow */}
               <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2 h-2 bg-gradient-to-r from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800 rotate-45" />
               
-              {/* Tooltip content */}
               <div className="px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800 text-white text-sm rounded-lg shadow-xl whitespace-nowrap backdrop-blur-md border border-white/10">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">맨 위로</span>
@@ -284,7 +249,7 @@ export default function BackToTopButton() {
             </div>
           </motion.div>
 
-          {/* Ripple effect on click */}
+          {/* Ripple effect on click - 이 부분은 클릭 시 효과이므로, isNearTop 보다는 클릭 상태로 관리하는 것이 더 적합할 수 있습니다. 우선은 기존 로직을 유지합니다. */}
           <AnimatePresence>
             {isNearTop && (
               <motion.div
