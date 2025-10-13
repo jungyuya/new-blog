@@ -6,11 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronUp } from 'lucide-react';
 
 // Throttle 유틸리티 함수 (성능 최적화)
-const throttle = (func: (...args: any[]) => void, delay: number) => {
-  let timeoutId: NodeJS.Timeout | null = null;
+const throttle = <F extends (...args: unknown[]) => void>(func: F, delay: number) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastRan = 0;
-  
-  return (...args: any[]) => {
+
+  return (...args: Parameters<F>): void => {
     const now = Date.now();
     if (now - lastRan >= delay) {
       func(...args);
