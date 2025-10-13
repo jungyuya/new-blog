@@ -1,7 +1,8 @@
-// 파일 위치: apps/frontend/src/components/PostList.tsx (v1.2 - ARIA 속성 추가)
+// 파일 위치: apps/frontend/src/components/PostList.tsx
 'use client';
 
 import { useEffect } from 'react';
+import { motion, Variants } from 'framer-motion'; // 1. framer-motion import
 import { PaginatedPosts } from '@/utils/api';
 import { useInfinitePosts } from '@/hooks/useInfinitePosts';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
@@ -13,18 +14,28 @@ const Spinner = () => (
   <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
 );
 
+// 2. PostList 컨테이너를 위한 애니메이션 variants 정의
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1, // 자식 요소들을 0.1초 간격으로 순차적으로 애니메이션
+    },
+  },
+};
+
 interface PostListProps {
   fallbackData: PaginatedPosts;
 }
 
-export default function PostList({ fallbackData }: PostListProps) { // [핵심 수정] excludeIds를 받지 않도록 변경
+export default function PostList({ fallbackData }: PostListProps) {
   const { posts, error, isRefreshing, isReachingEnd, loadMore, size } = useInfinitePosts(fallbackData);
   const { setTarget, entry } = useIntersectionObserver({
     rootMargin: '200px',
     threshold: 0.1,
   });
 
-  // 데이터 로딩이 완료되었을 때(!isRefreshing)만 복원을 활성화합니다.
   useScrollRestoration('main-scroll-position', size, !isRefreshing);
 
   useEffect(() => {
@@ -32,7 +43,6 @@ export default function PostList({ fallbackData }: PostListProps) { // [핵심 �
       loadMore();
     }
   }, [entry, isRefreshing, isReachingEnd, loadMore]);
-
 
   if (error) return <p className="text-red-500">게시물 목록을 불러오는 데 실패했습니다.</p>;
 
@@ -42,23 +52,26 @@ export default function PostList({ fallbackData }: PostListProps) { // [핵심 �
 
   return (
     <>
-      {/* --- 게시물 목록 그리드에 aria-busy 속성 추가 --- */}
-      <div
+      {/* 3. grid div를 motion.div로 변경하고 variants 및 애니메이션 prop 추가 */}
+      <motion.div
         className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3"
-        aria-busy={isRefreshing} // 로딩 중일 때 이 영역이 바쁘다고 스크린 리더에 알림
+        aria-busy={isRefreshing}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
       >
         {posts.map((post) => (
+          // PostCard는 이미 motion.div로 되어 있으며, 부모의 variants를 상속받아 애니메이션됨
           <PostCard key={post.postId} post={post} />
         ))}
         {isRefreshing && Array.from({ length: 6 }).map((_, i) => <PostCardSkeleton key={`skeleton-${i}`} />)}
-      </div>
+      </motion.div>
 
       <div
         ref={setTarget}
         className="flex justify-center mt-12 h-10"
-        // 스크린 리더가 이 영역의 변화를 감지하고 사용자에게 "상태 변경"을 알리도록 함
         role="status"
-        aria-live="polite" // 변경 사항을 부드럽게 알림 (polite)
+        aria-live="polite"
       >
         {!isReachingEnd && isRefreshing && (
           <>

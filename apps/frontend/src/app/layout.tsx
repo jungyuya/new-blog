@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import BackToTopButton from '@/components/BackToTopButton'; // 1. 컴포넌트 import
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -30,6 +31,8 @@ export default function RootLayout({
             <Footer />
           </Providers>
         </div>
+        {/* 2. BackToTopButton 컴포넌트를 body 최하단에 추가 */}
+        <BackToTopButton />
       </body>
     </html>
   );

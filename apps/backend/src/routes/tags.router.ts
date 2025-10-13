@@ -37,7 +37,7 @@ tagsRouter.get('/popular', async (c) => {
     // 3. 카운트가 높은 순서대로 정렬하고, 상위 6개만 추출합니다.
     const popularTags = Object.entries(tagCounts)
       .sort(([, countA], [, countB]) => countB - countA)
-      .slice(0, 6) // 상위 6개의 태그만 반환
+      .slice(0, 8) // 상위 8개의 태그만 반환
       .map(([name, count]) => ({ name, count }));
 
     return c.json({ tags: popularTags });

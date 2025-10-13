@@ -149,7 +149,7 @@ export async function getFeaturedPosts(userGroups?: string[]) {
 
   const editorPicksItems = featuredItems
     .filter(p => p.postId !== heroPostId) // Hero 게시물 제외
-    .slice(0, 4); // 최대 4개만 선택
+    .slice(0, 8); // 최대 8개만 선택
 
   // 3. [데이터 보강] 보강이 필요한 모든 게시물 목록을 준비합니다.
   const postsToEnrich = [...editorPicksItems];

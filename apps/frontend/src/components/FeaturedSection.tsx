@@ -1,24 +1,53 @@
 // 파일 위치: apps/frontend/src/components/FeaturedSection.tsx
-import { Post } from "@/utils/api";
-import FeaturedPostCard from "./FeaturedPostCard";
-import PostCard from "./PostCard";
-import TagFilter from "./TagFilter";
+'use client'; 
 
-// 컴포넌트가 받을 props 타입을 새로운 구조에 맞게 변경합니다.
+import React, { useCallback, useEffect, useState } from 'react';
+import useEmblaCarousel from 'embla-carousel-react';
+import { Post } from '@/utils/api';
+import FeaturedPostCard from './FeaturedPostCard';
+import PostCard from './PostCard';
+import TagFilter from './TagFilter';
+import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
+
 interface FeaturedSectionProps {
   heroPost: Post | null;
   editorPicks: Post[];
 }
 
 export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSectionProps) {
-  // heroPost나 editorPicks가 모두 없는 경우 아무것도 렌더링하지 않습니다.
-  if (!heroPost && editorPicks.length === 0) {
-    return null;
-  }
+  const [emblaRef, emblaApi] = useEmblaCarousel({ 
+    loop: true, 
+    align: 'start',
+  });
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [scrollSnaps, setScrollSnaps] = useState<number[]>([]);
+
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const scrollTo = useCallback((index: number) => emblaApi?.scrollTo(index), [emblaApi]);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    setScrollSnaps(emblaApi.scrollSnapList());
+    onSelect();
+    emblaApi.on('select', onSelect);
+    return () => {
+      emblaApi.off('select', onSelect);
+    };
+  }, [emblaApi, onSelect]);
+
+  if (!heroPost && editorPicks.length === 0) return null;
+
+  const showCarousel = editorPicks.length > 4;
 
   return (
     <div className="mb-16">
-      {/* Hero Section: heroPost가 존재할 경우에만 렌더링합니다. */}
       {heroPost && (
         <section className="mb-16">
           <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">🏆 Spotlight Post</h2>
@@ -31,15 +60,61 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
         <TagFilter />
       </section>
 
-      {/* Editor's Picks: editorPicks 배열에 아이템이 있을 경우에만 렌더링합니다. */}
       {editorPicks.length > 0 && (
         <section>
-          <h2 className="text-2xl font-bold mb-4 dark:text-gray-100">추천 게시물</h2>
-          <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            {editorPicks.map(post => (
-              <PostCard key={post.postId} post={post} isEditorPick={true} variant="compact" />
-            ))}
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold dark:text-gray-100">추천 게시물</h2>
           </div>
+
+          {showCarousel ? (
+            // --- [핵심 수정] 캐러셀과 버튼을 감싸는 relative group 컨테이너 추가 ---
+            <div className="relative group">
+              <div className="embla" ref={emblaRef}>
+                <div className="embla__container">
+                  {editorPicks.map(post => (
+                    <div className="embla__slide" key={post.postId}>
+                      <PostCard post={post} isEditorPick={true} variant="compact" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* --- [핵심 수정] 버튼 위치 및 스타일 변경 --- */}
+              <button 
+                onClick={scrollPrev} 
+                className="nav-btn absolute top-1/2 left-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30"
+                aria-label="Previous"
+              >
+                <ArrowLeftIcon />
+              </button>
+              <button 
+                onClick={scrollNext} 
+                className="nav-btn absolute top-1/2 right-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30"
+                aria-label="Next"
+              >
+                <ArrowRightIcon />
+              </button>
+
+              {scrollSnaps.length > 1 && (
+                <div className="dots">
+                  {scrollSnaps.map((_, idx) => (
+                    <button
+                      key={idx}
+                      className={`dot ${idx === selectedIndex ? 'dot--active' : ''}`}
+                      onClick={() => scrollTo(idx)}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {editorPicks.map(post => (
+                <PostCard key={post.postId} post={post} isEditorPick={true} variant="compact" />
+              ))}
+            </div>
+          )}
         </section>
       )}
     </div>
