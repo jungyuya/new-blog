@@ -8,27 +8,30 @@
 
 /* 라이트 모드(기본값)를 위한 CSS 변수 */
 :root {
-  --color-text: #111827; /* Tailwind gray-900 */
-  --color-bg-start: #fafafa; /* Tailwind gray-50 */
-  --color-bg-end: #ffffff;   /* White */
+  --color-text: #111827;
+  /* Tailwind gray-900 */
+  --color-bg-start: #fafafa;
+  /* Tailwind gray-50 */
+  --color-bg-end: #ffffff;
+  /* White */
 }
 
 /* [수정] 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
 html.dark {
-  --color-text: #e5e7eb; /* 기본 텍스트 색상 (Tailwind gray-200) */
-  --color-bg-start: #292929; /* 배경 시작 색상 (어두운 회색) */
-  --color-bg-end: #02060a;   /* 배경 끝 색상 (거의 검은색) */
+  --color-text: #e5e7eb;
+  /* 기본 텍스트 색상 (Tailwind gray-200) */
+  --color-bg-start: #292929;
+  /* 배경 시작 색상 (어두운 회색) */
+  --color-bg-end: #02060a;
+  /* 배경 끝 색상 (거의 검은색) */
 }
 
 /* body 스타일이 새로운 변수를 직접 사용하도록 변경 */
 body {
   color: var(--color-text);
-  background: linear-gradient(
-      to bottom,
+  background: linear-gradient(to bottom,
       transparent,
-      var(--color-bg-end)
-    )
-    var(--color-bg-start);
+      var(--color-bg-end)) var(--color-bg-start);
 }
 
 
@@ -47,7 +50,8 @@ body {
   border-radius: 0.5rem;
   margin-top: 2em;
   margin-bottom: 2em;
-  cursor: pointer; /* 클릭 가능하다는 것을 알려주는 커서 모양 */
+  cursor: pointer;
+  /* 클릭 가능하다는 것을 알려주는 커서 모양 */
 }
 
 /* ================================================================ */
@@ -87,12 +91,16 @@ body {
 /* ================================================================ */
 
 @keyframes bouncy-heart {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(0.8);
   }
+
   50% {
     transform: scale(1.8);
   }
+
   75% {
     transform: scale(0.2);
   }
@@ -139,12 +147,13 @@ body {
 
 /* [추가] 인라인 코드(code) 태그의 색상을 직접 덮어쓰기 위한, 더 강력한 규칙 */
 .prose.toastui-editor-dark code {
-  color: #C8EEFF !important; 
+  color: #C8EEFF !important;
 }
 
 /* 단, 블록 코드(pre > code)는 원래 스타일(또는 다른 색)로 복원 */
 .prose.toastui-editor-dark pre code {
-  color: inherit !important; /* 또는 원하는 색 지정 */
+  color: inherit !important;
+  /* 또는 원하는 색 지정 */
 }
 
 
@@ -184,13 +193,18 @@ body {
 
 /* (선택) 색상 커스터마이징을 위한 추가 클래스 */
 .liquid-blue::before {
-    background: #3b82f6; /* 파란색 */
+  background: #3b82f6;
+  /* 파란색 */
 }
+
 .liquid-green::before {
-    background: #22c55e; /* 초록색 */
+  background: #22c55e;
+  /* 초록색 */
 }
+
 .liquid-purple::before {
-    background: #8b5cf6; /* 보라색 */
+  background: #8b5cf6;
+  /* 보라색 */
 }
 
 
@@ -220,24 +234,32 @@ body {
 .embla__container {
   display: flex;
   /* [핵심 수정] gap을 제거하고, 첫 번째 슬라이드의 왼쪽 여백을 상쇄하기 위해 음수 마진을 사용합니다. */
-  margin-left: -1rem; 
+  margin-left: -1rem;
 }
+
 .embla__slide {
   /* [핵심 수정] flex-basis 대신 flex-grow/shrink를 사용하고, 각 슬라이드에 왼쪽 패딩을 추가합니다. */
-  flex: 0 0 100%; /* 모바일: 슬라이드 1개 */
+  flex: 0 0 100%;
+  /* 모바일: 슬라이드 1개 */
   min-width: 0;
   padding-left: 1rem;
 }
 
-@media (min-width: 640px) { /* sm breakpoint */
+@media (min-width: 640px) {
+
+  /* sm breakpoint */
   .embla__slide {
-    flex-basis: 50%; /* 태블릿: 슬라이드 2개 */
+    flex-basis: 50%;
+    /* 태블릿: 슬라이드 2개 */
   }
 }
 
-@media (min-width: 1024px) { /* lg breakpoint */
+@media (min-width: 1024px) {
+
+  /* lg breakpoint */
   .embla__slide {
-    flex-basis: 25%; /* 데스크탑: 슬라이드 4개 */
+    flex-basis: 25%;
+    /* 데스크탑: 슬라이드 4개 */
   }
 }
 
@@ -254,20 +276,23 @@ body {
   color: #6b7280;
   transition: all 0.2s;
   cursor: pointer;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* 미묘한 그림자 */
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  /* 미묘한 그림자 */
 }
 
 .nav-btn:hover {
   background: #f9fafb;
   border-color: #d1d5db;
   color: #374151;
-  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1); /* 호버 시 그림자 강화 */
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1);
+  /* 호버 시 그림자 강화 */
 }
 
 .nav-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .nav-btn:active {
   transform: scale(0.95);
 }
@@ -297,7 +322,8 @@ body {
   height: 0.5rem;
   padding: 0;
   border: none;
-  border-radius: 9999px; /* [개선] 원형을 보장하기 위해 충분히 큰 값으로 변경 */
+  border-radius: 9999px;
+  /* [개선] 원형을 보장하기 위해 충분히 큰 값으로 변경 */
   background: #d1d5db;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -329,4 +355,313 @@ body {
 .dot:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
+}
+
+
+/* 아키텍처 관련 */
+.arch-body {
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #e0e0e0;
+  padding: 40px 20px;
+  overflow-x: auto;
+}
+
+.arch-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  min-width: 1200px;
+}
+
+.arch-h1 {
+  text-align: center;
+  font-size: 2.5em;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+}
+
+.arch-subtitle {
+  text-align: center;
+  color: #9ca3af;
+  margin-bottom: 40px;
+  font-size: 1.1em;
+}
+
+.main-flow {
+  background: rgba(20, 20, 35, 0.6);
+  border: 2px solid rgba(0, 212, 255, 0.4);
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+}
+
+.flow-title {
+  font-size: 1.8em;
+  margin-bottom: 25px;
+  color: #00d4ff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  padding: 20px 0;
+}
+
+.flow-node {
+  flex: 1;
+  background: linear-gradient(135deg, rgba(30, 30, 50, 0.9), rgba(40, 40, 70, 0.7));
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  z-index: 10;
+}
+
+.flow-node:hover {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 15px 40px rgba(0, 212, 255, 0.4);
+}
+
+.flow-node.user {
+  border-color: #3b82f6;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.flow-node.edge {
+  border-color: #06b6d4;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+}
+
+.flow-node.compute {
+  border-color: #a855f7;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.flow-node.data {
+  border-color: #10b981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.node-icon {
+  font-size: 3em;
+  margin-bottom: 10px;
+}
+
+.node-name {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #fff;
+}
+
+.node-detail {
+  font-size: 0.85em;
+  color: #9ca3af;
+}
+
+.flow-arrow {
+  font-size: 2em;
+  color: #00d4ff;
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+.expandable-section {
+  background: rgba(20, 20, 35, 0.5);
+  border: 1px solid rgba(100, 100, 150, 0.3);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.section-header {
+  padding: 20px 25px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(30, 30, 50, 0.6);
+  transition: all 0.3s ease;
+}
+
+.section-header:hover {
+  background: rgba(40, 40, 60, 0.8);
+}
+
+.section-header h3 {
+  font-size: 1.4em;
+  color: #a855f7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-icon {
+  font-size: 1.5em;
+  transition: transform 0.3s ease;
+  color: #00d4ff;
+}
+
+.expandable-section.expanded .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.section-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  padding: 0 25px;
+}
+
+.expandable-section.expanded .section-content {
+  max-height: 2000px;
+  padding: 25px;
+}
+
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.component-card {
+  background: linear-gradient(135deg, rgba(30, 30, 50, 0.8), rgba(40, 40, 70, 0.6));
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.component-card:hover {
+  transform: translateY(-3px);
+  border-color: #00d4ff;
+  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+}
+
+.component-icon {
+  font-size: 2.5em;
+  margin-bottom: 10px;
+}
+
+.component-name {
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #fff;
+}
+
+.component-desc {
+  font-size: 0.8em;
+  color: #9ca3af;
+}
+
+.pipeline {
+  background: rgba(40, 40, 70, 0.5);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.pipeline-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #a855f7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pipeline-step {
+  background: rgba(60, 60, 100, 0.6);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.85em;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  white-space: nowrap;
+}
+
+.pipeline-arrow {
+  color: #a855f7;
+  font-size: 1.2em;
+}
+
+.layer-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9em;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.layer-badge.user {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+}
+
+.layer-badge.aws {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid #a855f7;
+  color: #a855f7;
+}
+
+.layer-badge.devops {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10b981;
+  color: #10b981;
+}
+
+.info-box {
+  background: rgba(30, 30, 50, 0.6);
+  border-left: 4px solid #00d4ff;
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin: 20px 0;
+  font-size: 0.95em;
+  color: #cbd5e1;
+}
+
+.info-box strong {
+  color: #00d4ff;
 }

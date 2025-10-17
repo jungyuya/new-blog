@@ -39,7 +39,7 @@ interface PostDetailViewProps {
 export default function PostDetailView({ post, prevPost, nextPost, postId, headings }: PostDetailViewProps) {
   const [activeId, setActiveId] = useState<string>('');
 
-    useEffect(() => {
+  useEffect(() => {
     // headings가 없으면 아무 작업도 하지 않음
     if (headings.length === 0) return;
 
@@ -67,7 +67,7 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
       headingElements.forEach((el) => observer.unobserve(el));
       observer.disconnect();
     };
-  }, [headings]); 
+  }, [headings]);
 
   if (!post) {
     return (
@@ -79,26 +79,42 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
   }
 
   return (
-    <div className="flex justify-center gap-12">
-      {/* 1. 메인 콘텐츠 영역 (왼쪽) */}
-      <div className="w-full max-w-4xl">
+    // Set a CSS variable that matches `max-w-4xl` (56rem) so the TOC can be positioned
+    <div className="relative" style={{ ['--content-max-w' as any]: '56rem' }}>
+
+
+      {/* 1) 메인 콘텐츠: 가운데 정렬 (mx-auto) + 콘텐츠 최대 너비를 CSS 변수로 제어 */}
+      <main className="mx-auto w-full max-w-[var(--content-max-w)] px-4">
         <PostHeader post={post} />
         <PostContent content={post.content!} headings={headings} />
         <PostAuthorProfile post={post} />
         <PostUtilButtons post={post} prevPost={prevPost} nextPost={nextPost} />
         <CommentsSection postId={postId} />
-      </div>
+      </main>
 
-      {/* 2. 따라다니는 목차 영역 (오른쪽) */}
-      {/* headings가 있고, post.showToc가 false가 아닐 때만 렌더링 */}
+
+      {/* 2) 떠다니는 목차: 화면 우측에서 게시글 바로 옆에 고정
+- lg 이상에서만 보여주며, 게시글의 중앙 정렬에 영향을 주지 않도록 flow에서 분리(fixed)
+- left 계산식: 50% + (콘텐츠 최대너비 / 2) + 간격(1rem)
+*/}
       {headings.length > 0 && post.showToc !== false && (
-        <aside className="hidden lg:block w-72 flex-shrink-0">
-          <div className="sticky top-24">
-            {/* activeId 상태를 prop으로 전달 */}
+        <aside
+          className="hidden lg:block"
+          style={{
+            position: 'fixed',
+            left: 'calc(50% + (var(--content-max-w) / 2) + 1rem)',
+            top: '6rem', // 원하는 stick 위치
+            width: '18rem', // tailwind의 w-72 == 18rem
+            maxWidth: '18rem',
+          }}
+        >
+          <div>
             <TableOfContents headings={headings} activeId={activeId} />
           </div>
         </aside>
       )}
+
+
     </div>
   );
 }

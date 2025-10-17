@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JUNGYU's Blog Architecture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #e0e0e0;
+            padding: 40px 20px;
+            overflow-x: auto;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            min-width: 1200px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #9ca3af;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        /* Main Flow Section */
+        .main-flow {
+            background: rgba(20, 20, 35, 0.6);
+            border: 2px solid rgba(0, 212, 255, 0.4);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+        }
+
+        .flow-title {
+            font-size: 1.8em;
+            margin-bottom: 25px;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .flow-node {
+            flex: 1;
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.9), rgba(40, 40, 70, 0.7));
+            border: 2px solid;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            z-index: 10;
+        }
+
+        .flow-node:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 212, 255, 0.4);
+        }
+
+        .flow-node.user {
+            border-color: #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .flow-node.edge {
+            border-color: #06b6d4;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+        }
+
+        .flow-node.compute {
+            border-color: #a855f7;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+        }
+
+        .flow-node.data {
+            border-color: #10b981;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .node-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .node-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .node-detail {
+            font-size: 0.85em;
+            color: #9ca3af;
+        }
+
+        .flow-arrow {
+            font-size: 2em;
+            color: #00d4ff;
+            animation: pulse 2s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.6;
+                transform: scale(1.2);
+            }
+        }
+
+        /* Expandable Sections */
+        .expandable-section {
+            background: rgba(20, 20, 35, 0.5);
+            border: 1px solid rgba(100, 100, 150, 0.3);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .section-header {
+            padding: 20px 25px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(30, 30, 50, 0.6);
+            transition: all 0.3s ease;
+        }
+
+        .section-header:hover {
+            background: rgba(40, 40, 60, 0.8);
+        }
+
+        .section-header h3 {
+            font-size: 1.4em;
+            color: #a855f7;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s ease;
+            color: #00d4ff;
+        }
+
+        .expandable-section.expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .section-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            padding: 0 25px;
+        }
+
+        .expandable-section.expanded .section-content {
+            max-height: 2000px;
+            padding: 25px;
+        }
+
+        /* Grid for components */
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .component-card {
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.8), rgba(40, 40, 70, 0.6));
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .component-card:hover {
+            transform: translateY(-3px);
+            border-color: #00d4ff;
+            box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+        }
+
+        .component-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .component-name {
+            font-size: 1em;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .component-desc {
+            font-size: 0.8em;
+            color: #9ca3af;
+        }
+
+        /* Pipeline Flow */
+        .pipeline {
+            background: rgba(40, 40, 70, 0.5);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .pipeline-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #a855f7;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .pipeline-step {
+            background: rgba(60, 60, 100, 0.6);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            white-space: nowrap;
+        }
+
+        .pipeline-arrow {
+            color: #a855f7;
+            font-size: 1.2em;
+        }
+
+        /* Layer Badges */
+        .layer-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .layer-badge.user {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+        }
+
+        .layer-badge.aws {
+            background: rgba(168, 85, 247, 0.2);
+            border: 1px solid #a855f7;
+            color: #a855f7;
+        }
+
+        .layer-badge.devops {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: rgba(30, 30, 50, 0.6);
+            border-left: 4px solid #00d4ff;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 20px 0;
+            font-size: 0.95em;
+            color: #cbd5e1;
+        }
+
+        .info-box strong {
+            color: #00d4ff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 JUNGYU's Blog: Cloud Architecture</h1>
+        <p class="subtitle">Cloud-Native Intelligent Content Platform on AWS</p>
+
+        <!-- Main Data Flow -->
+        <div class="main-flow">
+            <div class="flow-title">
+                ⚡ Main Request Flow (핵심 데이터 흐름)
+            </div>
+            <div class="flow-diagram">
+                <div class="flow-node user" data-node="user">
+                    <div class="node-icon">💻</div>
+                    <div class="node-name">User</div>
+                    <div class="node-detail">Web Browser</div>
+                </div>
+
+                <div class="flow-arrow">→</div>
+
+                <div class="flow-node edge" data-target="section-edge">
+                    <div class="node-icon">🌍</div>
+                    <div class="node-name">CloudFront</div>
+                    <div class="node-detail">CDN + Routing</div>
+                </div>
+
+                <div class="flow-arrow">→</div>
+
+                <div class="flow-node compute" data-target="section-compute">
+                    <div class="node-icon">⚛️</div>
+                    <div class="node-name">Frontend</div>
+                    <div class="node-detail">Next.js SSR</div>
+                </div>
+
+                <div class="flow-arrow">→</div>
+
+                <div class="flow-node compute" data-target="section-compute">
+                    <div class="node-icon">🔧</div>
+                    <div class="node-name">Backend</div>
+                    <div class="node-detail">Hono API</div>
+                </div>
+
+                <div class="flow-arrow">→</div>
+
+                <div class="flow-node data" data-target="section-data">
+                    <div class="node-icon">🗄️</div>
+                    <div class="node-name">Database</div>
+                    <div class="node-detail">DynamoDB</div>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>💡 핵심 포인트:</strong> CloudFront가 단일 진입점으로 경로별 라우팅 (/→Frontend, /api/*→Backend, /assets/*→S3,
+                /speeches/*→S3)
+            </div>
+        </div>
+
+        <!-- AWS Cloud Layer Details -->
+        <div class="layer-badge aws">☁️ AWS CLOUD LAYER</div>
+
+        <!-- Content Delivery & Edge -->
+        <div id="section-edge" class="expandable-section expanded">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>🌐 Content Delivery & Edge</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">🔀</div>
+                        <div class="component-name">Route 53</div>
+                        <div class="component-desc">DNS Management</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🔒</div>
+                        <div class="component-name">ACM</div>
+                        <div class="component-desc">SSL/TLS Certificates</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🌍</div>
+                        <div class="component-name">CloudFront</div>
+                        <div class="component-desc">Global CDN + Router</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Frontend & Backend -->
+        <div id="section-compute" class="expandable-section expanded">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>⚛️ Frontend & Backend Services</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">🐳</div>
+                        <div class="component-name">Frontend Lambda</div>
+                        <div class="component-desc">Docker + Next.js SSR</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">📦</div>
+                        <div class="component-name">S3 Assets</div>
+                        <div class="component-desc">Static Files (JS/CSS)</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🚪</div>
+                        <div class="component-name">API Gateway</div>
+                        <div class="component-desc">HTTP API Endpoints</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">λ</div>
+                        <div class="component-name">Backend Lambda</div>
+                        <div class="component-desc">Hono 3-Tier Architecture</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🔍</div>
+                        <div class="component-name">Search Lambda</div>
+                        <div class="component-desc">OpenSearch Integration</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data & Storage -->
+        <div id="section-data" class="expandable-section expanded">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>💾 Data & Storage</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">🗄️</div>
+                        <div class="component-name">DynamoDB</div>
+                        <div class="component-desc">Single-Table + GSI + Stream</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🖼️</div>
+                        <div class="component-name">Image S3 Bucket</div>
+                        <div class="component-desc">Images & Thumbnails</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🔊</div>
+                        <div class="component-name">Speech S3 Bucket</div>
+                        <div class="component-desc">Generated Audio Files</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Asynchronous Pipelines -->
+        <div id="section-pipelines" class="expandable-section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>⚙️ Asynchronous Pipelines (Event-Driven)</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="pipeline">
+                    <div class="pipeline-title">📐 Image Resizing Pipeline</div>
+                    <div class="pipeline-flow">
+                        <div class="pipeline-step">S3 Image Upload</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">EventBridge</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Image Processor λ (sharp)</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">S3 Thumbnails</div>
+                    </div>
+                </div>
+
+                <div class="pipeline">
+                    <div class="pipeline-title">🤖 AI Speech Synthesis Pipeline</div>
+                    <div class="pipeline-flow">
+                        <div class="pipeline-step">API Request</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Backend λ (Invoke)</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Speech Synthesis λ</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Polly</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">S3</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">SNS</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Update URL λ</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">DynamoDB</div>
+                    </div>
+                </div>
+
+                <div class="pipeline">
+                    <div class="pipeline-title">🔍 Search Indexing Pipeline</div>
+                    <div class="pipeline-flow">
+                        <div class="pipeline-step">DynamoDB Stream</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Indexing λ</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">OpenSearch</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI & Search -->
+        <div id="section-ai" class="expandable-section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>🧠 AI & Search Services</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">🤖</div>
+                        <div class="component-name">Bedrock (Claude)</div>
+                        <div class="component-desc">AI Summary Generation</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🗣️</div>
+                        <div class="component-name">Polly</div>
+                        <div class="component-desc">Text-to-Speech</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🔎</div>
+                        <div class="component-name">OpenSearch</div>
+                        <div class="component-desc">Full-text Search Cluster</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security & Auth -->
+        <div id="section-security" class="expandable-section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>🔐 Security & Authentication</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">👤</div>
+                        <div class="component-name">Cognito</div>
+                        <div class="component-desc">User Authentication</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🛡️</div>
+                        <div class="component-name">IAM</div>
+                        <div class="component-desc">Least Privilege Access</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observability -->
+        <div id="section-observability" class="expandable-section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>📊 Observability & Monitoring</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="component-grid">
+                    <div class="component-card">
+                        <div class="component-icon">📈</div>
+                        <div class="component-name">CloudWatch</div>
+                        <div class="component-desc">Logs, Metrics & Alarms</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">🗺️</div>
+                        <div class="component-name">X-Ray</div>
+                        <div class="component-desc">Distributed Tracing</div>
+                    </div>
+                    <div class="component-card">
+                        <div class="component-icon">⚠️</div>
+                        <div class="component-name">Sentry</div>
+                        <div class="component-desc">Error Tracking</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DevOps Layer -->
+        <div class="layer-badge devops" style="margin-top: 40px;">🛠️ DEVELOPER EXPERIENCE (DevOps)</div>
+
+        <div id="section-devops" class="expandable-section">
+            <div class="section-header" onclick="toggleSection(this)">
+                <h3>🔄 CI/CD Pipeline</h3>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="pipeline">
+                    <div class="pipeline-title">🚀 Deployment Flow</div>
+                    <div class="pipeline-flow">
+                        <div class="pipeline-step">💻 VS Code</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">Git Push</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">🐙 GitHub</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">🔄 GitHub Actions</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">🖥️ Self-hosted Runner (EC2)</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">📦 ECR (Docker)</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">🏗️ CDK Deploy</div>
+                        <span class="pipeline-arrow">→</span>
+                        <div class="pipeline-step">☁️ AWS Infrastructure</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function toggleSection(header) {
+            const section = header.parentElement;
+            section.classList.toggle('expanded');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // 기존: 첫 3개 섹션 기본으로 펼치기
+            const mainSections = document.querySelectorAll('.expandable-section');
+            mainSections.forEach((section, index) => {
+                if (index < 3) {
+                    section.classList.add('expanded');
+                }
+            });
+
+            // --- [신규] 메인 플로우 노드 클릭 이벤트 리스너 추가 ---
+            document.querySelectorAll('.flow-node').forEach(node => {
+                node.addEventListener('click', function () {
+                    const targetId = this.dataset.target;
+                    if (!targetId || targetId === 'none') {
+                        return; // data-target이 없으면 아무것도 안 함
+                    }
+
+                    const targetSection = document.getElementById(targetId);
+                    if (targetSection) {
+                        // 1. 해당 섹션을 펼칩니다.
+                        if (!targetSection.classList.contains('expanded')) {
+                            targetSection.classList.add('expanded');
+                        }
+
+                        // 2. 부드럽게 스크롤합니다.
+                        const offset = 80; // 헤더 높이 등을 고려한 여백
+                        const elementPosition = targetSection.getBoundingClientRect().top + window.scrollY;
+
+                        window.scrollTo({
+                            top: elementPosition - offset,
+                            behavior: 'smooth'
+                        });
+
+                        // 3. (선택적) 시각적 피드백: 잠시 깜빡이는 효과
+                        targetSection.style.transition = 'all 0.1s ease-in-out';
+                        targetSection.style.borderColor = '#00d4ff';
+                        targetSection.style.boxShadow = '0 0 30px rgba(0, 212, 255, 0.4)';
+                        setTimeout(() => {
+                            targetSection.style.borderColor = ''; // 원래 스타일로 복원
+                            targetSection.style.boxShadow = '';
+                        }, 1000);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

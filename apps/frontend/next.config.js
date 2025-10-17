@@ -53,4 +53,3 @@ if (process.env.ANALYZE === 'true') {
 
 // --- [핵심 수정 3/3] 최종적으로 nextConfig 객체만 export 합니다. ---
 module.exports = nextConfig;
-// --- 수정 끝 ---

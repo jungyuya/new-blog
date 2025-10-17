@@ -14,7 +14,7 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
   const [isExpanded, setIsExpanded] = useState(false); // 기본값을 true로 변경 (더 나은 UX)
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [isCompact, setIsCompact] = useState(false); // 컴팩트 모드 추가
+  const [isCompact, setIsCompact] = useState(true); // 컴팩트 모드 추가
 
   useEffect(() => {
     setIsMounted(true);
@@ -265,12 +265,17 @@ export default function TableOfContents({ headings, activeId }: TocRendererProps
       <div className="flex flex-col gap-3 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* 아이콘 컨테이너 - 애니메이션 추가 */}
-            <div className="relative p-2 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-lg">
+            
+            {/* --- [핵심 수정] 아이콘 컨테이너 div를 button으로 변경하고 onClick 핸들러를 추가합니다. --- */}
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="relative p-2 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+              aria-label={isExpanded ? "목차 접기" : "목차 펼치기"}
+            >
               <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-            </div>
+            </button>
 
             <div>
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
