@@ -13,6 +13,7 @@ interface SearchModalProps {
 
 // 인기검색어 : 현재는 트래픽이 없어 수동 관리하지만 추후 백엔드 로직 생성하여 실제 검색어 기능 구현 가능
 const TRENDING_SEARCHES = [
+    '아키텍처',
     'Polly',
     'OpenSearch',
     'Bedrock',

@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link'; 
 
 const GitHubIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="currentColor" viewBox="0 0 16 16">
@@ -15,32 +16,62 @@ const HomeIcon = () => (
   </svg>
 );
 
+const ArchitectureIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <circle cx="6.5" cy="6.5" r="3.5" fill="rgba(0, 0, 0, 0.1)" stroke="currentColor" />
+    <circle cx="17.5" cy="6.5" r="3.5" fill="rgba(0, 0, 0, 0.1)" stroke="currentColor" />
+    
+    <rect x="3" y="14" width="7" height="7" rx="1" fill="rgba(0, 0, 0, 0.1)" stroke="currentColor" />
+    <rect x="14" y="14" width="7" height="7" rx="1" fill="rgba(0, 0, 0, 0.1)" stroke="currentColor" />
+    
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 10v3.5M17.5 10v3.5" /> {/* 세로 연결 */}
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 17.5h4" /> {/* 하단 가로 */}
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6.5h4" /> {/* 상단 가로 */}
+    
+    <path d="M6.5 13.5l-1 1 1 1" fill="none" stroke="currentColor" strokeWidth={1.5} />
+    <path d="M17.5 13.5l-1 1 1 1" fill="none" stroke="currentColor" strokeWidth={1.5} />
+    
+    <line x1="2" y1="22" x2="22" y2="22" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+  </svg>
+);
+
 export default function Footer() {
   const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL;
   const homeUrl = "https://jungyu.store";
 
   return (
-    // [수정] 1. footer 배경 및 상단 테두리에 다크 모드 스타일 적용 (Header와 동일한 규칙)
     <footer className="bg-gray-50 border-t border-gray-100 dark:bg-stone-950 dark:border-t dark:border-gray-900">
       <div className="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
         
-        <div className="invisible flex items-center space-x-4" aria-hidden="true">
+        {/* 왼쪽 공간 확보용 div */}
+        <div className="flex items-center space-x-4 invisible" aria-hidden="true">
           <a href="#"><HomeIcon /></a>
           <a href="#"><GitHubIcon /></a>
+          {/* [신규] 아키텍처 아이콘을 왼쪽에도 추가하여 중앙 정렬을 맞춥니다. */}
+          <a href="#"><ArchitectureIcon /></a>
         </div>
 
-        {/* [수정] 2. 저작권 텍스트에 다크 모드 색상 적용 */}
+        {/* 중앙 저작권 텍스트 */}
         <div className="text-sm text-gray-700 text-center dark:text-gray-300">
           © {new Date().getFullYear()} LEE JUNGYU. All Rights Reserved.
         </div>
 
+        {/* 오른쪽 아이콘 그룹 */}
         <div className="flex items-center space-x-4">
+          {/* --- 아키텍처 페이지 링크 버튼 --- */}
+          <Link
+            href="/architecture"
+            className="text-gray-400 hover:text-gray-600 transition-colors dark:text-gray-400 dark:hover:text-white"
+            aria-label="View project architecture"
+          >
+            <ArchitectureIcon />
+          </Link>
+
           {homeUrl && (
             <a
               href={homeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              // [수정] 3. 아이콘 링크에 다크 모드 색상 및 hover 효과 적용
               className="text-gray-400 hover:text-gray-600 transition-colors dark:text-gray-400 dark:hover:text-white"
               aria-label="Visit my personal website"
             >
@@ -52,7 +83,6 @@ export default function Footer() {
               href={githubUrl}
               target="_blank"
               rel="noopener noreferrer"
-              // [수정] 3. 아이콘 링크에 다크 모드 색상 및 hover 효과 적용
               className="text-gray-400 hover:text-gray-600 transition-colors dark:text-gray-400 dark:hover:text-white"
               aria-label="Visit my GitHub profile"
             >

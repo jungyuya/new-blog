@@ -1,19 +1,18 @@
 // 파일 위치: apps/frontend/src/app/architecture/data.ts
 
-// 각 기술 카드의 데이터 타입을 정의합니다.
+// icon 타입을 간단한 문자열로 정의합니다.
 export interface ComponentCardData {
   icon: string;
   name: string;
   desc: string;
+  isHighlight?: boolean;
 }
 
-// 각 파이프라인의 데이터 타입을 정의합니다.
 export interface PipelineData {
   title: string;
   steps: string[];
 }
 
-// 각 상세 섹션의 데이터 타입을 정의합니다.
 export interface SectionData {
   id: string;
   title: string;
@@ -22,7 +21,7 @@ export interface SectionData {
   pipelines?: PipelineData[];
 }
 
-// --- 실제 데이터 정의 ---
+// --- [핵심 수정] 실제 데이터 정의: icon 속성을 iconMap의 키(key) 문자열로 교체 ---
 
 export const mainFlowNodes = [
   { id: 'user', type: 'user', icon: '💻', name: 'User', detail: 'Web Browser', target: 'none' },
@@ -38,9 +37,9 @@ export const architectureSections: SectionData[] = [
     title: 'Content Delivery & Edge',
     icon: '🌐',
     components: [
-      { icon: '🔀', name: 'Route 53', desc: 'DNS Management' },
-      { icon: '🔒', name: 'ACM', desc: 'SSL/TLS Certificates' },
-      { icon: '🌍', name: 'CloudFront', desc: 'Global CDN + Router' },
+      { icon: 'Globe', name: 'Route 53', desc: 'DNS Management' },
+      { icon: 'ShieldCheck', name: 'ACM', desc: 'SSL/TLS Certificates' },
+      { icon: 'CloudFront', name: 'CloudFront', desc: 'Global CDN + Router' },
     ],
   },
   {
@@ -48,11 +47,11 @@ export const architectureSections: SectionData[] = [
     title: 'Frontend & Backend Services',
     icon: '⚛️',
     components: [
-      { icon: '🐳', name: 'Frontend Lambda', desc: 'Docker + Next.js SSR' },
-      { icon: '📦', name: 'S3 Assets', desc: 'Static Files (JS/CSS)' },
-      { icon: '🚪', name: 'API Gateway', desc: 'HTTP API Endpoints' },
-      { icon: 'λ', name: 'Backend Lambda', desc: 'Hono 3-Tier Architecture' },
-      { icon: '🔍', name: 'Search Lambda', desc: 'OpenSearch Integration' },
+      { icon: 'Lambda', name: 'Frontend Lambda', desc: 'Docker + Next.js SSR', isHighlight: true },
+      { icon: 'S3', name: 'S3 Assets', desc: 'Static Files (JS/CSS)' },
+      { icon: 'ApiGateway', name: 'API Gateway', desc: 'HTTP API Endpoints' },
+      { icon: 'Lambda', name: 'Backend Lambda', desc: 'Hono 3-Tier Architecture' },
+      { icon: 'Lambda', name: 'Search Lambda', desc: 'OpenSearch Integration' },
     ],
   },
   {
@@ -60,9 +59,9 @@ export const architectureSections: SectionData[] = [
     title: 'Data & Storage',
     icon: '💾',
     components: [
-        { icon: '🗄️', name: 'DynamoDB', desc: 'Single-Table + GSI + Stream' },
-        { icon: '🖼️', name: 'Image S3 Bucket', desc: 'Images & Thumbnails' },
-        { icon: '🔊', name: 'Speech S3 Bucket', desc: 'Generated Audio Files' },
+        { icon: 'DynamoDb', name: 'DynamoDB', desc: 'Single-Table + GSI + Stream', isHighlight: true },
+        { icon: 'S3', name: 'Image S3 Bucket', desc: 'Images & Thumbnails' },
+        { icon: 'S3', name: 'Speech S3 Bucket', desc: 'Generated Audio Files' },
     ],
   },
   {
@@ -80,9 +79,9 @@ export const architectureSections: SectionData[] = [
     title: 'AI & Search Services',
     icon: '🧠',
     components: [
-        { icon: '🤖', name: 'Bedrock (Claude)', desc: 'AI Summary Generation' },
-        { icon: '🗣️', name: 'Polly', desc: 'Text-to-Speech' },
-        { icon: '🔎', name: 'OpenSearch', desc: 'Full-text Search Cluster' },
+        { icon: 'Bedrock', name: 'Bedrock (Claude)', desc: 'AI Summary Generation' },
+        { icon: 'Polly', name: 'Polly', desc: 'Text-to-Speech' },
+        { icon: 'OpenSearch', name: 'OpenSearch', desc: 'Full-text Search Cluster' },
     ],
   },
   {
@@ -90,8 +89,8 @@ export const architectureSections: SectionData[] = [
     title: 'Security & Authentication',
     icon: '🔐',
     components: [
-        { icon: '👤', name: 'Cognito', desc: 'User Authentication' },
-        { icon: '🛡️', name: 'IAM', desc: 'Least Privilege Access' },
+        { icon: 'Cognito', name: 'Cognito', desc: 'User Authentication' },
+        { icon: 'Iam', name: 'IAM', desc: 'Least Privilege Access' },
     ],
   },
   {
@@ -99,9 +98,9 @@ export const architectureSections: SectionData[] = [
     title: 'Observability & Monitoring',
     icon: '📊',
     components: [
-        { icon: '📈', name: 'CloudWatch', desc: 'Logs, Metrics & Alarms' },
-        { icon: '🗺️', name: 'X-Ray', desc: 'Distributed Tracing' },
-        { icon: '⚠️', name: 'Sentry', desc: 'Error Tracking' },
+        { icon: 'CloudWatch', name: 'CloudWatch', desc: 'Logs, Metrics & Alarms' },
+        { icon: 'XRay', name: 'X-Ray', desc: 'Distributed Tracing' },
+        { icon: 'Sentry', name: 'Sentry', desc: 'Error Tracking' },
     ],
   },
   {

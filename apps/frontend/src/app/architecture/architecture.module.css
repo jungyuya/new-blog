@@ -1,0 +1,262 @@
+/* 파일 위치: apps/frontend/src/app/architecture/architecture.module.css */
+
+.body {
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #e0e0e0;
+    padding: 40px 20px;
+    overflow-x: auto;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    min-width: 1200px;
+}
+
+.h1 {
+    text-align: center;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+}
+
+.subtitle {
+    text-align: center;
+    color: #9ca3af;
+    margin-bottom: 40px;
+    font-size: 1.1em;
+}
+
+/* Expandable Sections */
+.expandable-section {
+    background: rgba(20, 20, 35, 0.5);
+    border: 1px solid rgba(100, 100, 150, 0.3);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.section-header {
+    padding: 20px 25px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(30, 30, 50, 0.6);
+    transition: all 0.3s ease;
+    min-height: 44px;
+}
+
+.section-header:hover {
+    background: rgba(40, 40, 60, 0.8);
+}
+
+.section-header h3 {
+    font-size: 1.4em;
+    color: #a855f7;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.toggle-icon {
+    font-size: 1.5em;
+    transition: transform 0.3s ease;
+    color: #00d4ff;
+}
+
+.expandable-section.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.section-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding: 0 25px;
+}
+
+.expandable-section.expanded .section-content {
+    max-height: 2000px;
+    padding: 25px;
+}
+
+/* Pipeline Flow */
+.pipeline {
+    background: rgba(40, 40, 70, 0.5);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+}
+
+.pipeline-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #a855f7;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pipeline-flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pipeline-step {
+    background: rgba(60, 60, 100, 0.6);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    white-space: nowrap;
+}
+
+.pipeline-arrow {
+    color: #a855f7;
+    font-size: 1.2em;
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+/* Tablet: 768px ~ 1199px */
+@media (max-width: 1199px) {
+    .container {
+        min-width: auto;
+        max-width: 100%;
+        padding: 0 15px;
+    }
+
+    .h1 {
+        font-size: 2.2em;
+    }
+
+    .subtitle {
+        font-size: 1em;
+    }
+
+    .section-header h3 {
+        font-size: 1.3em;
+    }
+}
+
+/* Mobile: 767px 이하 */
+@media (max-width: 767px) {
+    .body {
+        padding: 20px 10px;
+    }
+
+    .container {
+        min-width: auto;
+        max-width: 100%;
+        padding: 0 10px;
+    }
+
+    .h1 {
+        font-size: 1.8em;
+        margin-bottom: 8px;
+    }
+
+    .subtitle {
+        font-size: 0.95em;
+        margin-bottom: 25px;
+    }
+
+    /* Expandable Sections */
+    .section-header {
+        padding: 15px;
+        min-height: 44px;
+    }
+
+    .section-header h3 {
+        font-size: 1.2em;
+        gap: 8px;
+    }
+
+    .toggle-icon {
+        font-size: 1.3em;
+    }
+
+    .section-content {
+        padding: 0 15px;
+    }
+
+    .expandable-section.expanded .section-content {
+        max-height: 3000px;
+        padding: 20px 15px;
+    }
+
+    /* Pipeline Flow - 세로 스택 */
+    .pipeline {
+        padding: 15px;
+        margin-bottom: 12px;
+    }
+
+    .pipeline-title {
+        font-size: 1em;
+        margin-bottom: 12px;
+    }
+
+    .pipeline-flow {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .pipeline-step {
+        padding: 10px 12px;
+        font-size: 0.8em;
+        text-align: center;
+        white-space: normal;
+    }
+
+    .pipeline-arrow {
+        align-self: center;
+        transform: rotate(90deg);
+        font-size: 1em;
+    }
+}
+
+/* Small Mobile: 480px 이하 */
+@media (max-width: 480px) {
+    .h1 {
+        font-size: 1.5em;
+    }
+
+    .subtitle {
+        font-size: 0.9em;
+    }
+}
+
+/* 애니메이션 성능 최적화 */
+@media (prefers-reduced-motion: reduce) {
+    .section-header,
+    .toggle-icon,
+    .section-content {
+        transition: none;
+    }
+}
+
+/* 가로 모드 최적화 (모바일 landscape) */
+@media (max-width: 767px) and (orientation: landscape) {
+    .pipeline-flow {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .pipeline-arrow {
+        transform: none;
+    }
+}

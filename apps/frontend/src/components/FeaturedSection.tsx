@@ -68,7 +68,7 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
 
           {showCarousel ? (
             // --- [핵심 수정] 캐러셀과 버튼을 감싸는 relative group 컨테이너 추가 ---
-            <div className="relative group">
+            <div className="relative group border border-gray-200 dark:border-transparent rounded-lg p-1 bg-gray-50 dark:bg-transparent">
               <div className="embla" ref={emblaRef}>
                 <div className="embla__container">
                   {editorPicks.map(post => (

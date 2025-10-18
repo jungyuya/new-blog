@@ -77,3 +77,5 @@ pnpm-debug.log* # [추가]
 cdk.out
 cdk.context.json
 
+# Icon generation temporary build artifacts
+/apps/frontend/src/components/icons/_build/
