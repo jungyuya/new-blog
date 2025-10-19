@@ -84,7 +84,7 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
 
 
       {/* 1) 메인 콘텐츠: 가운데 정렬 (mx-auto) + 콘텐츠 최대 너비를 CSS 변수로 제어 */}
-      <main className="mx-auto w-full max-w-[var(--content-max-w)] px-4">
+      <main className="mx-auto w-full max-w-[var(--content-max-w)] sm:px-4">
         <PostHeader post={post} />
         <PostContent content={post.content!} headings={headings} />
         <PostAuthorProfile post={post} />
@@ -94,9 +94,9 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
 
 
       {/* 2) 떠다니는 목차: 화면 우측에서 게시글 바로 옆에 고정
-- lg 이상에서만 보여주며, 게시글의 중앙 정렬에 영향을 주지 않도록 flow에서 분리(fixed)
-- left 계산식: 50% + (콘텐츠 최대너비 / 2) + 간격(1rem)
-*/}
+          - lg 이상에서만 보여주며, 게시글의 중앙 정렬에 영향을 주지 않도록 flow에서 분리(fixed)
+          - left 계산식: 50% + (콘텐츠 최대너비 / 2) + 간격(1rem)
+      */}
       {headings.length > 0 && post.showToc !== false && (
         <aside
           className="hidden lg:block"

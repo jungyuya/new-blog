@@ -82,7 +82,7 @@ export default async function PostDetailPage({ params }: Props) {
 
     // --- [핵심 수정] 전체 레이아웃을 2단 구조로 변경합니다. ---
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="sm:px-6 lg:px-8 py-8">
         <PostDetailView 
           post={post} 
           prevPost={prevPost} 

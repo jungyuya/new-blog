@@ -1,5 +1,5 @@
 // 파일 위치: apps/frontend/src/components/FeaturedSection.tsx
-'use client'; 
+'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
@@ -15,9 +15,10 @@ interface FeaturedSectionProps {
 }
 
 export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSectionProps) {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ 
-    loop: true, 
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: true,
     align: 'start',
+    duration: 30,
   });
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -78,18 +79,18 @@ export default function FeaturedSection({ heroPost, editorPicks }: FeaturedSecti
                   ))}
                 </div>
               </div>
-              
+
               {/* --- [핵심 수정] 버튼 위치 및 스타일 변경 --- */}
-              <button 
-                onClick={scrollPrev} 
-                className="nav-btn absolute top-1/2 left-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30"
+              <button
+                onClick={scrollPrev}
+                className="nav-btn absolute top-1/2 left-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30 transition-all duration-300 hover:scale-110"
                 aria-label="Previous"
               >
                 <ArrowLeftIcon />
               </button>
-              <button 
-                onClick={scrollNext} 
-                className="nav-btn absolute top-1/2 right-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30"
+              <button
+                onClick={scrollNext}
+                className="nav-btn absolute top-1/2 right-4 -translate-y-1/2 opacity-0 group-hover:opacity-100 disabled:opacity-30 transition-all duration-300 hover:scale-110"
                 aria-label="Next"
               >
                 <ArrowRightIcon />
