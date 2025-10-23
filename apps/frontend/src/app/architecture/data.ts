@@ -108,7 +108,7 @@ export const architectureSections: SectionData[] = [
     title: 'CI/CD Pipeline',
     icon: '🔄',
     pipelines: [
-        { title: 'Deployment Flow', steps: ['💻 VS Code', 'Git Push', '🐙 GitHub', '🔄 GitHub Actions', '🖥️ Self-hosted Runner (EC2)', '📦 ECR (Docker)', '🏗️ CDK Deploy', '☁️ AWS Infrastructure'] },
+        { title: 'Deployment Flow', steps: ['VS Code', 'Git Push', 'GitHub', 'GitHub Actions', 'Self-hosted Runner (EC2)', 'ECR (Docker)', 'CDK Deploy', 'AWS Infrastructure'] },
     ],
   },
 ];

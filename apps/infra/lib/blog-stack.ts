@@ -27,6 +27,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 
 export class BlogStack extends Stack {
   public readonly imageBucket: s3.IBucket;
@@ -281,8 +282,8 @@ export class BlogStack extends Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
-      memorySize: 256,
-      timeout: Duration.seconds(30),
+      memorySize: 1024,
+      timeout: Duration.seconds(60),
       environment: {
         NODE_ENV: 'production',
         TABLE_NAME: postsTable.tableName,
@@ -382,8 +383,8 @@ export class BlogStack extends Stack {
       functionName: `blog-frontend-server-${this.stackName}`,
       description: 'Renders the Next.js frontend application (SSR).',
       code: lambda.DockerImageCode.fromEcr(ecrRepository, { tagOrDigest: imageTag.valueAsString }),
-      memorySize: 1024,
-      timeout: Duration.seconds(30),
+      memorySize: 2048,
+      timeout: Duration.seconds(60),
       architecture: lambda.Architecture.ARM_64,
       environment: {
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
@@ -406,6 +407,40 @@ export class BlogStack extends Stack {
 
     cdk.Tags.of(serverLambda).add('Purpose', 'Application Logic');
     cdk.Tags.of(serverLambda).add('Tier', 'Frontend');
+
+
+    // --- [신규] 저비용 워밍(Keep-Warm) 전략 구현 ---
+    
+    // 1. EventBridge Scheduler가 FrontendServerLambda를 호출할 수 있는 권한을 가진 IAM Role을 생성합니다.
+    const warmerRole = new iam.Role(this, 'FrontendWarmerRole', {
+      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+      description: 'IAM Role for EventBridge Scheduler to warm up the Frontend Lambda.',
+    });
+
+    // 2. 생성된 역할(warmerRole)에 serverLambda를 호출(invoke)할 수 있는 권한을 부여합니다.
+    serverLambda.grantInvoke(warmerRole);
+
+    // 3. 10분 간격으로 FrontendServerLambda를 호출하는 EventBridge 스케줄을 생성합니다.
+    new scheduler.CfnSchedule(this, 'FrontendWarmerSchedule', {
+      name: `blog-frontend-warmer-${this.stackName}`,
+      description: 'Warms up the FrontendServerLambda every 10 minutes to reduce cold starts.',
+      // 'rate(10 minutes)'는 10분마다 한 번씩 실행하라는 의미입니다.
+      scheduleExpression: 'rate(10 minutes)',
+      // 정확한 간격으로 실행되도록 설정합니다.
+      flexibleTimeWindow: {
+        mode: 'OFF',
+      },
+      // 스케줄의 목표 대상을 지정합니다.
+      target: {
+        arn: serverLambda.functionArn,
+        roleArn: warmerRole.roleArn,
+        // Lambda에 전달할 이벤트 페이로드입니다. 
+        // 이 내용을 통해 Lambda 코드에서 워밍 호출임을 식별할 수 있습니다.
+        input: JSON.stringify({ source: 'eventbridge-scheduler-warmer' }),
+      },
+    });
+
+
     assetsBucket.grantRead(serverLambda);
     const serverLambdaUrl = serverLambda.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 

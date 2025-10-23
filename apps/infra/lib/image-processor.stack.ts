@@ -45,14 +45,14 @@ export class ImageProcessorStack extends Stack {
         // =================================================================
         // SECTION 2: 이미지 처리 Lambda 함수 정의 (NodejsFunction Construct)
         // =================================================================
-        // (이 부분은 JUNGYU 님의 기존 코드와 거의 동일하며, 경로만 projectRoot를 사용하도록 유지합니다.)
+        // (경로만 projectRoot를 사용하도록 유지.)
         this.imageProcessorFunction = new NodejsFunction(this, 'ImageProcessorFunction', {
 
             functionName: `image-processor-func-${this.stackName}`,
             runtime: lambda.Runtime.NODEJS_20_X,
             architecture: lambda.Architecture.ARM_64,
 
-            // [유지] Lambda 함수의 소스 코드 진입점은 독립 프로젝트를 가리킵니다.
+            // Lambda 함수의 소스 코드 진입점은 독립 프로젝트를 가리킵니다.
             entry: path.join(projectRoot, 'image-processor-service', 'src', 'index.ts'),
             handler: 'handler',
 
@@ -98,7 +98,6 @@ export class ImageProcessorStack extends Stack {
         rule.addTarget(new targets.LambdaFunction(this.imageProcessorFunction));
 
         // 4. Lambda 함수에 S3 버킷 접근 권한을 부여합니다.
-        //    (이 부분은 이전과 동일하게 유지됩니다.)
         props.sourceBucket.grantRead(this.imageProcessorFunction, 'uploads/*');
         props.sourceBucket.grantDelete(this.imageProcessorFunction, 'uploads/*');
         props.sourceBucket.grantWrite(this.imageProcessorFunction, 'images/*');
