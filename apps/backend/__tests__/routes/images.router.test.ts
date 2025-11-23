@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import request from 'supertest';
 import { serve } from '@hono/node-server';
 import { mockAdminPayload, mockUserPayload, mockUserProfile } from '../../src/test/setup';
-// --- [핵심 수정] ddbDocClient를 import합니다. ---
 import { ddbDocClient } from '../../src/lib/dynamodb';
 
 // =================================================================

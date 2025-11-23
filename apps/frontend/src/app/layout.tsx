@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import MainLayout from "@/components/MainLayout"; // [신규] MainLayout 클라이언트 컴포넌트 import
+import ChatWidget from '../components/ChatWidget'; // [추가]
+
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,13 +19,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
- return (
-    <html lang="ko" suppressHydrationWarning> 
+  return (
+    <html lang="ko" suppressHydrationWarning>
       <body className={inter.className}>
         {/* [핵심] 모든 클라이언트 사이드 로직을 MainLayout 컴포넌트에 위임합니다. */}
         <MainLayout>
           {children}
         </MainLayout>
+        <ChatWidget />
       </body>
     </html>
   );
