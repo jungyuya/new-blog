@@ -44,8 +44,8 @@ export default function Header() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // '/' 키로 검색 모달 열기 (input/textarea 포커스 상태가 아닐 때만)
-      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+      // '=' 키로 검색 모달 열기 (input/textarea 포커스 상태가 아닐 때만)
+      if (e.key === '=' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
         e.preventDefault();
         setIsSearchOpen(true);
       }
@@ -71,11 +71,19 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-white dark:bg-stone-950 shadow-md dark:shadow-none dark:border-b dark:border-gray-800 sticky top-0 z-40">
-        <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-          <Link href="/" className="flex items-center space-x-2">
-            <Image src="/homelogo.webp" alt="Deep Dive! 로고" width={28} height={28} priority unoptimized={true} />
-            <span className="text-xl font-bold text-gray-800 dark:text-gray-200">Deep Dive!</span>
+      <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-stone-950/90 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm transition-colors duration-300">
+        <nav className="container mx-auto px-4 sm:px-6 h-[60px] flex justify-between items-center">
+          <Link href="/" className="flex items-center">
+            <Image 
+              src="/deepdive-logo.png"  
+              alt="Deep Dive!" 
+              width={0} 
+              height={0} 
+              sizes="100vw"
+              className="w-auto h-[45px] object-contain" 
+              priority 
+              unoptimized={true} 
+            />
           </Link>
 
           <div className="flex items-center space-x-2 sm:space-x-4">

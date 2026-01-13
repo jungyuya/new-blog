@@ -26,7 +26,7 @@ const ChatWidget = () => {
     }
   };
 
-  // [추가] 확대/축소 토글 함수
+  // 확대/축소 토글 함수
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
   };
@@ -34,7 +34,7 @@ const ChatWidget = () => {
   return (
     // [위치 반응형] 모바일: bottom-4 left-4 / 데스크톱(md): bottom-6 left-6
     <div className="fixed bottom-4 left-4 md:bottom-6 md:left-6 z-[9999] flex flex-col items-start gap-4 font-sans">
-      
+
       {/* 1. 채팅창 (Iframe) */}
       <div
         className={`
@@ -42,7 +42,7 @@ const ChatWidget = () => {
           transition-all duration-300 ease-in-out origin-bottom-left
           
           /* [크기 반응형 로직 수정] */
-          ${isOpen 
+          ${isOpen
             ? isExpanded
               // [확대 상태]
               // 모바일: 너비는 그대로, 높이를 90vh로 확장
@@ -59,34 +59,34 @@ const ChatWidget = () => {
         {/* 헤더 */}
         <div className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white px-5 py-4 flex justify-between items-center shadow-sm h-[64px]">
           <div className="flex flex-col">
-            <span className="font-bold text-lg leading-tight">💬실시간 대화방 [임시]</span>
+            <span className="font-bold text-lg leading-tight">💬실시간 대화방</span>
             <span className="text-xs text-blue-50 opacity-90">자유롭게 이야기 나눠요!</span>
           </div>
-          
+
           {/* 우측 버튼 그룹 */}
           <div className="flex items-center gap-1">
-            {/* [추가] 확대/축소 버튼 */}
-            <button 
-              onClick={toggleExpand} 
+            {/* 확대/축소 버튼 */}
+            <button
+              onClick={toggleExpand}
               className="text-white/80 hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10"
               title={isExpanded ? "기본 크기로" : "크게 보기"}
             >
               {isExpanded ? (
-                // 축소 아이콘 (Arrows pointing in)
+                // 축소 (Arrows pointing in - Minimize)
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m0 0l5 0m-5 0l0 5M15 9l5-5m0 0l-5 0m5 0l0 5M9 15l-5 5m0 0l5 0m-5 0l0-5M15 15l5 5m0 0l-5 0m5 0l0-5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 14h6m0 0v6M20 10h-6m0 0V4" />
                 </svg>
               ) : (
-                // 확대 아이콘 (Arrows pointing out)
+                // 확대 (Arrows pointing out - Maximize)
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M20 8V4m0 0h-4M4 16v4m0 0h4M20 16v4m0 0h-4" />
                 </svg>
               )}
             </button>
 
             {/* 닫기 버튼 */}
-            <button 
-              onClick={toggleChat} 
+            <button
+              onClick={toggleChat}
               className="text-white/80 hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10"
               title="닫기"
             >
@@ -96,18 +96,18 @@ const ChatWidget = () => {
             </button>
           </div>
         </div>
-        
+
         {/* Iframe */}
         <iframe
           src="https://chat.jungyu.store"
           title="Realtime Chat Room"
-          className="w-full h-[calc(100%-64px)] border-none bg-gray-50" 
+          className="w-full h-[calc(100%-64px)] border-none bg-gray-50"
           allow="clipboard-read; clipboard-write"
         />
       </div>
 
       {/* 2. 버튼 그룹 (기존 동일) */}
-      <div 
+      <div
         className="relative flex items-end"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -117,9 +117,9 @@ const ChatWidget = () => {
           onClick={toggleChat}
           className={`
             relative flex items-center justify-center transition-all duration-300 focus:outline-none
-            ${isOpen 
-              ? 'w-12 h-12 md:w-14 md:h-14 bg-gray-800 rounded-full shadow-lg rotate-90' 
-              : 'w-20 h-20 md:w-32 md:h-32 bg-transparent rotate-0 hover:scale-105' 
+            ${isOpen
+              ? 'w-12 h-12 md:w-14 md:h-14 bg-gray-800 rounded-full shadow-lg rotate-90'
+              : 'w-20 h-20 md:w-32 md:h-32 bg-transparent rotate-0 hover:scale-105'
             } 
           `}
           aria-label="Open Chat Room"
@@ -129,24 +129,24 @@ const ChatWidget = () => {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           ) : (
-            <img 
-              src="/logo-chat.png" 
-              alt="Chat Dolphin" 
-              className="w-full h-full object-contain drop-shadow-xl" 
+            <img
+              src="/logo-chat.png"
+              alt="Chat Dolphin"
+              className="w-full h-full object-contain drop-shadow-xl"
             />
           )}
         </button>
 
         {/* 말풍선 (Greeting Bubble) - 기존 동일 */}
         {!isOpen && (
-          <div 
+          <div
             className={`
               absolute left-full ml-2 w-max
               bottom-14 md:bottom-20
               bg-white text-gray-800 text-sm font-bold px-4 py-2.5 rounded-2xl shadow-lg border border-gray-100
               transition-all duration-500 origin-bottom-left select-none z-10
-              ${(isHovered || showGreeting) 
-                ? 'opacity-100 translate-x-0 scale-100' 
+              ${(isHovered || showGreeting)
+                ? 'opacity-100 translate-x-0 scale-100'
                 : 'opacity-0 -translate-x-4 scale-95 pointer-events-none'}
             `}
           >
