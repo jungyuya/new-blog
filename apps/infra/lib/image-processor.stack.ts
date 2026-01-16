@@ -53,7 +53,7 @@ export class ImageProcessorStack extends Stack {
             architecture: lambda.Architecture.ARM_64,
 
             // Lambda 함수의 소스 코드 진입점은 독립 프로젝트를 가리킵니다.
-            entry: path.join(projectRoot, 'image-processor-service', 'src', 'index.ts'),
+            entry: path.join(projectRoot, 'apps', 'image-processor', 'src', 'index.ts'),
             handler: 'handler',
 
             memorySize: 2048,
