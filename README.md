@@ -1,502 +1,136 @@
-# new-blog
+# Deep Dive! 블로그 프로젝트
+> **"AWS Serverless 아키텍처와 AI를 결합하여 구축한 완전 자동화된 지능형 블로그 플랫폼"**
 
-AWS 서버리스 아키텍처 기반의 개인 블로그 플랫폼입니다. Infrastructure as Code(IaC), 불변 배포 전략, 모니터링 통합 등 프로덕션 수준의 DevOps 관행을 적용했습니다.
+## 1. 프로젝트 소개
+본 프로젝트는 단순한 블로그 서비스를 넘어, 현대적인 클라우드 네이티브 환경에서의 개발, 배포, 운영 전 과정을 직접 설계하고 구현한 엔지니어링 포트폴리오입니다.
 
-**데모**: https://blog.jungyu.store
+프론트엔드와 백엔드를 독립적인 Lambda 함수로 분리하고, 이벤트 기반 아키텍처를 도입하여 확장성과 안정성을 극대화했습니다. 또한, 인프라를 포함한 모든 요소를 코드로 관리하며 DevOps의 철학을 실천했습니다.
 
----
-
-## 목차
-
-- [프로젝트 개요](#프로젝트-개요)
-- [아키텍처](#아키텍처)
-- [기술 스택](#기술-스택)
-- [DevOps 및 인프라 특징](#devops-및-인프라-특징)
-- [프로젝트 구조](#프로젝트-구조)
-- [로컬 개발 환경 구성](#로컬-개발-환경-구성)
-- [배포 과정](#배포-과정)
-- [주요 구현 사항](#주요-구현-사항)
+- **BLOG URL**: [https://blog.jungyu.store](https://blog.jungyu.store)
+- **Repo**: [https://github.com/jungyuya/new-blog](https://github.com/jungyuya/new-blog)
 
 ---
 
-## 프로젝트 개요
+## 2. 시스템 아키텍처 
+사용자 트래픽의 유입부터 데이터 처리, AI 파이프라인까지의 전체 흐름을 시각화했습니다.
 
-이 프로젝트는 단순한 블로그 애플리케이션을 넘어, 클라우드 네이티브 환경에서 안정적이고 확장 가능한 서비스를 구축하고 운영하는 과정을 담고 있습니다. 특히 다음 사항에 중점을 두었습니다:
+![!!!메인아키수작업](https://github.com/user-attachments/assets/ade9517f-a831-4f89-9608-3cb925ccf501)
 
-- **완전한 Infrastructure as Code**: AWS CDK를 사용하여 전체 인프라를 코드로 정의하고 버전 관리합니다.
-- **자동화된 CI/CD 파이프라인**: GitHub Actions를 통해 빌드, 테스트, 배포, 검증까지 전 과정을 자동화했습니다.
-- **서버리스 우선 설계**: 관리 오버헤드를 최소화하고 비용 효율성을 극대화하는 서버리스 아키텍처를 채택했습니다.
-- **관측성(Observability)**: AWS X-Ray와 Sentry를 통합하여 실시간 트레이싱 및 에러 추적이 가능합니다.
 
----
-
-## 아키텍처
-
-<!-- 
-전체 아키텍처 삽입 예정.
--->
-
-### 주요 컴포넌트
-
-**Frontend**
-- Next.js 16 기반 SSR 애플리케이션
-- CloudFront + Lambda@Edge를 통한 글로벌 배포
-- S3에서 정적 자산 제공
-
-**Backend**
-- Hono 프레임워크 기반 REST API
-- AWS Lambda (Node.js 20, ARM64)
-- API Gateway 또는 Lambda Function URL
-
-**데이터 레이어**
-- DynamoDB: 게시글, 사용자, 댓글 저장
-- OpenSearch: 전문 검색(Full-text search) 엔진
-- S3: 이미지 및 미디어 저장
-
-**인증 및 권한**
-- AWS Cognito User Pool
-- JWT 기반 인증
-
-**이미지 처리**
-- Lambda 함수 (Sharp 라이브러리)
-- S3 이벤트 트리거 기반 자동 리사이징
-
-**모니터링 및 추적**
-- AWS X-Ray: 분산 트레이싱
-- Sentry: 에러 추적 및 알림
-- CloudWatch Logs 및 Metrics
+### 핵심 아키텍처 포인트
+- **완전 관리형 서버리스**: EC2 관리 부담 없이 트래픽에 따라 자동 확장되는 Lambda, API Gateway, DynamoDB를 활용했습니다.
+- **단일 테이블 설계**: DynamoDB의 성능을 극대화하기 위해 단일 테이블 및 다중 GSI 설계를 적용했습니다.
+- **보안 콘텐츠 전송**: CloudFront CDN과 S3 OAC를 통해 보안을 강화하고 전송 속도를 높였습니다.
+- **계층형 아키텍처**: Frontend(Next.js)와 Backend(Hono API)를 물리적으로 분리하여 독립적인 배포 환경과 확장성을 확보했습니다.
 
 ---
 
-## 기술 스택
+## 3. 핵심 기능 및 주요 개선사항
 
-### 프론트엔드
-| 기술 | 버전 | 용도 |
-|------|------|------|
-| Next.js | 16.0.10 | 서버 사이드 렌더링 프레임워크 |
-| React | 19.2.3 | UI 라이브러리 |
-| TypeScript | 5.5.4 | 정적 타입 검사 |
-| Tailwind CSS | 4.0 | 유틸리티 우선 CSS 프레임워크 |
-| Framer Motion | 12.x | 애니메이션 라이브러리 |
-| SWR | 2.3.6 | 데이터 페칭 및 캐싱 |
+### 3.1. CI/CD 및 DevOps 자동화
+> **"인프라부터 애플리케이션까지, Git Push 한 번으로 끝나는 배포"**
+<img width="1408" height="768" alt="!cicd파이프라인" src="https://github.com/user-attachments/assets/bd8ac285-505b-4562-b3c5-6fc27b979d0b" />
 
-### 백엔드
-| 기술 | 버전 | 용도 |
-|------|------|------|
-| Hono | 4.8.12 | 경량 웹 프레임워크 |
-| Zod | 4.0.14 | 스키마 유효성 검증 |
-| AWS SDK v3 | 3.x | AWS 서비스 통합 |
-| Vitest | 3.2.4 | 테스트 프레임워크 |
-| esbuild | 0.21+ | 번들러 |
+- **Self-hosted Runner 구축**: GitHub 공용 러너 대신 AWS Graviton(ARM64) 인스턴스에 직접 러너를 구축하여 빌드 속도를 최적화하고 비용을 절감했습니다.
+- **AWS OIDC 인증 적용**: Access Key를 하드코딩하는 보안 위험을 제거하고, OpenID Connect를 통해 임시 자격 증명을 발급받는 보안 모범 사례를 적용했습니다.
+- **불변 배포 환경**: Next.js Standalone 모드와 Docker Multi-stage build를 결합하여 260MB 수준의 경량 컨테이너를 생성하고, 의존성을 격리하여 배포 안정성을 확보했습니다.
+- **배포 자동 검증**: 배포 직후 스모크 테스트를 자동 수행하여 서비스 가용성을 즉시 검증합니다.
 
-### 인프라
-| 기술 | 버전 | 용도 |
-|------|------|------|
-| AWS CDK | 2.215+ | Infrastructure as Code |
-| Node.js | 22.x | 런타임 |
-| pnpm | 10.14.0 | 패키지 매니저 |
-| Turborepo | 2.5.5 | 모노레포 빌드 시스템 |
-| Docker | - | 컨테이너화 (Frontend) |
+### 3.2. 이벤트 기반 AI 파이프라인
+> **"비동기 처리를 통한 사용자 경험 최적화"**
+<img width="844" height="564" alt="!polly 아키텍처" src="https://github.com/user-attachments/assets/c856ed1b-a78f-4506-9e44-a4f7ff5efd51" />
 
-### AWS 서비스
-- **Compute**: Lambda, Lambda@Edge
-- **Storage**: S3, DynamoDB
-- **Search**: OpenSearch Service
-- **Network**: CloudFront, Route53, ACM
-- **Security**: Cognito, WAF, IAM
-- **Messaging**: SQS, EventBridge
-- **Monitoring**: CloudWatch, X-Ray
+- **AI 음성 합성 자동화**: 게시물 발행 시 API 응답을 지연시키지 않고, 백그라운드에서 `Lambda -> Polly -> S3 -> SNS -> DB 업데이트`로 이어지는 비동기 파이프라인을 구축했습니다.
+- **회복 탄력성**: AI 작업 실패 시 데이터 유실을 방지하기 위해 SQS Dead-Letter Queue(DLQ)를 도입하여 재처리 메커니즘을 마련했습니다.
+- **콘텐츠 요약**: Amazon Bedrock(Claude 3 Haiku)을 활용하여 게시물 내용을 자동으로 3줄 요약하는 기능을 구현했습니다.
 
----
+### 3.3. 성능 분석 및 최적화 
+> **"추측이 아닌 데이터에 기반한 성능 개선"**
 
-## DevOps 및 인프라 특징
+- **AWS X-Ray 도입**: 분산 추적 시스템을 도입하여 시스템 전 구간의 지연 시간(Latency)을 시각화하고 병목 구간을 식별했습니다.
+- **Cold Start 해결**: 분석 결과 프론트엔드 Lambda의 Cold Start가 지연의 주원인임을 확인했습니다. 이를 해결하기 위해 Docker 이미지 경량화와 메모리 최적화로 초기 구동 시간을 약 3.8초에서 2초로 크게 단축하고, EventBridge Scheduler 기반의 Keep-Warm 전략으로 Cold Start 발생 빈도를 최소화하여 초기 페이지 진입 속도를 최적화했습니다.
 
-이 프로젝트에서 구현한 주요 DevOps 패턴과 인프라 관행입니다.
+### 3.4. 비동기 이미지 처리 파이프라인
+> **"서버 부하를 제거한 Direct Upload 및 이벤트 기반 리사이징"**
+<img width="1024" height="559" alt="!이미지리사이징" src="https://github.com/user-attachments/assets/6382eac1-0f79-4210-a174-385377c089c7" />
 
-### 1. Infrastructure as Code (IaC)
+- **Presigned URL 업로드**: 대용량 이미지 업로드 시 백엔드 서버의 대역폭 낭비를 막기 위해, 인증된 사용자에게 일회성 업로드 URL을 발급하여 S3로 직접 업로드하는 패턴을 적용했습니다.
+- **이벤트 기반 아키텍처**: 업로드 완료 후 별도의 API 호출 없이, Amazon EventBridge가 S3 이벤트를 감지하여 비동기적으로 이미지 처리 Lambda를 트리거합니다.
+- **Lambda Layer 최적화**: 이미지 처리 라이브러리인 sharp를 자체 빌드한 Lambda Layer로 분리하여 배포 패키지 크기를 줄이고 재사용성을 높였습니다. 업로드된 이미지는 해상도별 (썸네일/본문)로 리사이징되고, WebP 포맷으로 변환되어 로딩 성능을 최적화합니다.
 
-**AWS CDK를 사용한 전체 인프라 정의**
+### 3.5. 실시간 데이터 동기화 및 전문 검색 엔진
+> **"데이터가 저장되는 즉시 검색 가능하도록 만드는 실시간 파이프라인 구축"**
+![!오픈서치 아키텍처](https://github.com/user-attachments/assets/8ec38c79-8d10-4c47-a624-4f6f4f074f59)
 
-```typescript
-// apps/infra/lib/blog-stack.ts (844줄)
-// DynamoDB, Lambda, CloudFront, OpenSearch 등 모든 리소스를 코드로 정의
-```
-
-- 인프라 변경 사항을 코드 리뷰를 통해 검증
-- Git을 통한 인프라 버전 관리
-- 재현 가능한 환경 구성
-
-### 2. 불변 배포(Immutable Deployment)
-
-배포마다 고유한 Release ID를 생성하여 정적 자산을 분리합니다.
-
-```yaml
-RELEASE_ID="$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
-# 예: 20260116085932-abc1234
-```
-
-**장점:**
-- 배포 중에도 기존 사용자는 이전 버전의 자산을 계속 사용
-- 롤백 시 즉시 이전 버전으로 전환 가능
-- 캐시 무효화 문제 해결
-
-### 3. CI/CD 파이프라인
-
-**GitHub Actions 기반 완전 자동화된 배포 파이프라인**
-
-```
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
-│ Code Push   │───▶│  Build       │───▶│  Deploy      │───▶│  Verify     │
-│ to main     │    │  & Test      │    │  to AWS      │    │  & Monitor  │
-└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
-```
-
-**파이프라인 주요 단계:**
-
-1. **변경 감지**: 변경된 앱만 선택적으로 배포 (Turbo 활용)
-2. **빌드**: Frontend와 Backend를 병렬 빌드
-3. **ECR 이미지 푸시**: Docker 이미지 빌드 및 Amazon ECR 업로드
-4. **CDK 배포**: 인프라 변경 사항 자동 적용
-5. **정적 자산 동기화**: S3에 버전별 정적 파일 업로드
-6. **캐시 무효화**: CloudFront 캐시 갱신
-7. **Smoke Test**: 배포 직후 자동 검증
-   - HTTP 200 응답 확인
-   - 버전별 정적 자산 접근성 검증
-
-### 4. OIDC 기반 AWS 인증
-
-GitHub Actions에서 AWS 자격 증명을 직접 저장하지 않고, OIDC(OpenID Connect)를 통해 임시 토큰을 발급받습니다.
-
-```yaml
-- name: Configure AWS Credentials via OIDC
-  uses: aws-actions/configure-aws-credentials@v4
-  with:
-    role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-    aws-region: ap-northeast-2
-```
-
-**보안 이점:**
-- Access Key/Secret Key를 GitHub Secrets에 저장하지 않음
-- 토큰 유효 기간이 제한적 (15분~1시간)
-- IAM 역할 기반 세밀한 권한 제어
-
-### 5. 멀티스테이지 Docker 빌드
-
-Frontend 이미지를 최적화하기 위해 멀티스테이지 빌드를 사용합니다.
-
-```dockerfile
-# Stage 1: Pruning - 프로덕션 의존성만 추출
-FROM node:22-alpine AS pruner
-RUN pnpm deploy --filter=frontend... --prod /app/prod_deps --legacy
-
-# Stage 2: Runner - 실행 이미지
-FROM node:22-alpine AS runner
-COPY --from=pruner /app/prod_deps/node_modules ./node_modules
-```
-
-**효과:**
-- 최종 이미지 크기 최소화
-- 불필요한 devDependencies 제외
-- 빌드 속도 향상 (캐시 레이어 활용)
-
-### 6. 모니터링 및 관측성
-
-**AWS X-Ray 통합**
-```typescript
-// Backend에서 모든 요청을 자동으로 트레이싱
-AWSXRay.capturePromise();
-app.use('*', async (c, next) => {
-  const segment = new AWSXRay.Segment('BackendHonoApp');
-  // 요청/응답 메타데이터 자동 수집
-});
-```
-
-**Sentry 에러 추적**
-- Frontend/Backend 모두 Sentry SDK 통합
-- 소스맵 자동 업로드로 프로덕션 에러 디버깅 가능
-- Release 버전별 에러 추적
-
-### 7. 테스트 전략
-
-**Backend: Unit + Integration 테스트**
-```bash
-# Vitest 기반 테스트
-pnpm --filter backend test
-```
-
-- 라우터별 테스트 파일 (5개)
-- Supertest를 사용한 HTTP 엔드포인트 테스트
-- 테스트 환경 격리 (setup.ts)
+- **실시간 동기화**: NoSQL(DynamoDB)은 복잡한 검색에 취약합니다. 이를 해결하기 위해 DynamoDB Stream을 활용하여, 글이 작성되거나 수정되는 순간 그 변경사항을 감지하고 즉시 OpenSearch로 복제하는 파이프라인을 구축했습니다. 덕분에 사용자는 글 작성 직후 바로 검색 결과를 확인할 수 있도록 구현하였습니다.
+- **역할 분리**: '데이터 저장(DynamoDB)'과 '데이터 검색(OpenSearch)'의 역할을 물리적으로 분리했습니다. 검색 트래픽이 급증해도 메인 데이터베이스의 성능에는 전혀 영향을 주지 않는 안정적인 구조입니다.
+- **오류 대비**: 네트워크 오류 등으로 동기화가 실패할 경우를 대비해 SQS Dead-Letter Queue(DLQ)를 설치했습니다. 실패한 데이터는 사라지지 않고 별도로 보관되어, 나중에 자동으로 재처리할 수 있도록 데이터 유실을 원천 차단했습니다.
+- **한글 검색 최적화**: 단순한 단어 일치가 아니라, OpenSearch의 Nori(노리) 형태소 분석기를 도입하여 한글의 특성을 고려한 정확하고 자연스러운 검색 결과를 제공합니다.
 
 ---
 
-## 프로젝트 구조
+## 4. 기술 스택 
 
-이 프로젝트는 Turborepo 기반 모노레포로 구성되어 있습니다.
-
-```
-new-blog/
-├── apps/
-│   ├── frontend/              # Next.js 애플리케이션
-│   │   ├── src/
-│   │   │   ├── app/           # Next.js 13+ App Router
-│   │   │   ├── components/    # 재사용 가능한 UI 컴포넌트 (43개)
-│   │   │   ├── hooks/         # 커스텀 React Hooks
-│   │   │   ├── contexts/      # React Context (Auth, Theme 등)
-│   │   │   └── utils/         # 유틸리티 함수
-│   │   ├── Dockerfile         # 프로덕션 이미지 빌드 설정
-│   │   └── package.json
-│   │
-│   ├── backend/               # Hono API 서버
-│   │   ├── src/
-│   │   │   ├── routes/        # API 라우트 (7개: posts, auth, users, tags, images, config, comments)
-│   │   │   ├── services/      # 비즈니스 로직 레이어
-│   │   │   ├── repositories/  # 데이터 접근 레이어 (DynamoDB, OpenSearch)
-│   │   │   ├── middlewares/   # 인증, 에러 처리 등
-│   │   │   └── lib/           # 공통 유틸리티 및 타입 정의
-│   │   ├── __tests__/         # Vitest 테스트 파일
-│   │   └── package.json
-│   │
-│   ├── image-processor/       # 이미지 리사이징 Lambda
-│   │   ├── src/
-│   │   │   └── index.ts       # Sharp 기반 이미지 처리
-│   │   └── package.json
-│   │
-│   └── infra/                 # AWS CDK 인프라 정의
-│       ├── lib/
-│       │   ├── blog-stack.ts          # 메인 애플리케이션 스택 (844줄)
-│       │   ├── cicd-stack.ts          # CI/CD 인프라 스택
-│       │   └── image-processor.stack.ts
-│       ├── bin/
-│       │   └── infra.ts       # CDK 앱 진입점
-│       └── package.json
-│
-├── .github/
-│   └── workflows/
-│       ├── deploy.yml         # 통합 배포 워크플로우 (295줄)
-│       └── build-and-verify.yml
-│
-├── scripts/                   # 유틸리티 스크립트
-│   ├── setup_runner.sh        # Self-hosted runner 설정
-│   └── migrate-to-opensearch.ts
-│
-├── turbo.json                 # Turborepo 빌드 설정
-├── pnpm-workspace.yaml        # pnpm 워크스페이스 정의
-└── package.json               # 루트 패키지 설정
-```
-
-### 앱별 역할
-
-| 앱 | 설명 | 주요 의존성 |
-|----|------|------------|
-| **frontend** | SSR 블로그 UI | Next.js, React, Tailwind, SWR |
-| **backend** | REST API 서버 | Hono, AWS SDK, Zod, @opensearch-project/opensearch |
-| **image-processor** | 이미지 최적화 | Sharp, AWS SDK (S3) |
-| **infra** | IaC 정의 | AWS CDK, Constructs |
+| 분류 | 기술 | 선정 이유 및 활용 |
+|:---:|:---:|---|
+| **Frontend** | **Next.js 15+**<br>(App Router) | SSR 기반 성능 최적화 및 SEO 강화, 서버/클라이언트 컴포넌트 분리로 번들 경량화 |
+| | **TypeScript** | 정적 타입 시스템으로 런타임 에러 방지 및 백엔드 API와의 인터페이스 일관성 유지 |
+| **Backend** | **Hono** | AWS Lambda 환경 최적화를 위해 Express 대비 가벼운 초경량 프레임워크 채택 |
+| | **AWS SDK v3** | 모듈 단위 import를 통해 Lambda 배포 패키지 크기 최소화 |
+| **Database** | **Amazon DynamoDB** | Single Table Design으로 NoSQL 성능 극대화, GSI를 활용한 다양한 조회 패턴 구현 |
+| | **Amazon OpenSearch** | DynamoDB 검색 한계 보완, 'Nori' 형태소 분석기를 통한 한글 검색 정확도 향상 |
+| **Infra** | **AWS CDK** | TypeScript로 인프라 정의(IaC), AWS 리소스를 코드로 안전하게 관리 |
+| | **GitHub Actions** | 배포 전 과정 자동화, EC2 기반 Self-hosted Runner 구축으로 빌드 속도 최적화 |
+| | **Docker** | Next.js 컨테이너화로 환경 일관성 보장, Multi-stage build를 통한 이미지 경량화 |
+| **AI & Async** | **Amazon Bedrock / Polly** | 콘텐츠 요약 및 음성 합성 기능 구현 |
+| | **EventBridge / SQS / SNS** | 고부하 작업을 비동기로 처리하여 API 응답 속도 보장 및 시스템 결합도 감소 |
+| **Observability** | **AWS X-Ray / CloudWatch** | 분산 추적을 통한 성능 병목 분석 및 시스템 상태 모니터링 |
 
 ---
 
-## 로컬 개발 환경 구성
+## 5. 트러블슈팅 및 최적화
 
-### 사전 요구 사항
+### Case 1: CloudFront + S3 OAC 권한 및 라우팅 충돌 해결
+- **상황**: 배포된 AI 음성 파일(.mp3)에 접근 시 403 Access Denied 발생. S3 버킷 정책과 OAC 설정은 정상으로 보임.
+- **인프라 분석**: 단순 CORS 문제가 아님을 curl 테스트로 확인. CloudFront의 Path Pattern 우선순위가 구체적인 경로(`/speeches/`)보다 일반적인 경로(`/.*`)가 상위에 있어, 요청이 잘못된 S3 Origin으로 라우팅됨을 규명함. 또한, 백엔드에서 생성하는 S3 객체 키에 포함된 특수문자(.)가 경로 매칭에 영향을 줄 수 있음을 파악.
+- **해결**: CloudFront Cache Behavior의 우선순위를 재조정하고, 백엔드 로직에서 S3 키 생성 규칙을 정규화하여 인프라 레벨의 라우팅 오류 해결.
 
-- Node.js 22.x (`.nvmrc` 참고)
-- pnpm 10.14.0 이상
-- Docker Desktop (프론트엔드 컨테이너 테스트용)
+### Case 2: IAM Service Principal과 권한 관리 
+- **상황**: Polly 서비스에 IAM Role을 위임(`iam:PassRole`)하여 S3에 쓰기 권한을 주려 했으나 Invalid Principal 에러로 배포 실패.
+- **인프라 분석**: 모든 AWS 서비스가 Role을 Assume할 수 있는 것은 아님을 확인. AWS 공식 문서 및 검증을 통해 Amazon Polly는 Service Role 패턴을 지원하지 않음을 파악.
+- **해결**: 아키텍처를 변경하여, Polly를 호출하는 주체인 Lambda에게 직접 S3 PutObject 권한을 부여하는 방식으로 보안 모델 재설계.
 
----
+### Case 3: CI/CD 파이프라인 최적화 
+- **상황**: GitHub Actions Self-hosted Runner 구축 시, 프리티어인 t2.micro 환경에서 Docker 빌드 중 메모리 부족으로 프로세스가 중단됨.
+- **인프라 분석**: Docker 데몬과 Next.js 빌드 프로세스가 요구하는 리소스가 마이크로 인스턴스의 한계를 초과함. Swap 메모리를 설정해도 I/O 병목으로 인해 빌드 속도가 현저히 저하됨을 확인.
+- **해결**: 2025년 기준 프리티어 사용이 가능한 t4g.small 인스턴스로 마이그레이션하고, ARM64 아키텍처에 맞춰 Dockerfile 및 빌드 스크립트를 수정하여 호환성 확보 및 성능 향상.
 
-## 배포 과정
-
-배포는 GitHub Actions를 통해 완전히 자동화되어 있습니다.
-
-### 자동 배포 트리거
-
-`main` 브랜치에 푸시하면 자동으로 배포가 시작됩니다:
-
-```bash
-git push origin main
-```
-
-### 배포 워크플로우 상세
-
-`.github/workflows/deploy.yml` 파일은 다음 단계를 수행합니다:
-
-**1. 변경 감지 (Detect Changes)**
-```yaml
-- Frontend/Backend 코드 변경 감지
-- 인프라 코드 변경 감지
-- 변경된 부분만 선택적으로 배포
-```
-
-**2. 빌드 (Build)**
-```yaml
-- Release ID 생성: YYYYMMDDHHmmss-[git-sha]
-- pnpm install (캐싱 활용)
-- Frontend/Backend 빌드
-- Sharp Lambda Layer 빌드
-```
-
-**3. 컨테이너 이미지 (Container Build)**
-```yaml
-- Docker 멀티스테이지 빌드
-- ARM64 아키텍처로 빌드
-- Amazon ECR에 푸시
-```
-
-**4. 인프라 배포 (Infrastructure Deploy)**
-```yaml
-- AWS CDK를 사용하여 스택 배포
-- Lambda 함수 업데이트 (새 ECR 이미지 태그)
-- DynamoDB, OpenSearch 등 리소스 업데이트
-```
-
-**5. 정적 자산 배포 (Static Assets Deploy)**
-```yaml
-- S3에 .next/static 폴더 업로드
-- 버전별 경로로 업로드: /{RELEASE_ID}/_next/static/
-```
-
-**6. 캐시 무효화 (Cache Invalidation)**
-```yaml
-- CloudFront 캐시 무효화 (/* 경로)
-```
-
-**7. 검증 (Verification)**
-```yaml
-- Smoke Test 실행
-  - 홈페이지 HTTP 200 확인
-  - 버전별 정적 자산 접근 확인
-- 실패 시 배포 중단 및 알림
-```
-
-### 수동 배포
-
-CDK를 직접 사용하여 수동 배포도 가능합니다:
-
-```bash
-# 인프라 변경 사항만 배포
-cd apps/infra
-pnpm exec cdk deploy BlogInfraStack
-
-# 특정 이미지 태그로 배포
-pnpm exec cdk deploy BlogInfraStack --parameters ImageTag=20260116-abc1234
-```
+### Case 4: Lambda Cold Start 최적화
+- **상황**: 초기 페이지 로드 시 TTFB가 4초 이상 소요되는 성능 저하 발생.
+- **분석**: AWS X-Ray 분산 추적을 도입하여 트랜잭션을 분석한 결과, 병목 구간이 Docker 컨테이너 이미지 로딩임을 데이터로 규명.
+- **해결**: Multi-stage build를 적용하여 불필요한 레이어를 제거하고, EventBridge Scheduler를 통해 10분 주기로 핑을 보내 실행 환경을 유지하는 Keep-Warm 전략 적용.
 
 ---
 
-## 주요 구현 사항
+## 6. 비용 최적화 및 운영 효율성
 
-### 1. 서버리스 아키텍처 설계
+### 6.1. 서버리스 우선 전략을 통한 비용 절감
+- **유휴 비용 제거**: 상시 가동되는 EC2 대신, 트래픽이 발생할 때만 과금되는 Lambda, API Gateway, DynamoDB를 사용하여 초기 운영 단계의 불필요한 지출을 없애고 사용량 기반 과금 모델을 구축했습니다.
+- **실제 운영 성과**: 2025년 7월부터 현재까지 실제 서비스 트래픽을 처리하면서도 월 청구 금액을 1달러 미만으로 유지하고 있습니다. 이 중 Route 53 도메인 유지비(약 0.55달러)를 제외하면 순수 인프라 비용은 0달러에 수렴합니다.
+- **트래픽 유연성**: DynamoDB와 Lambda가 제공하는 넉넉한 프리티어 허용량을 활용하여, 갑작스러운 트래픽 증가가 발생하더라도 추가 비용 없이 안정적인 서비스 유지가 가능하도록 설계했습니다.
 
-**Lambda + DynamoDB 조합으로 완전한 서버리스 구현**
+### 6.2. 컴퓨팅 리소스 사이징 최적화
+- **CI/CD Runner 비용 최적화**: Self-hosted Runner용 인스턴스로 t4g.small을 채택했습니다. 이는 Docker 빌드를 위한 최소 사양을 충족하면서도, 2026년 기준 매월 750시간 무료 혜택을 통해 24시간 상시 가동함에도 비용이 발생하지 않도록 구성했습니다.
+- **AI API 캐싱**: 비용이 높은 텍스트 요약 API 호출 결과를 데이터베이스에 캐싱하여, 중복 호출로 인한 불필요한 토큰 비용 발생을 차단했습니다.
 
-- **비용 효율성**: 요청이 없을 때는 과금되지 않음
-- **자동 확장**: 트래픽 증가 시 Lambda가 자동으로 스케일 아웃
-- **관리 부담 없음**: 서버 패치, 업데이트 불필요
+### 6.3. 컨테이너 기반 서버리스 운영
+- **Lambda 컨테이너 이미지 활용**: 관리 비용이 높고 상시 비용이 발생하는 ECS나 EKS 대신 Lambda를 선택했습니다. 또한, 콜드스타트 문제도 최적화하여 컨테이너 이미지를 사용하지만 서버리스 아키텍처를 유지하면서 인프라 관리 부담을 없애고 비용 효율성을 극대화했습니다.
 
-**ARM64 아키텍처 채택**
-```typescript
-// apps/infra/lib/blog-stack.ts
-const backendFunction = new lambda.Function(this, 'BackendFunction', {
-  architecture: lambda.Architecture.ARM_64, // Graviton2 프로세서
-  // x86 대비 20% 가격 절감, 최대 34% 성능 향상
-});
-```
+### 6.4. 데이터 전송량 최적화
+- **이미지 최적화 파이프라인**: 사용자가 업로드한 고용량 이미지를 원본 그대로 전송하지 않고, 업로드 즉시 WebP 포맷으로 압축 및 리사이징하여 저장합니다.
+- **효과**: 이미지 용량을 평균 70% 이상 줄여 스토리지 비용과 CDN의 데이터 전송 비용을 절감했습니다.
 
-### 2. 검색 기능 구현
-
-**OpenSearch Service를 사용한 전문 검색**
-
-```typescript
-// 게시글 인덱싱 (DynamoDB Stream → Lambda → OpenSearch)
-// 한글 형태소 분석기(nori) 적용
-```
-
-- DynamoDB에 게시글 저장 시 자동으로 OpenSearch에 인덱싱
-- 제목, 본문, 태그에 대한 통합 검색
-- 검색어 하이라이팅 지원
-
-### 3. 이미지 최적화 파이프라인
-
-**S3 이벤트 트리거 기반 자동 이미지 처리**
-
-```
-Upload Image (S3) → Trigger Lambda → Sharp 리사이징 → Save Optimized Image
-```
-
-- 원본 이미지는 `originals/` 폴더에 저장
-- 자동으로 여러 해상도 생성 (썸네일, 중간, 원본)
-- WebP 포맷 변환으로 용량 최적화
-
-### 4. 인증 시스템
-
-**AWS Cognito + JWT 검증**
-
-```typescript
-// Backend: JWT 토큰 검증 미들웨어
-import { CognitoJwtVerifier } from 'aws-jwt-verify';
-
-const verifier = CognitoJwtVerifier.create({
-  userPoolId: process.env.USER_POOL_ID,
-  tokenUse: 'id',
-  clientId: process.env.CLIENT_ID,
-});
-```
-
-- Cognito User Pool로 회원가입/로그인 관리
-- JWT 토큰 기반 stateless 인증
-- 미들웨어를 통한 보호된 라우트 구현
-
-### 5. 모노레포 관리 전략
-
-**Turborepo를 통한 효율적인 빌드**
-
-```json
-// turbo.json
-{
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
-    }
-  }
-}
-```
-
-- 변경된 앱만 선택적으로 빌드
-- 의존성 그래프 자동 해석
-- 빌드 결과 캐싱으로 시간 절약
-
-### 6. 보안 강화
-
-**다층 보안 적용**
-
-- **WAF**: CloudFront 앞단에 Web Application Firewall 배치
-  - SQL Injection, XSS 공격 차단
-  - Rate Limiting으로 DDoS 방어
-  
-- **CORS 정책**: Backend에서 허용된 오리진만 접근 가능
-  ```typescript
-  app.use('*', cors({
-    origin: ['https://blog.jungyu.store'],
-    credentials: true,
-  }));
-  ```
-
-- **입력 검증**: Zod 스키마로 모든 API 입력 검증
-  ```typescript
-  const postSchema = z.object({
-    title: z.string().min(1).max(100),
-    content: z.string().min(1),
-  });
-  ```
-
----
-
-
----
-
-## 문의
-
-프로젝트에 대한 질문이나 제안 사항이 있다면 언제든 이메일 : jungyuya@gmail.com 으로 연락 주세요.
+### 6.5. 리소스 수명 주기 관리 자동화
+- **ECR 수명 주기 정책**: CI/CD 파이프라인이 실행될 때마다 누적되는 Docker 이미지로 인한 비용 증가를 막기 위해, 최근 배포된 이미지만 유지하고 오래된 이미지는 자동으로 삭제되도록 설정했습니다.
+- **데이터 자동 만료 (TTL)**: 게시물 삭제 시 즉시 지우지 않고 `isDeleted` 플래그 처리 후, TTL 기능을 통해 7일 뒤 자동으로 만료되도록 설계했습니다. 별도의 삭제 서버 없이 컴퓨팅 비용 '0'으로 데이터를 정리합니다.
+- **S3 수명 주기 규칙**: 임시 파일이나 오래된 로그가 자동으로 삭제되도록 규칙을 적용하여 불필요한 스토리지 비용을 방지했습니다.
