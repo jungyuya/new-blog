@@ -1,6 +1,6 @@
 /* apps/frontend/src/app/globals.css */
 
-/* [변경] Tailwind v4의 공식 import 방식으로 변경 (기존과 동일하다면 유지) */
+/*  Tailwind v4의 공식 import 방식으로 변경 */
 @import "tailwindcss";
 
 /* Tailwind v4의 클래스 기반 다크 모드 활성화 지시문 */
@@ -16,7 +16,7 @@
   /* White */
 }
 
-/* [수정] 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
+/* 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
 html.dark {
   --color-text: #e5e7eb;
   /* 기본 텍스트 색상 (Tailwind gray-200) */
@@ -40,9 +40,10 @@ body {
 /* Custom Styles for Markdown Content                             */
 /* ================================================================ */
 
-/* [수정] prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
+/* prose 클래스 내부의 이미지에 최종 스타일을 적용합니다. */
 .prose img {
-  max-height: 400px;
+  max-height: 500px;
+  max-width: 95%;
   width: auto;
   display: block;
   margin-left: auto;
@@ -217,6 +218,13 @@ body {
   h1, h2 태그에 적용하는 밑줄(border-bottom)을 제거합니다.
   !important를 사용하여 다른 모든 스타일보다 우선 적용되도록 합니다.
 */
+.toastui-editor-contents,
+.prose {
+  font-size: 1.015rem !important;
+  /* 18px forced */
+  line-height: 1.8 !important;
+}
+
 .toastui-editor-contents h1,
 .toastui-editor-contents h2 {
   border-bottom: none !important;

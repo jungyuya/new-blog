@@ -79,8 +79,8 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
   }
 
   return (
-    // Set a CSS variable that matches `max-w-4xl` (56rem) so the TOC can be positioned
-    <div className="relative" style={{ '--content-max-w': '56rem' }}>
+    // Set a CSS variable that matches `max-w-5xl` (64rem) so the TOC can be positioned
+    <div className="relative" style={{ '--content-max-w': '64rem' }}>
 
 
       {/* 1) 메인 콘텐츠: 가운데 정렬 (mx-auto) + 콘텐츠 최대 너비를 CSS 변수로 제어 */}
