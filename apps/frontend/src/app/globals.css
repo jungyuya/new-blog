@@ -677,3 +677,39 @@ body {
 .info-box strong {
   color: #00d4ff;
 }
+
+
+/* ================================================================ */
+/* RAG Chat BOT 전용 CSS (기존 채팅서비스 활용)                        */
+/* ================================================================ */
+
+@theme {
+  /* --- 채팅 위젯용 색상 팔레트 (v4 방식) --- */
+  --color-chat-bg: #e8f4f9;
+  --color-chat-primary: #a5d8f0;
+  --color-chat-primary-hover: #8ecbe7;
+  --color-chat-text-dark: #405d6b;
+  --color-chat-text-light: #ffffff;
+  --color-chat-text-assistant: #5ab0d3;
+  --color-chat-user-bubble: #dff1f8;
+  --color-chat-assistant-bubble: #edf6f9;
+  --color-chat-surface: #ffffff;
+
+  /* --- 채팅 위젯용 애니메이션 (v4 방식) --- */
+  --animate-slide-in-left: slide-in-left 0.4s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+  --animate-slide-in-right: slide-in-right 0.4s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+  --animate-fade-in-up: fade-in-up 0.3s ease-out forwards;
+
+  @keyframes slide-in-left {
+    0% { opacity: 0; transform: translateX(-20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slide-in-right {
+    0% { opacity: 0; transform: translateX(20px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fade-in-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+}

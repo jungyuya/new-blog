@@ -282,7 +282,7 @@ export class BlogStack extends Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
-      memorySize: 1024,
+      memorySize: 2048,
       timeout: Duration.seconds(60),
       environment: {
         NODE_ENV: 'production',
@@ -303,6 +303,20 @@ export class BlogStack extends Stack {
 
     // --- [신규] BackendApiLambda의 X-Ray 쓰기 권한 부여 ---
     backendApiLambda.role?.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'));
+
+
+    // 챗봇 기능을 위해 BackendApiLambda가 Bedrock을 호출할 수 있도록 권한 부여
+    backendApiLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeModel'],
+      resources: [
+        // 임베딩 모델 (Titan)
+        `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+        // 텍스트 생성 모델 (Claude 3 Haiku)
+        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`
+      ],
+    }));
+
 
     // --- Lambda 함수에 비용 추적을 위한 태그를 추가 ---
     cdk.Tags.of(backendApiLambda).add('blog-project-cost', 'bedrock-caller');
@@ -410,7 +424,7 @@ export class BlogStack extends Stack {
 
 
     // --- [신규] 저비용 워밍(Keep-Warm) 전략 구현 ---
-    
+
     // 1. EventBridge Scheduler가 FrontendServerLambda를 호출할 수 있는 권한을 가진 IAM Role을 생성합니다.
     const warmerRole = new iam.Role(this, 'FrontendWarmerRole', {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
@@ -677,6 +691,13 @@ export class BlogStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY, // 프로덕션에서는 DESTROY를 사용하지 않도록 주의
     });
 
+    // [긴급 수정] BackendApiLambda에 OpenSearch 엔드포인트 환경 변수 추가
+    // 변수가 선언된 후에 addEnvironment 메서드를 사용하여 추가합니다.
+    backendApiLambda.addEnvironment('OPENSEARCH_ENDPOINT', `https://${searchDomain.domainEndpoint}`);
+
+    // [긴급 수정] BackendApiLambda에 OpenSearch 접근 권한 부여
+    searchDomain.grantReadWrite(backendApiLambda);
+
     // --- 5.2. 인덱싱 실패를 위한 Dead-Letter Queue (DLQ) ---
     const indexingDlq = new sqs.Queue(this, 'IndexingDlq', {
       queueName: `blog-indexing-dlq-${this.stackName}`,
@@ -733,6 +754,14 @@ export class BlogStack extends Stack {
     indexingLambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')); // CloudWatch Logs 기본 권한
     postsTable.grantStreamRead(indexingLambdaRole); // DynamoDB Stream 읽기 권한
     indexingDlq.grantSendMessages(indexingLambdaRole); // DLQ에 메시지 보내기 권한
+
+    // --- IndexingLambda가 Bedrock을 사용하여 임베딩을 생성할 수 있도록 권한 부여 ---
+    indexingLambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['bedrock:InvokeModel'],
+      // [중요] 모든 모델이 아니라, 'Titan Embeddings v2' 모델만 허용.
+      resources: [`arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`],
+    }));
 
     // 검색 API 역할에 권한 추가
     searchApiLambdaRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')); // CloudWatch Logs 기본 권한

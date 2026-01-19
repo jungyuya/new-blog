@@ -8,6 +8,7 @@ import { serve } from '@hono/node-server';
 import * as AWSXRay from 'aws-xray-sdk';
 import * as Sentry from '@sentry/node';
 
+import chatRouter from './routes/chat.router'; 
 import postsRouter from './routes/posts.router';
 import authRouter from './routes/auth.router';
 import usersRouter from './routes/users.router';
@@ -92,6 +93,7 @@ app.route('/images', imagesRouter);
 app.route('/config', configRouter); 
 app.route('/comments', commentsRouter);
 app.route('/posts/:postId/comments', postCommentsRouter);
+app.route('/chat', chatRouter); 
 
 // --- Error Handling ---
 app.onError((err, c) => {
