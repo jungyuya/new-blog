@@ -7,7 +7,7 @@ interface ChatAvatarProps {
 
 const ChatAvatar = ({ role }: ChatAvatarProps) => {
   // assistant는 봇 아이콘, user는 기본 사람 아이콘 사용
-  const src = role === 'assistant' ? '/deepdive-logo.png' : '/default-avatar.png';
+  const src = role === 'assistant' ? '/ai-avatar.jpg' : '/default-avatar.png';
   const alt = role === 'assistant' ? 'AI Assistant' : 'User';
 
   return (

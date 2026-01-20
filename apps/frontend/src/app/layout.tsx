@@ -22,10 +22,11 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* [핵심] 모든 클라이언트 사이드 로직을 MainLayout 컴포넌트에 위임합니다. */}
+        {/* MainLayout: Header, Footer, Providers 등을 포함 */}
         <MainLayout>
           {children}
         </MainLayout>
+        
         <ChatWidget />
       </body>
     </html>

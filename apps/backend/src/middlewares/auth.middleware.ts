@@ -58,7 +58,7 @@ export const cookieAuthMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     await next();
   } catch (error: any) {
     console.error('Cookie Auth Error:', error);
-    // [수정] Postman cURL에 idToken이 없던 문제를 고려하여, 에러 메시지를 더 명확하게 변경
+    // Postman cURL에 idToken이 없던 문제를 고려하여, 에러 메시지를 더 명확하게 변경
     if (error.message.includes('not found')) {
       return c.json({ message: 'Unauthorized: ID token cookie not found.' }, 401);
     }
@@ -110,7 +110,7 @@ export const adminOnlyMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =>
 
 
 // =================================================================
-// [신규] 비로그인 사용자 식별 미들웨어 (Anonymous User Middleware)
+// 비로그인 사용자 식별 미들웨어 (Anonymous User Middleware)
 // =================================================================
 /**
  * X-Anonymous-Id 헤더가 존재하면 검증하고 컨텍스트에 주입합니다.
