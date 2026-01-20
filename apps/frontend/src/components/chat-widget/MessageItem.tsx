@@ -13,7 +13,7 @@ export interface ChatMessage {
   timestamp: Date;
   sources?: { title: string; url: string }[];
 }
-
+ 
 interface MessageItemProps {
   message: ChatMessage;
 }
