@@ -19,15 +19,15 @@
 ---
 
 ## 2. 프론트엔드 구현 (`apps/frontend`)
-
-### Step 5.2.2: 스트리밍 클라이언트 구현 (Stream Reader)
+<!--5.2.2의 스트리밍 채팅은 잠정중단-->
+~~### Step 5.2.2: 스트리밍 클라이언트 구현 (Stream Reader)
 *   **파일**: `src/components/AiChatView.tsx`
     *   **Action**: `handleSendMessage` 함수를 전면 재작성합니다.
     *   **로직**:
         1.  `fetch` 호출 후 `response.body.getReader()`를 획득합니다.
         2.  `while` 루프로 스트림이 끝날 때까지 `read()`를 반복합니다.
         3.  받아온 텍스트 조각을 즉시 `messages` 상태의 마지막 메시지(AI 답변)에 이어 붙입니다 (`setMessages` update).
-        4.  스트림 종료 후 전체 답변이 완성됩니다.
+        4.  스트림 종료 후 전체 답변이 완성됩니다.~~ 
 
 ### Step 5.2.3: 마크다운 및 코드 하이라이팅 (Rich Text)
 *   **패키지 설치**: `react-markdown`, `remark-gfm`, `react-syntax-highlighter` (또는 `prismjs`).

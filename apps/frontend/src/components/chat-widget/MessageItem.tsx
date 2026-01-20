@@ -75,7 +75,7 @@ const MessageItem = ({ message }: MessageItemProps) => {
             {message.sources && message.sources.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-100/50">
                 <p className="text-[11px] text-gray-400 font-medium mb-1.5 flex items-center gap-1">
-                  📚 참고 문서
+                  👉️ 관련 포스팅
                 </p>
                 <ul className="space-y-1">
                   {message.sources.map((source, idx) => (

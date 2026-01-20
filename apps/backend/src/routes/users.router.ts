@@ -99,9 +99,8 @@ usersRouter.put(
   }
 );
 
-// --- [핵심 추가 2] 덜 구체적인 '/me' 경로는 마지막에 정의합니다. ---
+// --- 덜 구체적인 '/me' 경로는 마지막에 정의합니다. ---
 usersRouter.get('/me', cookieAuthMiddleware, async (c) => {
-  // ... (JUNGYU 님의 기존 GET /me 핸들러 코드는 완벽하므로 그대로 유지)
   const userId = c.get('userId');
   const userEmail = c.get('userEmail');
   const userGroups = c.get('userGroups');

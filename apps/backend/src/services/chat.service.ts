@@ -2,7 +2,7 @@
 
 import { ddbDocClient } from '../lib/dynamodb';
 import { GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { BedrockRuntimeClient, InvokeModelCommand, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { Client } from '@opensearch-project/opensearch';
 import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws';
 
@@ -57,7 +57,6 @@ export async function getQuota(): Promise<QuotaStatus> {
     };
   } catch (error) {
     console.error('Failed to get quota:', error);
-    // 에러 시 안전하게 0으로 반환하거나 에러를 던질 수 있음
     return { remaining: 0, total: DAILY_LIMIT, isExceeded: true };
   }
 }
@@ -71,7 +70,6 @@ export async function useQuota(): Promise<boolean> {
   const pk = `RATE_LIMIT#${today}`;
   const sk = 'GLOBAL_COUNTER';
 
-  // 내일 자정(TTL) 계산: 데이터 자동 삭제용
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -79,8 +77,6 @@ export async function useQuota(): Promise<boolean> {
   const ttl = Math.floor(tomorrow.getTime() / 1000);
 
   try {
-    // Atomic Counter: 읽고 쓰는게 아니라, DB에게 "더해줘!"라고 명령함.
-    // ConditionExpression: "현재 count가 50보다 작을 때만 더해줘"
     await ddbDocClient.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { PK: pk, SK: sk },
@@ -98,10 +94,10 @@ export async function useQuota(): Promise<boolean> {
       }
     }));
 
-    return true; // 성공적으로 증가시킴 (사용 가능)
+    return true;
   } catch (error: any) {
     if (error.name === 'ConditionalCheckFailedException') {
-      return false; // 이미 한도 초과됨
+      return false;
     }
     console.error('Failed to use quota:', error);
     throw error;
@@ -109,8 +105,8 @@ export async function useQuota(): Promise<boolean> {
 }
 
 
-// 사용자 질문에 대한 RAG 답변을 생성합니다. (스트리밍 버전)
-export async function generateAnswerStream(question: string, history?: { role: 'user' | 'assistant', content: string }[]): Promise<{ stream: AsyncGenerator<string>, sources: { title: string, url: string }[] }> {
+// 사용자 질문에 대한 RAG 답변을 생성합니다.
+export async function generateAnswer(question: string, history?: { role: 'user' | 'assistant', content: string }[]): Promise<{ answer: string, sources: { title: string, url: string }[] }> {
   try {
     // 1. 질문 벡터화 (Embedding)
     const embeddingCommand = new InvokeModelCommand({
@@ -163,15 +159,15 @@ export async function generateAnswerStream(question: string, history?: { role: '
 
     // 검색 결과가 없으면
     if (!contexts) {
-      async function* emptyStream() {
-        yield "죄송합니다. 관련 정보를 블로그에서 찾을 수 없습니다.";
-      }
-      return { stream: emptyStream(), sources: [] };
+      return {
+        answer: "죄송합니다. 관련 정보를 블로그에서 찾을 수 없습니다.",
+        sources: []
+      };
     }
 
-    // 3. 답변 생성 (Stream) - Claude 3 Haiku
+    // 3. 답변 생성 - Claude 3 Haiku
     const systemPrompt = `
-    당신은 'JUNGYU'의 기술 블로그를 담당하는 AI 어시스턴트입니다.
+    당신은 블로그 관리자인 준규의 기술 블로그를 담당하는 AI 어시스턴트입니다.
     당신의 이름은 'JUNGYU' 페르소나를 따르지만, 본체는 아니고 친절한 안내자 역할을 합니다.
 
     [페르소나 및 톤앤매너]
@@ -182,9 +178,21 @@ export async function generateAnswerStream(question: string, history?: { role: '
 
     [메타 인지 및 답변 규칙]
     - 아래 제공된 <context> 태그 안의 내용(블로그 글)을 기반으로 답변해야 합니다.
-    - <context>에 있는 지식을 당신의 머릿속에 있는 지식인 것처럼 자연스럽게 답변하세요. 
-    - **중요**: "제공된 맥락에 따르면"이나 "문서에 의하면" 같은 기계적인 표현을 절대 사용하지 마세요. 그냥 당신이 아는 것을 말하듯 하세요.
-    - 만약 사용자의 질문에 대한 정보가 <context>에 전혀 없다면, 솔직하게 "해당 내용은 제 블로그에 아직 정리되지 않은 것 같아요. 😅"라고 말하고, 일반적인 클라우드 지식을 바탕으로 짧게 답변해 줄 수는 있습니다. 단, 이 경우 "제 블로그 내용은 아니지만..."이라고 명시해주세요.
+    - <context>에 있는 지식을 **당신이 직접 아는 지식**인 것처럼 자연스럽게 답변하세요.
+    
+    **절대 금지 사항 (매우 중요!):**
+    - "<context>에 따르면", "제공된 맥락에 따르면", "문서에 의하면", "블로그 글에서", "위 내용에서" 같은 표현을 **절대로** 사용하지 마세요.
+    - "참고 자료", "제공된 정보", "주어진 텍스트" 등의 메타 언급도 **절대 금지**입니다.
+    - 마치 당신이 JUNGYU 본인인 것처럼, 또는 JUNGYU의 지식을 완전히 내재화한 것처럼 답변하세요.
+    
+    올바른 예시:
+    ❌ "<context>에 따르면 Deep Dive 블로그는..."
+    ✅ "Deep Dive 블로그는..."
+    
+    ❌ "제공된 문서에서 설명한 바와 같이..."
+    ✅ "이 블로그에서는..." 또는 그냥 바로 설명 시작
+    
+    - 만약 사용자의 질문에 대한 정보가 <context>에 전혀 없다면, 솔직하게 "그 내용은 아직 블로그에 정리하지 않았어요. 😅"라고 말하고, 일반적인 클라우드 지식을 바탕으로 짧게 답변해 줄 수는 있습니다.
     `;
 
     const userPrompt = `
@@ -203,7 +211,7 @@ export async function generateAnswerStream(question: string, history?: { role: '
     }
     messages.push({ role: 'user', content: userPrompt });
 
-    const streamCommand = new InvokeModelWithResponseStreamCommand({
+    const chatCommand = new InvokeModelCommand({
       modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
       contentType: 'application/json',
       accept: 'application/json',
@@ -215,25 +223,13 @@ export async function generateAnswerStream(question: string, history?: { role: '
       }),
     });
 
-    const response = await bedrockClient.send(streamCommand);
+    const chatResponse = await bedrockClient.send(chatCommand);
+    const chatBody = JSON.parse(new TextDecoder().decode(chatResponse.body));
 
-    if (!response.body) {
-      throw new Error('No response body from Bedrock');
-    }
-
-    async function* streamGenerator() {
-      for await (const chunk of response.body!) {
-        if (chunk.chunk && chunk.chunk.bytes) {
-          const decoded = new TextDecoder().decode(chunk.chunk.bytes);
-          const parsed = JSON.parse(decoded);
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            yield parsed.delta.text;
-          }
-        }
-      }
-    }
-
-    return { stream: streamGenerator(), sources };
+    return {
+      answer: chatBody.content[0].text,
+      sources: sources
+    };
 
   } catch (error) {
     console.error('RAG Error:', error);

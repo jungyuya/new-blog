@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '@/utils/api';
-import MessageList from './chat-widget/MessageItem'; // MessageItem을 list로 렌더링할 컨테이너 필요하지만, 일단 Item을 직접 map
+import MessageList from './chat-widget/MessageItem';
 import MessageItem, { ChatMessage } from './chat-widget/MessageItem';
 import MessageInput from './chat-widget/MessageInput';
 
@@ -48,16 +48,6 @@ const AiChatView = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
-    // 2. 빈 AI 메시지 먼저 추가
-    const aiMsgId = (Date.now() + 1).toString();
-    const initialAiMsg: ChatMessage = {
-      id: aiMsgId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, initialAiMsg]);
-
     try {
       // 대화 히스토리 준비
       const history = messages
@@ -72,70 +62,61 @@ const AiChatView = () => {
       });
 
       if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+
+        // 가드레일 차단
+        if (res.status === 400 && errorData.error === 'GUARDRAIL_BLOCKED') {
+          const errorMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `⚠️ ${errorData.message || '부적절한 질문이 감지되었습니다. 정중한 표현을 사용해주세요.'}`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+          setIsLoading(false);
+          return;
+        }
+
+        // 쿼터 초과
+        if (res.status === 429 && errorData.error === 'QUOTA_EXCEEDED') {
+          const errorMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: '⚠️ 오늘의 질문 횟수를 모두 사용했습니다. 내일 다시 시도해주세요.',
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+          setIsLoading(false);
+          return;
+        }
+
         throw new Error('Failed to get answer');
       }
 
-      // 스트림 읽기
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No reader available');
+      // 응답 처리
+      const data = await res.json();
 
-      const decoder = new TextDecoder();
-      let streamedContent = '';
-      let sources: { title: string; url: string }[] = [];
-      let isFirstChunk = true;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-
-        // 첫 번째 청크에서 출처 정보 파싱
-        if (isFirstChunk && text.includes('__SOURCES__')) {
-          const match = text.match(/__SOURCES__(.*?)__SOURCES__/);
-          if (match) {
-            try {
-              sources = JSON.parse(match[1]);
-            } catch (e) {
-              console.error('Failed to parse sources', e);
-            }
-            // 출처 정보 제거 후 나머지 텍스트만 사용
-            streamedContent += text.replace(/__SOURCES__.*?__SOURCES__/, '');
-          } else {
-            streamedContent += text;
-          }
-          isFirstChunk = false;
-        } else {
-          streamedContent += text;
-        }
-
-        // 실시간 업데이트
-        setMessages((prev) =>
-          prev.map(msg =>
-            msg.id === aiMsgId ? { ...msg, content: streamedContent } : msg
-          )
-        );
-      }
-
-      // 최종 업데이트 (출처 포함)
-      setMessages((prev) =>
-        prev.map(msg =>
-          msg.id === aiMsgId ? { ...msg, content: streamedContent, sources } : msg
-        )
-      );
+      // AI 답변 추가
+      const aiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.answer,
+        timestamp: new Date(),
+        sources: data.sources,
+      };
+      setMessages((prev) => [...prev, aiMsg]);
 
       // 쿼터 갱신
       fetchQuota();
 
     } catch (error: any) {
-      // 에러 발생 시 placeholder 제거하고 에러 메시지로 교체
-      setMessages((prev) =>
-        prev.map(msg =>
-          msg.id === aiMsgId
-            ? { ...msg, content: `죄송합니다. 오류가 발생했습니다. (${error.message})` }
-            : msg
-        )
-      );
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `죄송합니다. 오류가 발생했습니다. (${error.message})`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }

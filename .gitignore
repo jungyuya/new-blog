@@ -79,3 +79,11 @@ cdk.context.json
 
 # Icon generation temporary build artifacts
 /apps/frontend/src/components/icons/_build/
+
+
+# 26-01-20
+# 모든 .md 파일 무시
+*.md
+
+# README.md는 예외로 허용
+!README.md

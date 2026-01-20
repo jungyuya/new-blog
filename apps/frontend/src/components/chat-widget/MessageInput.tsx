@@ -9,6 +9,7 @@ interface MessageInputProps {
 
 const MessageInput = ({ onSendMessage, isLoading }: MessageInputProps) => {
   const [input, setInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -22,12 +23,22 @@ const MessageInput = ({ onSendMessage, isLoading }: MessageInputProps) => {
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (input.trim() && !isLoading) {
+
+    // 디바운싱: 이미 전송 중이면 무시
+    if (isSubmitting || isLoading) {
+      return;
+    }
+
+    if (input.trim()) {
+      setIsSubmitting(true);
       onSendMessage(input.trim());
       setInput('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
+
+      // 300ms 후 다시 전송 가능
+      setTimeout(() => setIsSubmitting(false), 300);
     }
   };
 
@@ -52,12 +63,11 @@ const MessageInput = ({ onSendMessage, isLoading }: MessageInputProps) => {
       />
       <button
         type="submit"
-        className={`p-2.5 rounded-full text-white transition-all duration-200 shadow-sm flex items-center justify-center ${
-          input.trim() && !isLoading 
-            ? 'bg-chat-primary hover:bg-chat-primary-hover transform hover:scale-105 active:scale-95' 
+        className={`p-2.5 rounded-full text-white transition-all duration-200 shadow-sm flex items-center justify-center ${input.trim() && !isLoading && !isSubmitting
+            ? 'bg-chat-primary hover:bg-chat-primary-hover transform hover:scale-105 active:scale-95'
             : 'bg-gray-200 cursor-not-allowed'
-        }`}
-        disabled={!input.trim() || isLoading}
+          }`}
+        disabled={!input.trim() || isLoading || isSubmitting}
         aria-label="전송"
       >
         <IoSend className="w-5 h-5 ml-0.5" />

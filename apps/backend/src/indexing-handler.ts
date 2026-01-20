@@ -22,6 +22,27 @@ const bedrockClient = new BedrockRuntimeClient({ region: REGION });
 
 const INDEX_NAME = 'posts';
 
+// --- 재시도 유틸리티 함수 (Retry Logic) ---
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: Error;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        console.warn(`Attempt ${attempt} failed, retrying in ${delayMs * attempt}ms...`, error);
+        await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
+      }
+    }
+  }
+  throw lastError!;
+}
+
 // --- [신규] 텍스트 청킹 함수 (Chunking Strategy) ---
 // 마크다운 헤더(#)를 기준으로 나누고, 너무 길면 강제로 자릅니다.
 function splitIntoChunks(text: string): string[] {
@@ -76,6 +97,35 @@ async function getEmbedding(text: string): Promise<number[]> {
     return responseBody.embedding; // 1024차원 벡터 배열 반환
   } catch (error) {
     console.error('Error generating embedding:', error);
+    throw error;
+  }
+}
+
+// --- 벡터 데이터 삭제 함수 (Vector Deletion) ---
+async function deleteVectorData(postId: string): Promise<void> {
+  console.log(`Attempting to delete vector data for postId: ${postId}`);
+
+  try {
+    const deleteResponse = await retryOperation(async () => {
+      return await opensearchClient.deleteByQuery({
+        index: INDEX_NAME,
+        body: {
+          query: {
+            term: { parentPostId: postId }
+          }
+        }
+      });
+    });
+
+    // OpenSearch deleteByQuery 응답에서 삭제된 문서 수 추출
+    const deletedCount = (deleteResponse.body as any).deleted || 0;
+    console.log(`Successfully deleted ${deletedCount} chunks for postId: ${postId}`);
+
+    if (deletedCount === 0) {
+      console.warn(`No chunks found to delete for postId: ${postId}. This might be expected if the post was never indexed.`);
+    }
+  } catch (error) {
+    console.error(`Failed to delete vector data for postId: ${postId} after retries`, error);
     throw error;
   }
 }
@@ -137,6 +187,7 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
   }
 
   const bulkOperations: any[] = [];
+  const failedRecords: { record: DynamoDBRecord; error: Error }[] = [];
 
   for (const record of event.Records) {
     try {
@@ -151,35 +202,17 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
         if (postData.visibility !== 'public') {
           console.log(`Skipping private/draft post: ${postData.postId}`);
           // 만약 기존에 공개글이었다가 비밀글로 바뀐 경우를 대비해 삭제 로직을 수행하는 것이 안전.
-          await opensearchClient.deleteByQuery({
-            index: INDEX_NAME,
-            body: { query: { term: { parentPostId: postData.postId } } }
-          });
+          await deleteVectorData(postData.postId);
           continue;
         }
 
         if (postData.isDeleted === true) {
           // Soft Delete 처리: 해당 postId를 가진 모든 청크 삭제
           console.log(`Detected soft delete for postId: ${postData.postId}. Deleting all chunks.`);
-          // OpenSearch의 delete_by_query를 사용하여 parentPostId가 일치하는 모든 문서 삭제
-          await opensearchClient.deleteByQuery({
-            index: INDEX_NAME,
-            body: {
-              query: {
-                term: { parentPostId: postData.postId }
-              }
-            }
-          });
+          await deleteVectorData(postData.postId);
         } else {
           // 1. 기존 청크 삭제 
-          await opensearchClient.deleteByQuery({
-            index: INDEX_NAME,
-            body: {
-              query: {
-                term: { parentPostId: postData.postId }
-              }
-            }
-          });
+          await deleteVectorData(postData.postId);
 
           // 2. 텍스트 청킹
           const chunks = splitIntoChunks(postData.content);
@@ -219,20 +252,25 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
         const deletedData = unmarshall(oldImage as any);
         console.log(`Detected hard delete for postId: ${deletedData.postId}. Deleting all chunks.`);
 
-        await opensearchClient.deleteByQuery({
-          index: INDEX_NAME,
-          body: {
-            query: {
-              term: { parentPostId: deletedData.postId }
-            }
-          }
-        });
+        await deleteVectorData(deletedData.postId);
       }
     } catch (error) {
-      console.error('Error processing a single record:', JSON.stringify(record, null, 2), error);
-      // 개별 레코드 실패 시 전체 배치를 중단하지 않고 로그만 남김 (DLQ 처리는 Lambda 실패 시 수행됨)
-      throw error;
+      console.error('Error processing record:', JSON.stringify(record, null, 2), error);
+      // 개별 레코드 실패를 기록하고 계속 진행
+      failedRecords.push({ record, error: error as Error });
     }
+  }
+
+  // 실패한 레코드가 있으면 로그 출력
+  if (failedRecords.length > 0) {
+    console.error(`Failed to process ${failedRecords.length} out of ${event.Records.length} records`);
+    failedRecords.forEach(({ record, error }, index) => {
+      console.error(`Failed record ${index + 1}:`, {
+        eventID: record.eventID,
+        eventName: record.eventName,
+        error: error.message
+      });
+    });
   }
 
   if (bulkOperations.length > 0) {

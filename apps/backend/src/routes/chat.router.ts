@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { stream } from 'hono/streaming';
 import * as chatService from '../services/chat.service';
+import { GuardrailService } from '../services/guardrail.service';
 import type { AppEnv } from '../lib/types';
 
 const chatRouter = new Hono<AppEnv>();
@@ -31,7 +31,21 @@ chatRouter.post('/', zValidator('json', chatSchema), async (c) => {
   const { question, history } = c.req.valid('json');
 
   try {
-    // A. 쿼터 차감 시도 (방어 로직)
+    // A. 가드레일 검증 (쿼터 소모 전에 먼저 체크)
+    const validation = GuardrailService.validateQuestion(question);
+    if (!validation.isValid) {
+      console.warn('[Guardrail] Blocked question:', {
+        question,
+        reason: validation.reason,
+        timestamp: new Date().toISOString(),
+      });
+      return c.json({
+        message: validation.reason || '부적절한 질문입니다.',
+        error: 'GUARDRAIL_BLOCKED'
+      }, 400);
+    }
+
+    // B. 쿼터 차감 시도
     const allowed = await chatService.useQuota();
 
     if (!allowed) {
@@ -41,23 +55,10 @@ chatRouter.post('/', zValidator('json', chatSchema), async (c) => {
       }, 429);
     }
 
-    // B. RAG 답변 생성 (스트림)
-    const { stream: textStream, sources } = await chatService.generateAnswerStream(question, history);
+    // C. RAG 답변 생성
+    const { answer, sources } = await chatService.generateAnswer(question, history);
 
-    // C. 스트리밍 응답 반환
-    return stream(c, async (streamWriter) => {
-      try {
-        // 1. 먼저 출처 정보 전송 (특수 구분자와 함께)
-        await streamWriter.write(`__SOURCES__${JSON.stringify(sources)}__SOURCES__`);
-
-        // 2. 텍스트 스트림 전송
-        for await (const chunk of textStream) {
-          await streamWriter.write(chunk);
-        }
-      } catch (error) {
-        console.error('Stream writing error:', error);
-      }
-    });
+    return c.json({ answer, sources });
 
   } catch (error) {
     console.error('Chat Error:', error);
