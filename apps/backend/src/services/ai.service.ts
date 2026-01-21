@@ -118,5 +118,58 @@ export async function clearAiSummaryCache(postId: string) {
     Key: { PK: `POST#${postId}`, SK: 'METADATA' },
     UpdateExpression: 'REMOVE aiSummary, aiKeywords',
   });
-  await ddbDocClient.send(command);
+}
+
+/**
+ * 사용자 질문을 검색에 최적화된 형태로 확장/변환합니다. (Query Expansion)
+ * @param query 사용자 원본 질문
+ * @returns refinedQuery(검색용 문장), keywords(검색용 키워드 배열)
+ */
+export async function expandQuery(query: string): Promise<{ refinedQuery: string; keywords: string[] }> {
+  const bedrockClient = new BedrockRuntimeClient({ region: REGION });
+
+  // 프롬프트: 사용자의 의도를 파악하고, 검색 엔진이 이해하기 쉬운 형태의 문장과 키워드로 변환
+  const prompt = `
+    Human: 당신은 검색 쿼리 최적화 전문가입니다. 사용자의 질문을 분석하여 OpenSearch(Vector + Keyword) 검색 성능을 높일 수 있는 "정제된 질문(refinedQuery)"과 "핵심 키워드(keywords)"를 추출해주세요.
+    
+    <user_query>${query}</user_query>
+    
+    <output_format>
+    { "refinedQuery": "검색 엔진에 입력할 최적화된 단일 문장 (한국어)", "keywords": ["키워드1", "키워드2", "영어키워드(필요시)"] }
+    </output_format>
+    
+    **지침:**
+    1. **Refined Query**: 불주제어(은/는/이/가 등)를 제거하거나, 검색 의도를 명확히 하는 문장으로 변환하세요. (예: "배포가 안돼" -> "AWS CDK 배포 실패 원인 해결")
+    2. **Keywords**: 명사 위주의 핵심 단어 3~5개를 추출하세요. 기술 용어는 영어 원문을 포함하는 것이 좋습니다. (예: "CDK", "Deployment", "Error", "Log")
+    3. 오직 유효한 JSON 객체만 출력하세요.
+    
+    Assistant:`;
+
+  try {
+    const command = new InvokeModelCommand({
+      modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    const response = await bedrockClient.send(command);
+    const decodedBody = new TextDecoder().decode(response.body);
+    const responseBody = JSON.parse(decodedBody);
+    const contentText = responseBody.content?.[0]?.text ?? '';
+    const result = extractJsonObject(contentText);
+
+    return {
+      refinedQuery: result.refinedQuery || query,
+      keywords: Array.isArray(result.keywords) ? result.keywords : [],
+    };
+  } catch (error) {
+    console.warn('[Query Expansion] Failed to expand query, using original query.', error);
+    // 실패 시 원본 쿼리 반환
+    return { refinedQuery: query, keywords: [] };
+  }
 }

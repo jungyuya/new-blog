@@ -17,6 +17,8 @@ export interface PostMetadata {
   speechUrl?: string | null;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
   showToc?: boolean;
+  category?: 'post' | 'learning';
+  ragIndex?: boolean;
 }
 
 interface PostMetadataEditorProps {
@@ -40,6 +42,8 @@ export default function PostMetadataEditor({
   const [status, setStatus] = useState<'published' | 'draft'>(initialData.status || 'published');
   const [visibility, setVisibility] = useState<'public' | 'private'>(initialData.visibility || 'public');
   const [showToc, setShowToc] = useState<boolean>(initialData.showToc ?? true);
+  const [category, setCategory] = useState<'post' | 'learning'>(initialData.category || 'post');
+  const [ragIndex, setRagIndex] = useState<boolean>(initialData.ragIndex ?? true);
 
 
   // --- [신규] 미니 오디오 플레이어 상태 ---
@@ -48,9 +52,10 @@ export default function PostMetadataEditor({
 
   useEffect(() => {
     onMetadataChange({
-      tags, status, visibility, showToc, postId: initialData.postId, speechUrl: initialData.speechUrl, speechStatus: initialData.speechStatus
+      tags, status, visibility, showToc, category, ragIndex,
+      postId: initialData.postId, speechUrl: initialData.speechUrl, speechStatus: initialData.speechStatus
     });
-  }, [tags, status, visibility, showToc, onMetadataChange, initialData.postId, initialData.speechUrl, initialData.speechStatus]);
+  }, [tags, status, visibility, showToc, category, ragIndex, onMetadataChange, initialData.postId, initialData.speechUrl, initialData.speechStatus]);
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -162,6 +167,35 @@ export default function PostMetadataEditor({
         />
       </div>
 
+      {/* [Epic 6] 카테고리 설정 */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">카테고리</label>
+        <div className="flex gap-4">
+          <label className="flex items-center dark:text-gray-300">
+            <input
+              type="radio"
+              name="category"
+              value="post"
+              checked={category === 'post'}
+              onChange={() => setCategory('post')}
+              className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"
+            />
+            <span className="ml-2">회고록 (Post)</span>
+          </label>
+          <label className="flex items-center dark:text-gray-300">
+            <input
+              type="radio"
+              name="category"
+              value="learning"
+              checked={category === 'learning'}
+              onChange={() => setCategory('learning')}
+              className="form-radio text-indigo-600 bg-gray-200 border-gray-300 focus:ring-indigo-500 dark:bg-gray-600 dark:border-gray-500"
+            />
+            <span className="ml-2">학습 노트 (Learning)</span>
+          </label>
+        </div>
+      </div>
+
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">공개 설정</label>
         <div className="flex gap-4">
@@ -175,6 +209,32 @@ export default function PostMetadataEditor({
             <span className="ml-2">비밀글</span>
           </label>
         </div>
+      </div>
+
+      {/* [Epic 6] AI 학습 허용 설정 */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI 학습 허용 (RAG)</label>
+          <label htmlFor="rag-index-toggle" className="flex items-center cursor-pointer">
+            <div className="relative">
+              <input
+                type="checkbox"
+                id="rag-index-toggle"
+                className="sr-only"
+                checked={ragIndex}
+                onChange={() => setRagIndex(!ragIndex)}
+              />
+              <div className={`block w-10 h-6 rounded-full transition-colors ${ragIndex ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}></div>
+              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${ragIndex ? 'translate-x-4' : ''}`}></div>
+            </div>
+            <div className="ml-3 text-xs text-gray-500 dark:text-gray-400">
+              {ragIndex ? '허용됨' : '차단됨'}
+            </div>
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          체크하면 이 글을 챗봇이 지식으로 학습합니다.{visibility === 'private' ? ' (비밀글도 학습 가능)' : ''}
+        </p>
       </div>
 
       {/* --- [수정] '발행 상태' 섹션 바로 위에 새로운 섹션 추가 --- */}
@@ -215,6 +275,6 @@ export default function PostMetadataEditor({
           {renderSpeechSection()}
         </div>
       </div>
-    </div>
+    </div >
   );
 }

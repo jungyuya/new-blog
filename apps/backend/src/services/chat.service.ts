@@ -6,6 +6,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { Client } from '@opensearch-project/opensearch';
 import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws';
 
+import { expandQuery } from './ai.service'; // [추가]
 
 const TABLE_NAME = process.env.TABLE_NAME!;
 const DAILY_LIMIT = 50;
@@ -108,29 +109,62 @@ export async function useQuota(): Promise<boolean> {
 // 사용자 질문에 대한 RAG 답변을 생성합니다.
 export async function generateAnswer(question: string, history?: { role: 'user' | 'assistant', content: string }[]): Promise<{ answer: string, sources: { title: string, url: string }[] }> {
   try {
-    // 1. 질문 벡터화 (Embedding)
+    // 0. [Epic 6] 쿼리 확장 (Query Expansion)
+    // 사용자의 질문을 검색에 최적화된 형태(Refined Query)와 키워드로 변환합니다.
+    const { refinedQuery, keywords } = await expandQuery(question);
+    console.log(`[RAG] Original: "${question}" -> Refined: "${refinedQuery}", Keywords: [${keywords.join(', ')}]`);
+
+    // 1. 질문 벡터화 (Embedding) - Refined Query 사용
     const embeddingCommand = new InvokeModelCommand({
       modelId: 'amazon.titan-embed-text-v2:0',
       contentType: 'application/json',
       accept: 'application/json',
-      body: JSON.stringify({ inputText: question }),
+      body: JSON.stringify({ inputText: refinedQuery }), // 수정: refinedQuery 사용
     });
     const embeddingResponse = await bedrockClient.send(embeddingCommand);
     const embeddingBody = JSON.parse(new TextDecoder().decode(embeddingResponse.body));
     const questionVector = embeddingBody.embedding;
 
-    // 2. OpenSearch 벡터 검색 (Retrieval)
+    // 2. OpenSearch 하이브리드 검색 (Hybrid Search)
+    // Vector (k-NN) + Keyword (Match) 결합
     const searchResponse = await opensearchClient.search({
       index: 'posts',
       body: {
-        size: 5, // [수정] Top-5로 늘려서 필터링 여지 확보
+        size: 5, // 검색 결과 후보를 조금 더 늘림 (3 -> 5)
         query: {
-          knn: {
-            content_vector: {
-              vector: questionVector,
-              k: 5, // [수정] K도 5로 증가
-            },
-          },
+          bool: {
+            should: [
+              // Strategy 1: Vector Search (Semantic Similarity) - 가중치 1.0 (기본)
+              {
+                knn: {
+                  content_vector: {
+                    vector: questionVector,
+                    k: 5,
+                  },
+                },
+              },
+              // Strategy 2: Keyword Search (Exact Match) - 가중치 0.3 ~ 0.5
+              {
+                multi_match: {
+                  query: refinedQuery, // Refined Query를 키워드 매칭에도 사용
+                  fields: ['title^2.0', 'content^1.0', 'tags^1.5', 'category^1.0'], // 제목과 태그에 높은 가중치
+                  boost: 0.3,
+                }
+              },
+              // Strategy 3: Extracted Keywords Boosting - 추출된 핵심 키워드가 포함되면 추가 가산점
+              ...keywords.map(keyword => ({
+                match: {
+                  content: {
+                    query: keyword,
+                    boost: 0.1 // 키워드 하나당 소폭 상승
+                  }
+                }
+              }))
+            ],
+            // 최소한 하나의 조건(주로 knn)은 만족해야 함 (k-NN은 항상 결과를 반환하므로 안전)
+            minimum_should_match: 1
+          }
+
         },
         _source: ['content', 'title', 'postId', 'parentPostId'],
       },

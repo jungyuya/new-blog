@@ -164,6 +164,7 @@ async function ensureIndexExists() {
             content: { type: "text", analyzer: "nori_analyzer" },
             title: { type: "text", analyzer: "nori_analyzer" },
             tags: { type: "keyword" },
+            category: { type: "keyword" }, // [Epic 6] 카테고리 필드 추가
             status: { type: "keyword" },
             visibility: { type: "keyword" },
             postId: { type: "keyword" },
@@ -198,10 +199,13 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
         if (!newImage) continue;
         const postData = unmarshall(newImage as any);
 
-        // [신규] 공개글이 아니면 인덱싱하지 않고 건너뜀 (또는 기존 인덱스에서 삭제)
-        if (postData.visibility !== 'public') {
-          console.log(`Skipping private/draft post: ${postData.postId}`);
-          // 만약 기존에 공개글이었다가 비밀글로 바뀐 경우를 대비해 삭제 로직을 수행하는 것이 안전.
+        // [Epic 6] 인덱싱 조건 변경: Visibility 대신 ragIndex 확인
+        // 레거시 호환성: ragIndex가 없으면 public일 때만 true
+        const shouldIndex = postData.ragIndex ?? (postData.visibility === 'public');
+
+        if (!shouldIndex) {
+          console.log(`Skipping post (ragIndex=false): ${postData.postId}`);
+          // 인덱싱 대상이 아니게 되었다면 벡터 삭제 (예: 학습 허용 껐을 때)
           await deleteVectorData(postData.postId);
           continue;
         }
@@ -230,6 +234,7 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
               content: chunkText,                    // 청크 텍스트
               content_vector: vector,                // 벡터 데이터
               tags: postData.tags,
+              category: postData.category || 'post', // [Epic 6] 카테고리 추가
               authorNickname: postData.authorNickname,
               createdAt: postData.createdAt,
               thumbnailUrl: postData.thumbnailUrl,

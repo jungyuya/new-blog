@@ -184,38 +184,59 @@ export async function getFeaturedPosts(userGroups?: string[]) {
 // 파일 위치: apps/backend/src/services/posts.service.ts
 // ... (기존 함수들) ...
 
-interface GetLatestPostsOptions {
+
+export interface GetLatestPostsOptions {
   limit: number;
   cursor?: string;
   userGroups?: string[];
+  category?: 'post' | 'learning' | 'all'; // [Epic 6] 'all' 타입 추가
 }
 
 /**
  * 추천 게시물을 제외한 최신 게시물 목록을 조회합니다.
- * @param options limit, cursor, userGroups를 포함하는 옵션 객체
+ * @param options limit, cursor, userGroups, category를 포함하는 옵션 객체
  * @returns 최신 게시물 배열과 다음 페이지를 위한 커서
  */
-export async function getLatestPosts({ limit, cursor, userGroups }: GetLatestPostsOptions) {
+export async function getLatestPosts({ limit, cursor, userGroups, category = 'post' }: GetLatestPostsOptions) {
   const isAdmin = userGroups?.includes('Admins') ?? false;
 
   // 1. 제외해야 할 추천 게시물 ID 목록을 가져옵니다.
-  const [config, featuredItems] = await Promise.all([
-    postsRepository.findSiteConfig(),
-    postsRepository.findPostsByTag('featured', true),
-  ]);
+  let heroPost: Post | null = null;
+  let featuredPosts: Post[] = [];
 
-  const excludeIds = new Set<string>();
-  if (config?.heroPostId) {
-    excludeIds.add(config.heroPostId);
+  if (category === 'post') {
+    const [config, fetchedFeaturedItems] = await Promise.all([
+      postsRepository.findSiteConfig(),
+      postsRepository.findPostsByTag('featured', true),
+    ]);
+
+    if (config?.heroPostId) {
+      heroPost = fetchedFeaturedItems.find(p => p.postId === config.heroPostId) || null;
+      if (!heroPost) {
+        heroPost = await postsRepository.findPostById(config.heroPostId);
+      }
+    }
+    featuredPosts = fetchedFeaturedItems;
   }
-  featuredItems.forEach(item => excludeIds.add(item.postId));
 
-  // 2. [핵심 수정] 확장된 findAllPosts 함수를 사용하여 DB 레벨에서 필터링합니다.
+  // 2. GSI3(타임라인)에서 최신순 조회
+  // [Strategy Change] 이제 모든 포스트는 'POST#ALL'로 저장되므로 PK는 고정하고 FilterExpression을 사용합니다.
+  const queryCategory = category === 'all' ? undefined : category;
+
+  // '전체 보기'('all' 또는 undefined)일 경우, Hero/Featured를 포함하여 시간순으로 모두 보여줍니다.
+  // 따라서 excludeIds를 적용하지 않습니다.
+  const shouldExclude = category && category !== 'all';
+  const excludeIds = shouldExclude ? [
+    ...(heroPost ? [heroPost.postId] : []),
+    ...(featuredPosts.map(p => p.postId))
+  ] : [];
+
   const { posts, nextCursor } = await postsRepository.findAllPosts({
     limit,
     cursor,
     isAdmin,
-    excludeIds,
+    category: queryCategory, // 'post' or 'learning' or undefined
+    excludeIds: excludeIds.length > 0 ? new Set(excludeIds) : undefined,
   });
 
   // 서비스 계층에서는 더 이상 비효율적인 필터링을 할 필요가 없습니다.
@@ -229,6 +250,8 @@ const CreatePostSchema = z.object({
   status: z.enum(['published', 'draft']).optional(),
   visibility: z.enum(['public', 'private']).optional(),
   showToc: z.boolean().optional(),
+  category: z.enum(['post', 'learning']).optional(),
+  ragIndex: z.boolean().optional(),
 });
 type CreatePostInput = z.infer<typeof CreatePostSchema>;
 
@@ -240,7 +263,11 @@ type CreatePostInput = z.infer<typeof CreatePostSchema>;
  */
 export async function createPost(authorContext: UserContext, postInput: CreatePostInput): Promise<Post> {
   const { userId, userEmail } = authorContext;
-  const { title, content, tags = [], status = 'published', visibility = 'public' } = postInput;
+  const {
+    title, content, tags = [], status = 'published', visibility = 'public',
+    category = 'post',
+    ragIndex = true // 기본적으로 AI 학습 허용
+  } = postInput;
 
   const postId = uuidv4();
   const now = new Date().toISOString();
@@ -285,8 +312,13 @@ export async function createPost(authorContext: UserContext, postInput: CreatePo
     status, visibility,
     authorNickname, authorBio, authorAvatarUrl,
     tags, thumbnailUrl, imageUrl,
+    showToc: postInput.showToc ?? true,
+    // [Epic 6] New Fields
+    category, ragIndex,
     // GSI Keys
     GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
+    // [Universal Timeline] 모든 게시물을 타임라인(GSI3)에서 'POST#ALL'로 묶어 '전체 보기'를 지원합니다.
+    // 각 탭(회고록/학습)은 FilterExpression으로 처리합니다.
     GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
   };
 
@@ -368,6 +400,8 @@ const UpdatePostSchema = z.object({
   status: z.enum(['published', 'draft']).optional(),
   visibility: z.enum(['public', 'private']).optional(),
   showToc: z.boolean().optional(),
+  category: z.enum(['post', 'learning']).optional(),
+  ragIndex: z.boolean().optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: '수정할 내용을 하나 이상 제공해야 합니다.',
 });
@@ -413,10 +447,26 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
       finalUpdateData.imageUrl = firstImageMatch[1];
       finalUpdateData.thumbnailUrl = firstImageMatch[1].replace('/images/', '/thumbnails/');
     } else {
-      finalUpdateData.imageUrl = '';
       finalUpdateData.thumbnailUrl = '';
     }
   }
+  // 3-1. [비즈니스 로직] 카테고리 변경 시 GSI3_PK 업데이트 (매우 중요!)
+  // GSI3_PK는 파티션 키이므로 UpdateItem으로 직접 수정 불가 -> 레코드 삭제 후 재생성 또는 로직 복잡.
+  // 하지만 DynamoDB UpdateItem에서는 PK/SK 수정을 지원하지 않음.
+  // 따라서 카테고리가 변경되면, 이 함수 내에서 처리하기보다 repository level에서 handleCategoryChange 같은 걸 호출해야 함.
+  // 또는 간단히: GSI3_PK는 "조회용" 파생 데이터이므로, Posts Table 구조상 GSI PK Update는 불가능.
+  // UpdatePost 로직에서 카테고리가 바뀌면, 기존 GSI Index에서 해당 아이템이 "사라지고" 새로운 GSI PK 그룹으로 이동해야 한다면
+  // 사실상 Delete & Put이 맞음. 
+  // *단, Single Table Design에서 메인 PK가 변경되는 것은 아니므로, GSI PK값만 UpdateExpression으로 수정 가능함!* 
+  // (Main Table의 PK/SK가 아니기 때문)
+
+  if (updateInput.category) {
+    // GSI3_PK 업데이트
+    // [Backward Compatibility] post -> POST#ALL, learning -> POST#LEARNING
+    finalUpdateData.GSI3_PK = 'POST#ALL';
+    finalUpdateData.GSI3_SK = `${existingPost.createdAt}#${postId}`;
+  }
+
 
   // 4. [비즈니스 로직] 태그 동기화 로직을 처리합니다.
   if (updateInput.tags) {

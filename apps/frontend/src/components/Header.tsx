@@ -74,17 +74,24 @@ export default function Header() {
       <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-stone-950/90 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50 shadow-sm transition-colors duration-300">
         <nav className="container mx-auto px-4 sm:px-6 h-[60px] flex justify-between items-center">
           <Link href="/" className="flex items-center">
-            <Image 
-              src="/deepdive-logo.png"  
-              alt="Deep Dive!" 
-              width={0} 
-              height={0} 
+            <Image
+              src="/deepdive-logo.png"
+              alt="Deep Dive!"
+              width={0}
+              height={0}
               sizes="100vw"
-              className="w-auto h-[45px] object-contain" 
-              priority 
-              unoptimized={true} 
+              className="w-auto h-[45px] object-contain"
+              priority
+              unoptimized={true}
             />
           </Link>
+
+          {/* [Epic 6] Navigation Links */}
+          <nav className="hidden md:flex space-x-8 items-center">
+            {/* [수정] 메인 페이지 드롭다운 필터로 통합됨에 따라 헤더 링크 제거 */}
+            {/* <Link href="/?category=post" ... /> */}
+            {/* <Link href="/learning" ... /> */}
+          </nav>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
 
@@ -183,11 +190,11 @@ export default function Header() {
             )}
           </div>
         </nav>
-      </header>
+      </header >
       {/* 검색 모달 렌더링 로직 */}
       <AnimatePresence>
         {isSearchOpen && <SearchModal onClose={() => setIsSearchOpen(false)} />}
-      </AnimatePresence>
+      </AnimatePresence >
     </>
   );
 }

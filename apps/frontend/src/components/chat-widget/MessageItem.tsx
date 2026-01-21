@@ -102,8 +102,14 @@ const MessageItem = ({ message }: MessageItemProps) => {
                 </ul>
               </div>
             )}
+
           </div>
-          <span className="text-[10px] text-gray-400 whitespace-nowrap mb-1">{formattedTime}</span>
+          <span
+            className="text-[10px] text-gray-400 whitespace-nowrap mb-1"
+            suppressHydrationWarning={true}
+          >
+            {formattedTime}
+          </span>
         </div>
       </div>
     </div>

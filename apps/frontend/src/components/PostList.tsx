@@ -27,10 +27,11 @@ const containerVariants: Variants = {
 
 interface PostListProps {
   fallbackData: PaginatedPosts;
+  initialCategory?: 'post' | 'learning';
 }
 
-export default function PostList({ fallbackData }: PostListProps) {
-  const { posts, error, isRefreshing, isReachingEnd, loadMore, size } = useInfinitePosts(fallbackData);
+export default function PostList({ fallbackData, initialCategory }: PostListProps) {
+  const { posts, error, isRefreshing, isReachingEnd, loadMore, size, isLoading } = useInfinitePosts(fallbackData, initialCategory);
   const { setTarget, entry } = useIntersectionObserver({
     rootMargin: '200px',
     threshold: 0.1,
@@ -46,13 +47,14 @@ export default function PostList({ fallbackData }: PostListProps) {
 
   if (error) return <p className="text-red-500">게시물 목록을 불러오는 데 실패했습니다.</p>;
 
-  if (posts.length === 0 && !isRefreshing) {
-    return <p>아직 작성된 게시물이 없습니다.</p>;
+  // [Fix] 게시물이 0개라도 다음 페이지가 있다면(isReachingEnd === false) 로딩을 계속 시도해야 합니다
+  // 따라서 isReachingEnd가 true일 때만 '게시물이 없습니다'를 보여줍니다.
+  if (posts.length === 0 && !isRefreshing && !isLoading && isReachingEnd) {
+    return <p className="text-center text-gray-500 py-12 dark:text-gray-400">아직 작성된 게시물이 없습니다.</p>;
   }
 
   return (
     <>
-      {/* 3. grid div를 motion.div로 변경하고 variants 및 애니메이션 prop 추가 */}
       <motion.div
         className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3"
         aria-busy={isRefreshing}
@@ -61,10 +63,9 @@ export default function PostList({ fallbackData }: PostListProps) {
         animate="visible"
       >
         {posts.map((post) => (
-          // PostCard는 이미 motion.div로 되어 있으며, 부모의 variants를 상속받아 애니메이션됨
           <PostCard key={post.postId} post={post} />
         ))}
-        {isRefreshing && Array.from({ length: 6 }).map((_, i) => <PostCardSkeleton key={`skeleton-${i}`} />)}
+        {(isRefreshing || isLoading) && Array.from({ length: 6 }).map((_, i) => <PostCardSkeleton key={`skeleton-${i}`} />)}
       </motion.div>
 
       <div

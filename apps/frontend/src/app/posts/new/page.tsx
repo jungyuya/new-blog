@@ -76,7 +76,9 @@ function NewPostForm() {
         tags: metadata.tags,
         status: metadata.status,
         visibility: metadata.visibility,
-        showToc: metadata.showToc, // 이 라인 추가
+        showToc: metadata.showToc,
+        category: metadata.category,
+        ragIndex: metadata.ragIndex,
       };
 
       const result = await api.createNewPost(newPostData);

@@ -174,7 +174,7 @@ export const api = {
     return fetchWrapper('/posts/featured', { method: 'GET' });
   },
   // --- [신규 추가] 추천을 제외한 최신 게시물을 가져오는 함수 ---
-  fetchLatestPosts: (limit: number | null, cursor: string | null): Promise<PaginatedPosts> => {
+  fetchLatestPosts: (limit: number | null, cursor: string | null, category?: 'post' | 'learning'): Promise<PaginatedPosts> => {
     const params = new URLSearchParams();
     if (limit && limit > 0) {
       params.append('limit', String(limit));
@@ -182,8 +182,11 @@ export const api = {
     if (cursor) {
       params.append('cursor', cursor);
     }
+    if (category) {
+      params.append('category', category);
+    }
     const queryString = params.toString();
-    // [핵심] '/posts'가 아닌 '/posts/latest'를 호출합니다.
+    // [핵심] '/posts/latest'를 호출합니다.
     const path = queryString ? `/posts/latest?${queryString}` : '/posts/latest';
 
     return fetchWrapper(path, { method: 'GET' });
@@ -202,6 +205,9 @@ export const api = {
     tags?: string[];
     status?: 'published' | 'draft';
     visibility?: 'public' | 'private';
+    showToc?: boolean;
+    category?: 'post' | 'learning';
+    ragIndex?: boolean;
   }): Promise<{ message: string; post: Post }> => {
     return fetchWrapper('/posts', { method: 'POST', body: JSON.stringify(postData) });
   },
