@@ -84,21 +84,7 @@ export class BlogStack extends Stack {
       timeToLiveAttribute: 'ttl',
     });
 
-    // --- GSI 3 (전체 게시물 최신순 조회용) ---
-    postsTable.addGlobalSecondaryIndex({
-      indexName: 'GSI3',
-      partitionKey: { name: 'GSI3_PK', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'GSI3_SK', type: dynamodb.AttributeType.STRING },
-      // [핵심 수정 1] PostCard 목록 조회 시 '좋아요' 수를 함께 가져오기 위해
-      // projectionType을 INCLUDE로 변경하고 nonKeyAttributes에 likeCount를 추가합니다.
-      projectionType: dynamodb.ProjectionType.INCLUDE,
-      nonKeyAttributes: [
-        'postId', 'title', 'authorNickname', 'status', 'visibility',
-        'thumbnailUrl', 'summary', 'viewCount', 'tags', 'authorBio',
-        'authorAvatarUrl', 'createdAt', 'commentCount', 'likeCount', 'isDeleted',
-        'content'
-      ]
-    });
+    // [GSI3 Removed] Deprecated in favor of FeedIndex (Full Projection)
 
     // --- GSI 2 (태그별 게시물 최신순 조회용) ---
     postsTable.addGlobalSecondaryIndex({
@@ -125,6 +111,18 @@ export class BlogStack extends Stack {
       // 기본 정보만 필요하므로 INCLUDE 타입을 사용합니다.
       projectionType: dynamodb.ProjectionType.INCLUDE,
       nonKeyAttributes: ['postId', 'title', 'thumbnailUrl', 'summary']
+    });
+
+    // ===================================================================================
+    // [Phase 1] 신규 GSI 추가: FeedIndex (성능 최적화용)
+    // ===================================================================================
+    // 1. 모든 속성을 투영(ALL)하여 BatchGet을 제거하고 읽기 성능을 극대화합니다.
+    // 2. PK를 'feedPK'로 별도 분리하여 기존 로직과 충돌 없이 안전하게 마이그레이션합니다.
+    postsTable.addGlobalSecondaryIndex({
+      indexName: 'FeedIndex',
+      partitionKey: { name: 'feedPK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL, // [핵심] 모든 속성 포함 -> 추가 조회 불필요
     });
 
     // --- [신규 추가] CDK를 사용하여 DynamoDB 초기 데이터(SITE_CONFIG) Seeding ---
@@ -347,8 +345,8 @@ export class BlogStack extends Stack {
       // [핵심 수정 3] 새로 추가된 GSI4에 대한 쿼리 권한을 부여합니다.
       resources: [
         `${postsTable.tableArn}/index/GSI2`,
-        `${postsTable.tableArn}/index/GSI3`,
-        `${postsTable.tableArn}/index/GSI4`
+        `${postsTable.tableArn}/index/GSI4`,
+        `${postsTable.tableArn}/index/FeedIndex`
       ],
     }));
     backendApiLambda.addToRolePolicy(new iam.PolicyStatement({

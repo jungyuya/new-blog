@@ -50,13 +50,13 @@ export async function findPostById(postId: string): Promise<Post | null> {
  * @returns Post 배열
  */
 export async function findAllPostTitlesForNav(isAdmin: boolean): Promise<Pick<Post, 'postId' | 'title'>[]> {
+  const tableName = process.env.TABLE_NAME || TABLE_NAME;
   const listCommandParams: QueryCommandInput = {
-    TableName: TABLE_NAME,
-    IndexName: 'GSI3',
-    KeyConditionExpression: 'GSI3_PK = :pk',
+    TableName: tableName,
+    IndexName: 'FeedIndex',
+    KeyConditionExpression: 'feedPK = :pk',
     ExpressionAttributeValues: { ':pk': 'POST#ALL' },
     ScanIndexForward: false,
-    // 이전/다음 글 탐색에는 postId와 title만 필요하므로, 필요한 속성만 가져와 네트워크 비용을 절감합니다.
     ProjectionExpression: 'postId, title, isDeleted, #status, #visibility',
     ExpressionAttributeNames: {
       '#status': 'status',
@@ -114,52 +114,18 @@ interface FindAllPostsOptions {
  * @returns 게시물 배열과 다음 페이지를 위한 커서
  */
 export async function findAllPosts({ limit, cursor, isAdmin, excludeIds, category }: FindAllPostsOptions): Promise<{ posts: Post[], nextCursor: string | null }> {
-  // [Epic 6] Category Filtering
-  // category='learning' -> 'POST#LEARNING'
-  // [Universal Feed Strategy] 모든 글은 GSI3_PK='POST#ALL'을 공유합니다.
-  const pkValue = 'POST#ALL';
+  const tableName = process.env.TABLE_NAME || TABLE_NAME;
 
   const queryCommandInput: any = {
-    TableName: TABLE_NAME,
-    IndexName: 'GSI3',
-    KeyConditionExpression: 'GSI3_PK = :pk',
+    TableName: tableName,
+    IndexName: 'FeedIndex',
+    KeyConditionExpression: 'feedPK = :pk',
     ExpressionAttributeValues: {
-      ':pk': pkValue,
+      ':pk': 'POST#ALL',
     },
     Limit: limit,
-    ScanIndexForward: false, // 최신순
+    ScanIndexForward: false, // Descending (Latest first)
   };
-
-  // 필터링 조건 추가 (Exclude IDs)
-  const filterAllocations: string[] = [];
-  const expressionAttributeNames: Record<string, string> = {};
-
-  if (excludeIds && excludeIds.size > 0) {
-    // filter expression: NOT contains... (DynamoDB는 NOT IN이 없음, OR로 연결하거나 NOT (id IN (...)) 불가)
-    // 리스트 크기가 작으므로 "NOT postId IN (...)" 대신 
-    // "postId <> :id1 AND postId <> :id2 ..." 사용
-    Array.from(excludeIds).forEach((id, index) => {
-      const key = `:ex${index}`;
-      filterAllocations.push('postId <> ' + key);
-      queryCommandInput.ExpressionAttributeValues[key] = id;
-    });
-  }
-
-  if (!isAdmin) {
-    filterAllocations.push('#status = :published AND #visibility = :public');
-    expressionAttributeNames['#status'] = 'status';
-    expressionAttributeNames['#visibility'] = 'visibility';
-    queryCommandInput.ExpressionAttributeValues[':published'] = 'published';
-    queryCommandInput.ExpressionAttributeValues[':public'] = 'public';
-  }
-
-  if (filterAllocations.length > 0) {
-    queryCommandInput.FilterExpression = filterAllocations.join(' AND ');
-  }
-  if (Object.keys(expressionAttributeNames).length > 0) {
-    queryCommandInput.ExpressionAttributeNames = expressionAttributeNames;
-  }
-  // --- 수정 끝 ---
 
   if (cursor) {
     try {
@@ -169,76 +135,59 @@ export async function findAllPosts({ limit, cursor, isAdmin, excludeIds, categor
     }
   }
 
-  const { Items, LastEvaluatedKey } = await ddbDocClient.send(new QueryCommand(queryCommandInput));
+  const filters: string[] = [];
+  const expressionAttributeNames: Record<string, string> = {};
 
-  // [Fix] GSI3 does not project 'category' (and possibly other attributes), causing in-memory filtering to fail.
-  // We must fetch the full items from the main table using the PK/SK returned by GSI3.
-
-  let activePosts: Post[] = [];
-
-  if (Items && Items.length > 0) {
-    // 1. GSI 조회 결과에서 PK, SK 추출
-    const keys = Items.map(item => ({
-      PK: item.PK,
-      SK: item.SK,
-    }));
-
-    // 2. BatchGet 항목이 100개를 넘거나 너무 많을 경우 분할해야 하지만, 
-    // findAllPosts의 limit은 보통 12~24 정도이므로 한 번에 처리 가능합니다.
-    // 만약 limit이 100을 넘는다면 chunking 로직이 필요합니다.
-    const uniqueKeys = keys.filter((key, index, self) =>
-      index === self.findIndex((t) => (
-        t.PK === key.PK && t.SK === key.SK
-      ))
-    );
-
-    console.log(`[findAllPosts] GSI Items: ${Items.length}, Unique Keys: ${uniqueKeys.length}`);
-
-    if (uniqueKeys.length > 0) {
-      const batchGetCmd = new BatchGetCommand({
-        RequestItems: {
-          [TABLE_NAME]: {
-            Keys: uniqueKeys,
-          },
-        },
-      });
-
-      try {
-        const batchResult = await ddbDocClient.send(batchGetCmd);
-        const fullItems = batchResult.Responses?.[TABLE_NAME] || [];
-        console.log(`[findAllPosts] BatchGet Fetched: ${fullItems.length}`);
-
-        // 순서 보장을 위해 Map으로 변환 후 원래 순서대로 재정렬
-        const itemMap = new Map(fullItems.map((item: any) => [item.PK, item]));
-
-        activePosts = uniqueKeys.map(key => itemMap.get(key.PK)).filter(item => {
-          if (!item) return false;
-          if (item.isDeleted) return false;
-          // [Validation] 필수 필드가 없는 잘못된 데이터(Garbage) 필터링
-          if (!item.postId || !item.title) {
-            console.warn(`[findAllPosts] Skipping malformed item: ${item.PK}`, item);
-            return false;
-          }
-          return true;
-        }) as Post[];
-
-        console.log(`[findAllPosts] Active Posts after filter: ${activePosts.length}`);
-      } catch (err) {
-        console.error('[findAllPosts] BatchGet Error:', err);
-      }
-    }
-  }
-
-  // [In-Memory Filtering]
   if (category) {
-    activePosts = activePosts.filter((post: any) => post.category === category);
+    filters.push('#category = :category');
+    expressionAttributeNames['#category'] = 'category';
+    queryCommandInput.ExpressionAttributeValues[':category'] = category;
   }
 
-  const nextCursor = LastEvaluatedKey
-    ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
-    : null;
+  if (!isAdmin) {
+    filters.push('#status = :published');
+    filters.push('#visibility = :public');
+    filters.push('isDeleted = :false');
 
-  return { posts: activePosts, nextCursor };
+    expressionAttributeNames['#status'] = 'status';
+    expressionAttributeNames['#visibility'] = 'visibility';
+
+    queryCommandInput.ExpressionAttributeValues[':published'] = 'published';
+    queryCommandInput.ExpressionAttributeValues[':public'] = 'public';
+    queryCommandInput.ExpressionAttributeValues[':false'] = false;
+  }
+
+  if (excludeIds && excludeIds.size > 0) {
+    Array.from(excludeIds).forEach((id, index) => {
+      const key = `:ex${index}`;
+      filters.push(`postId <> ${key}`);
+      queryCommandInput.ExpressionAttributeValues[key] = id;
+    });
+  }
+
+  if (filters.length > 0) {
+    queryCommandInput.FilterExpression = filters.join(' AND ');
+    queryCommandInput.ExpressionAttributeNames = expressionAttributeNames;
+  }
+
+  try {
+    console.log(`[findAllPosts] Request Table: ${tableName}, Index: FeedIndex, Limit: ${limit}, Filter: ${queryCommandInput.FilterExpression || 'None'}`);
+
+    const { Items, LastEvaluatedKey } = await ddbDocClient.send(new QueryCommand(queryCommandInput));
+
+    const posts = (Items || []) as Post[];
+
+    const nextCursor = LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
+      : null;
+
+    console.log(`[findAllPosts] Success: Found ${posts.length} items. HasNext: ${!!nextCursor}`);
+
+    return { posts, nextCursor };
+  } catch (err) {
+    console.error(`[findAllPosts] DynamoDB Error on ${tableName}:`, err);
+    throw err;
+  }
 }
 
 /**
@@ -251,12 +200,13 @@ export async function findCommentCounts(postIds: string[]): Promise<Record<strin
     return {};
   }
 
+  const tableName = process.env.TABLE_NAME || TABLE_NAME;
   const counts: Record<string, number> = {};
 
   // 각 post에 대한 count 쿼리를 병렬로 실행하여 성능을 최적화합니다.
   const promises = postIds.map(postId => {
     const command = new QueryCommand({
-      TableName: TABLE_NAME,
+      TableName: tableName,
       KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
       ExpressionAttributeValues: {
         ':pk': `POST#${postId}`,
@@ -278,8 +228,9 @@ export async function findCommentCounts(postIds: string[]): Promise<Record<strin
  * @returns 사이트 설정 객체 또는 null
  */
 export async function findSiteConfig(): Promise<{ heroPostId?: string } | null> {
+  const tableName = process.env.TABLE_NAME || TABLE_NAME;
   const command = new GetCommand({
-    TableName: TABLE_NAME,
+    TableName: tableName,
     Key: { PK: 'SITE_CONFIG', SK: 'METADATA' },
   });
   const { Item } = await ddbDocClient.send(command);
@@ -344,11 +295,10 @@ export async function createPostWithTags(postItem: Post, tagItems: any[]): Promi
     return;
   }
 
-  // DynamoDB BatchWrite는 최대 25개의 요청을 한 번에 처리할 수 있습니다.
-  // 현재 로직에서는 태그가 24개를 초과할 일이 거의 없으므로 분할 처리는 생략합니다.
+  const tableName = process.env.TABLE_NAME || TABLE_NAME;
   const command = new BatchWriteCommand({
     RequestItems: {
-      [TABLE_NAME]: writeRequests,
+      [tableName]: writeRequests,
     },
   });
 

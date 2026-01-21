@@ -317,9 +317,8 @@ export async function createPost(authorContext: UserContext, postInput: CreatePo
     category, ragIndex,
     // GSI Keys
     GSI1_PK: `USER#${userId}`, GSI1_SK: `POST#${now}#${postId}`,
-    // [Universal Timeline] 모든 게시물을 타임라인(GSI3)에서 'POST#ALL'로 묶어 '전체 보기'를 지원합니다.
-    // 각 탭(회고록/학습)은 FilterExpression으로 처리합니다.
-    GSI3_PK: 'POST#ALL', GSI3_SK: `${now}#${postId}`
+    // [Universal Timeline] FeedIndex uses feedPK = 'POST#ALL'
+    feedPK: 'POST#ALL'
   };
 
   const tagItems = tags.map(tagName => {
@@ -450,22 +449,9 @@ export async function updatePost(postId: string, currentUserId: string, updateIn
       finalUpdateData.thumbnailUrl = '';
     }
   }
-  // 3-1. [비즈니스 로직] 카테고리 변경 시 GSI3_PK 업데이트 (매우 중요!)
-  // GSI3_PK는 파티션 키이므로 UpdateItem으로 직접 수정 불가 -> 레코드 삭제 후 재생성 또는 로직 복잡.
-  // 하지만 DynamoDB UpdateItem에서는 PK/SK 수정을 지원하지 않음.
-  // 따라서 카테고리가 변경되면, 이 함수 내에서 처리하기보다 repository level에서 handleCategoryChange 같은 걸 호출해야 함.
-  // 또는 간단히: GSI3_PK는 "조회용" 파생 데이터이므로, Posts Table 구조상 GSI PK Update는 불가능.
-  // UpdatePost 로직에서 카테고리가 바뀌면, 기존 GSI Index에서 해당 아이템이 "사라지고" 새로운 GSI PK 그룹으로 이동해야 한다면
-  // 사실상 Delete & Put이 맞음. 
-  // *단, Single Table Design에서 메인 PK가 변경되는 것은 아니므로, GSI PK값만 UpdateExpression으로 수정 가능함!* 
-  // (Main Table의 PK/SK가 아니기 때문)
-
-  if (updateInput.category) {
-    // GSI3_PK 업데이트
-    // [Backward Compatibility] post -> POST#ALL, learning -> POST#LEARNING
-    finalUpdateData.GSI3_PK = 'POST#ALL';
-    finalUpdateData.GSI3_SK = `${existingPost.createdAt}#${postId}`;
-  }
+  // 3-1. Category change logic
+  // FeedIndex uses the same 'POST#ALL' for all categories, filtering at query time.
+  // No index key updates needed here.
 
 
   // 4. [비즈니스 로직] 태그 동기화 로직을 처리합니다.

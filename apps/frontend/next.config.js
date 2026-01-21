@@ -9,7 +9,10 @@ let nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  
+  experimental: {
+    serverExternalPackages: ['import-in-the-middle', 'require-in-the-middle'],
+  },
+
   // --- [핵심 수정 1/3] Sentry 연동을 위한 최소한의 설정만 남깁니다. ---
   // 프로덕션 빌드에서만 소스맵을 생성하도록 설정합니다.
   productionBrowserSourceMaps: true,

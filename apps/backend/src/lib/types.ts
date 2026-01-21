@@ -49,8 +49,7 @@ export interface Post {
   // --- [핵심 수정] GSI 키들을 선택적 속성으로 추가합니다. ---
   GSI1_PK?: string;
   GSI1_SK?: string;
-  GSI3_PK?: string;
-  GSI3_SK?: string;
+  feedPK?: string;
   aiKeywords?: string[];
   speechUrl?: string;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
