@@ -13,7 +13,7 @@ export interface ChatMessage {
   timestamp: Date;
   sources?: { title: string; url: string }[];
 }
- 
+
 interface MessageItemProps {
   message: ChatMessage;
 }
@@ -78,18 +78,27 @@ const MessageItem = ({ message }: MessageItemProps) => {
                   👉️ 관련 포스팅
                 </p>
                 <ul className="space-y-1">
-                  {message.sources.map((source, idx) => (
-                    <li key={idx}>
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1 truncate block max-w-full"
-                      >
-                        📄 {source.title}
-                      </a>
-                    </li>
-                  ))}
+                  {message.sources.map((source, idx) => {
+                    // 제목이 60자를 초과하면 잘라내고 "..." 추가
+                    const MAX_TITLE_LENGTH = 60;
+                    const truncatedTitle = source.title.length > MAX_TITLE_LENGTH
+                      ? source.title.substring(0, MAX_TITLE_LENGTH) + '...'
+                      : source.title;
+
+                    return (
+                      <li key={idx}>
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1 block max-w-full"
+                          title={source.title} // 전체 제목을 툴팁으로 표시
+                        >
+                          📄 {truncatedTitle}
+                        </a>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

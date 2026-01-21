@@ -123,12 +123,12 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
     const searchResponse = await opensearchClient.search({
       index: 'posts',
       body: {
-        size: 3,
+        size: 5, // [수정] Top-5로 늘려서 필터링 여지 확보
         query: {
           knn: {
             content_vector: {
               vector: questionVector,
-              k: 3,
+              k: 5, // [수정] K도 5로 증가
             },
           },
         },
@@ -137,11 +137,21 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
     });
 
     const hits = searchResponse.body.hits.hits;
-    const contexts = hits.map((hit: any) => hit._source.content).join('\n\n');
 
-    // 출처 정보 추출
+    // [신규] 유사도 점수가 낮은 결과 필터링 (0.7 이상만 사용)
+    const SIMILARITY_THRESHOLD = 0.7;
+    const relevantHits = hits.filter((hit: any) => {
+      // k-NN 검색의 _score는 유사도 점수 (1.0에 가까울수록 유사)
+      return hit._score >= SIMILARITY_THRESHOLD;
+    });
+
+    console.log(`[RAG] Total hits: ${hits.length}, Relevant hits (score >= ${SIMILARITY_THRESHOLD}): ${relevantHits.length}`);
+
+    const contexts = relevantHits.map((hit: any) => hit._source.content).join('\n\n');
+
+    // 출처 정보 추출 (필터링된 관련 결과만 사용)
     const sourcesMap = new Map<string, { title: string, url: string }>();
-    hits.forEach((hit: any) => {
+    relevantHits.forEach((hit: any) => {
       const source = hit._source;
       let originalPostId = source.parentPostId;
       if (!originalPostId && source.postId) {
@@ -186,8 +196,8 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
     - 마치 당신이 JUNGYU 본인인 것처럼, 또는 JUNGYU의 지식을 완전히 내재화한 것처럼 답변하세요.
     
     올바른 예시:
-    ❌ "<context>에 따르면 Deep Dive 블로그는..."
-    ✅ "Deep Dive 블로그는..."
+    ❌ "<context>에 따르면 Deep Dive! 블로그는..."
+    ✅ "Deep Dive! 블로그는..."
     
     ❌ "제공된 문서에서 설명한 바와 같이..."
     ✅ "이 블로그에서는..." 또는 그냥 바로 설명 시작

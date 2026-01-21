@@ -1,5 +1,5 @@
 // 파일 위치: apps/infra/lib/blog-stack.ts
-// 최종 버전: v2025.09.03-The-Purified-Masterpiece - GSI2 수정
+// 최종 버전: v2026.01.21 : RAG 도입 완료
 
 import * as cdk from 'aws-cdk-lib';
 import { Stack, StackProps, Duration, CfnOutput, RemovalPolicy, CfnParameter } from 'aws-cdk-lib';
@@ -79,7 +79,7 @@ export class BlogStack extends Stack {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      stream: dynamodb.StreamViewType.NEW_IMAGE, // [추가] DynamoDB Stream 활성화
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES, // [수정] 삭제 감지를 위해 OLD_IMAGES도 포함
       removalPolicy: RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
     });
