@@ -18,6 +18,9 @@ const CreatePostSchema = z.object({
   status: z.enum(['published', 'draft']).optional(),
   // [추가] 공개 여부: 'public' 또는 'private' 중 하나, 필수는 아님 (기본값 처리)
   visibility: z.enum(['public', 'private']).optional(),
+  // [Epic 6] 카테고리 추가
+  category: z.enum(['post', 'learning']).optional(),
+  ragIndex: z.boolean().optional(),
 });
 
 const UpdatePostSchema = z.object({
@@ -28,6 +31,10 @@ const UpdatePostSchema = z.object({
   visibility: z.enum(['public', 'private']).optional(),
   thumbnailUrl: z.string().url().optional(),
   imageUrl: z.string().url().optional(),
+  // [Epic 6] 카테고리 추가
+  category: z.enum(['post', 'learning']).optional(),
+  ragIndex: z.boolean().optional(),
+  showToc: z.boolean().optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: '수정할 내용을 하나 이상 제공해야 합니다.' }
@@ -46,7 +53,7 @@ postsRouter.get('/', tryCookieAuthMiddleware, async (c) => {
   const queryParseResult = querySchema.safeParse(c.req.query());
   if (!queryParseResult.success) {
     return c.json({ message: 'Invalid query parameters', errors: queryParseResult.error.issues }, 400);
-  } 
+  }
   const { limit, cursor } = queryParseResult.data;
   try {
     // 1. 모든 비즈니스 로직을 서비스 계층에 위임합니다.
@@ -89,6 +96,7 @@ postsRouter.get('/latest', tryCookieAuthMiddleware, async (c) => {
   const querySchema = z.object({
     limit: z.coerce.number().int().positive().default(12),
     cursor: z.string().optional(),
+    category: z.enum(['post', 'learning']).optional(), // [Epic 6] 카테고리 필터링 추가
   });
 
   const queryParseResult = querySchema.safeParse(c.req.query());
@@ -97,13 +105,14 @@ postsRouter.get('/latest', tryCookieAuthMiddleware, async (c) => {
     return c.json({ message: 'Invalid query parameters', errors: queryParseResult.error.issues }, 400);
   }
 
-  const { limit, cursor } = queryParseResult.data;
+  const { limit, cursor, category } = queryParseResult.data;
 
   try {
     const result = await postsService.getLatestPosts({
       limit,
       cursor,
       userGroups,
+      category,
     });
     return c.json(result);
   } catch (error: any) {
@@ -286,7 +295,7 @@ postsRouter.get(
       if (result.status === 'too_short') {
         return c.json({ summary: '요약하기에는 글의 내용이 너무 짧습니다.', keywords: [], source: 'error' });
       }
-      
+
       return c.json(result.data);
 
     } catch (error: any) {

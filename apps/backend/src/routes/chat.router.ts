@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import * as chatService from '../services/chat.service';
+import { getQuota, useQuota, generateAnswer } from '../services/chat.service'; // Named import
 import { GuardrailService } from '../services/guardrail.service';
 import type { AppEnv } from '../lib/types';
 
@@ -10,7 +10,7 @@ const chatRouter = new Hono<AppEnv>();
 // 1. 쿼터 조회 API
 chatRouter.get('/quota', async (c) => {
   try {
-    const status = await chatService.getQuota();
+    const status = await getQuota();
     return c.json(status);
   } catch (error) {
     console.error('Get Quota Error:', error);
@@ -46,7 +46,7 @@ chatRouter.post('/', zValidator('json', chatSchema), async (c) => {
     }
 
     // B. 쿼터 차감 시도
-    const allowed = await chatService.useQuota();
+    const allowed = await useQuota();
 
     if (!allowed) {
       return c.json({
@@ -56,7 +56,7 @@ chatRouter.post('/', zValidator('json', chatSchema), async (c) => {
     }
 
     // C. RAG 답변 생성
-    const { answer, sources } = await chatService.generateAnswer(question, history);
+    const { answer, sources } = await generateAnswer(question, history);
 
     return c.json({ answer, sources });
 

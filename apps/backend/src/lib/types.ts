@@ -55,6 +55,9 @@ export interface Post {
   speechUrl?: string;
   speechStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
   showToc?: boolean;
+  // --- [Epic 6] 지식 베이스 확장을 위한 필드 추가 ---
+  category?: 'post' | 'learning'; // 기본값: 'post'
+  ragIndex?: boolean;             // 기본값: 공개글 true, 비밀글 false (하지만 true로 설정 가능)
 };
 
 export interface PaginatedPosts {

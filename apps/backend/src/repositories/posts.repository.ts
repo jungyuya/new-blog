@@ -4,13 +4,14 @@ import { ddbDocClient } from '../lib/dynamodb';
 import { ReturnValue } from '@aws-sdk/client-dynamodb';
 import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import type { Post } from '../lib/types';
-import { 
-  GetCommand, 
-  QueryCommand, 
-  BatchWriteCommand, 
-  UpdateCommand, 
+import {
+  GetCommand,
+  QueryCommand,
+  BatchWriteCommand,
+  UpdateCommand,
   DeleteCommand,
-  type QueryCommandInput 
+  BatchGetCommand,
+  type QueryCommandInput
 } from '@aws-sdk/lib-dynamodb';
 
 const TABLE_NAME = process.env.TABLE_NAME!;
@@ -39,7 +40,7 @@ export async function findPostById(postId: string): Promise<Post | null> {
   if (!Item || Item.isDeleted) {
     return null;
   }
-  
+
   return Item as Post;
 }
 
@@ -75,7 +76,7 @@ export async function findAllPostTitlesForNav(isAdmin: boolean): Promise<Pick<Po
 
   // isDeleted가 아닌 게시물만 필터링하여 반환합니다.
   const activePosts = Items?.filter((p: any) => !p.isDeleted) || [];
-  
+
   return activePosts as Pick<Post, 'postId' | 'title'>[];
 }
 
@@ -91,7 +92,7 @@ export async function incrementViewCount(postId: string): Promise<void> {
     UpdateExpression: 'SET viewCount = if_not_exists(viewCount, :start) + :inc',
     ExpressionAttributeValues: { ':inc': 1, ':start': 0 },
   });
-  
+
   // 조회수 증가는 사용자가 응답을 기다릴 필요 없는 작업이므로, await 없이 비동기 실행합니다.
   // 에러가 발생하더라도 전체 요청이 실패해서는 안됩니다.
   ddbDocClient.send(command).catch(err => {
@@ -104,6 +105,7 @@ interface FindAllPostsOptions {
   cursor?: string;
   isAdmin: boolean;
   excludeIds?: Set<string>;
+  category?: 'post' | 'learning';
 }
 
 /**
@@ -111,63 +113,132 @@ interface FindAllPostsOptions {
  * @param options limit, cursor, isAdmin, excludeIds를 포함하는 옵션 객체
  * @returns 게시물 배열과 다음 페이지를 위한 커서
  */
-export async function findAllPosts({ limit, cursor, isAdmin, excludeIds }: FindAllPostsOptions): Promise<{ posts: Post[], nextCursor: string | null }> {
-  const commandParams: QueryCommandInput = {
+export async function findAllPosts({ limit, cursor, isAdmin, excludeIds, category }: FindAllPostsOptions): Promise<{ posts: Post[], nextCursor: string | null }> {
+  // [Epic 6] Category Filtering
+  // category='learning' -> 'POST#LEARNING'
+  // [Universal Feed Strategy] 모든 글은 GSI3_PK='POST#ALL'을 공유합니다.
+  const pkValue = 'POST#ALL';
+
+  const queryCommandInput: any = {
     TableName: TABLE_NAME,
     IndexName: 'GSI3',
     KeyConditionExpression: 'GSI3_PK = :pk',
-    ExpressionAttributeValues: { ':pk': 'POST#ALL' },
-    ScanIndexForward: false,
+    ExpressionAttributeValues: {
+      ':pk': pkValue,
+    },
     Limit: limit,
+    ScanIndexForward: false, // 최신순
   };
 
-  const filterExpressions: string[] = [];
+  // 필터링 조건 추가 (Exclude IDs)
+  const filterAllocations: string[] = [];
   const expressionAttributeNames: Record<string, string> = {};
 
-  if (!isAdmin) {
-    filterExpressions.push('#status = :published AND #visibility = :public');
-    expressionAttributeNames['#status'] = 'status';
-    expressionAttributeNames['#visibility'] = 'visibility';
-    commandParams.ExpressionAttributeValues![':published'] = 'published';
-    commandParams.ExpressionAttributeValues![':public'] = 'public';
-  }
-  
-  // --- [핵심 수정] excludeIds가 있으면 FilterExpression을 동적으로 생성합니다. ---
   if (excludeIds && excludeIds.size > 0) {
-    expressionAttributeNames['#postId'] = 'postId';
-    const excludeIdValues = Array.from(excludeIds);
-    const placeholders = excludeIdValues.map((_, index) => `:excludeId${index}`);
-    filterExpressions.push(`NOT (#postId IN (${placeholders.join(',')}))`);
-    excludeIdValues.forEach((id, index) => {
-      commandParams.ExpressionAttributeValues![`:excludeId${index}`] = id;
+    // filter expression: NOT contains... (DynamoDB는 NOT IN이 없음, OR로 연결하거나 NOT (id IN (...)) 불가)
+    // 리스트 크기가 작으므로 "NOT postId IN (...)" 대신 
+    // "postId <> :id1 AND postId <> :id2 ..." 사용
+    Array.from(excludeIds).forEach((id, index) => {
+      const key = `:ex${index}`;
+      filterAllocations.push('postId <> ' + key);
+      queryCommandInput.ExpressionAttributeValues[key] = id;
     });
   }
 
-  if (filterExpressions.length > 0) {
-    commandParams.FilterExpression = filterExpressions.join(' AND ');
+  if (!isAdmin) {
+    filterAllocations.push('#status = :published AND #visibility = :public');
+    expressionAttributeNames['#status'] = 'status';
+    expressionAttributeNames['#visibility'] = 'visibility';
+    queryCommandInput.ExpressionAttributeValues[':published'] = 'published';
+    queryCommandInput.ExpressionAttributeValues[':public'] = 'public';
+  }
+
+  if (filterAllocations.length > 0) {
+    queryCommandInput.FilterExpression = filterAllocations.join(' AND ');
   }
   if (Object.keys(expressionAttributeNames).length > 0) {
-    commandParams.ExpressionAttributeNames = expressionAttributeNames;
+    queryCommandInput.ExpressionAttributeNames = expressionAttributeNames;
   }
   // --- 수정 끝 ---
 
   if (cursor) {
     try {
-      commandParams.ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+      queryCommandInput.ExclusiveStartKey = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
     } catch (e) {
       throw new Error('Invalid cursor format.');
     }
   }
 
-  const { Items, LastEvaluatedKey } = await ddbDocClient.send(new QueryCommand(commandParams));
-  
-  const activePosts = Items?.filter((i) => !i.isDeleted) || [];
-  
+  const { Items, LastEvaluatedKey } = await ddbDocClient.send(new QueryCommand(queryCommandInput));
+
+  // [Fix] GSI3 does not project 'category' (and possibly other attributes), causing in-memory filtering to fail.
+  // We must fetch the full items from the main table using the PK/SK returned by GSI3.
+
+  let activePosts: Post[] = [];
+
+  if (Items && Items.length > 0) {
+    // 1. GSI 조회 결과에서 PK, SK 추출
+    const keys = Items.map(item => ({
+      PK: item.PK,
+      SK: item.SK,
+    }));
+
+    // 2. BatchGet 항목이 100개를 넘거나 너무 많을 경우 분할해야 하지만, 
+    // findAllPosts의 limit은 보통 12~24 정도이므로 한 번에 처리 가능합니다.
+    // 만약 limit이 100을 넘는다면 chunking 로직이 필요합니다.
+    const uniqueKeys = keys.filter((key, index, self) =>
+      index === self.findIndex((t) => (
+        t.PK === key.PK && t.SK === key.SK
+      ))
+    );
+
+    console.log(`[findAllPosts] GSI Items: ${Items.length}, Unique Keys: ${uniqueKeys.length}`);
+
+    if (uniqueKeys.length > 0) {
+      const batchGetCmd = new BatchGetCommand({
+        RequestItems: {
+          [TABLE_NAME]: {
+            Keys: uniqueKeys,
+          },
+        },
+      });
+
+      try {
+        const batchResult = await ddbDocClient.send(batchGetCmd);
+        const fullItems = batchResult.Responses?.[TABLE_NAME] || [];
+        console.log(`[findAllPosts] BatchGet Fetched: ${fullItems.length}`);
+
+        // 순서 보장을 위해 Map으로 변환 후 원래 순서대로 재정렬
+        const itemMap = new Map(fullItems.map((item: any) => [item.PK, item]));
+
+        activePosts = uniqueKeys.map(key => itemMap.get(key.PK)).filter(item => {
+          if (!item) return false;
+          if (item.isDeleted) return false;
+          // [Validation] 필수 필드가 없는 잘못된 데이터(Garbage) 필터링
+          if (!item.postId || !item.title) {
+            console.warn(`[findAllPosts] Skipping malformed item: ${item.PK}`, item);
+            return false;
+          }
+          return true;
+        }) as Post[];
+
+        console.log(`[findAllPosts] Active Posts after filter: ${activePosts.length}`);
+      } catch (err) {
+        console.error('[findAllPosts] BatchGet Error:', err);
+      }
+    }
+  }
+
+  // [In-Memory Filtering]
+  if (category) {
+    activePosts = activePosts.filter((post: any) => post.category === category);
+  }
+
   const nextCursor = LastEvaluatedKey
     ? Buffer.from(JSON.stringify(LastEvaluatedKey)).toString('base64')
     : null;
 
-  return { posts: activePosts as Post[], nextCursor };
+  return { posts: activePosts, nextCursor };
 }
 
 /**
@@ -181,7 +252,7 @@ export async function findCommentCounts(postIds: string[]): Promise<Record<strin
   }
 
   const counts: Record<string, number> = {};
-  
+
   // 각 post에 대한 count 쿼리를 병렬로 실행하여 성능을 최적화합니다.
   const promises = postIds.map(postId => {
     const command = new QueryCommand({

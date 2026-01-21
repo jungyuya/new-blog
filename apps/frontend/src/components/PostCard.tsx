@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion, Variants } from 'framer-motion'; 
+import { motion, Variants } from 'framer-motion';
 import { Post } from '@/utils/api';
 import ClientOnlyLocalDate from './ClientOnlyLocalDate';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,7 +59,7 @@ export default function PostCard({ post, isEditorPick = false, variant = 'defaul
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/posts/${post.postId}`); }}
     >
-      <div className="relative w-full aspect-video">
+      <div className="relative w-full aspect-video shadow-sm dark:shadow-none">
         <Image
           src={thumbnailUrl}
           alt={post.title}
@@ -91,7 +91,7 @@ export default function PostCard({ post, isEditorPick = false, variant = 'defaul
         <p className={`text-stone-500 text-sm mb-4 dark:text-stone-300 ${summaryLineClamp}`}>
           {post.summary || ''}
         </p>
-        
+
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-auto pt-4">
             {post.tags.map(tag => (
