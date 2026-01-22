@@ -164,7 +164,7 @@ async function ensureIndexExists() {
             content: { type: "text", analyzer: "nori_analyzer" },
             title: { type: "text", analyzer: "nori_analyzer" },
             tags: { type: "keyword" },
-            category: { type: "keyword" }, // [Epic 6] 카테고리 필드 추가
+            category: { type: "keyword" }, 
             status: { type: "keyword" },
             visibility: { type: "keyword" },
             postId: { type: "keyword" },

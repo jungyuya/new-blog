@@ -125,13 +125,20 @@ export async function clearAiSummaryCache(postId: string) {
  * @param query 사용자 원본 질문
  * @returns refinedQuery(검색용 문장), keywords(검색용 키워드 배열)
  */
-export async function expandQuery(query: string): Promise<{ refinedQuery: string; keywords: string[] }> {
+export async function expandQuery(query: string, history: { role: 'user' | 'assistant'; content: string }[] = []): Promise<{ refinedQuery: string; keywords: string[] }> {
   const bedrockClient = new BedrockRuntimeClient({ region: REGION });
+
+  // 최근 대화 기록 포맷팅 (최대 4개)
+  const historyText = history.slice(-4).map(msg => `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`).join('\n');
 
   // 프롬프트: 사용자의 의도를 파악하고, 검색 엔진이 이해하기 쉬운 형태의 문장과 키워드로 변환
   const prompt = `
     Human: 당신은 검색 쿼리 최적화 전문가입니다. 사용자의 질문을 분석하여 OpenSearch(Vector + Keyword) 검색 성능을 높일 수 있는 "정제된 질문(refinedQuery)"과 "핵심 키워드(keywords)"를 추출해주세요.
     
+    <chat_history>
+    ${historyText}
+    </chat_history>
+
     <user_query>${query}</user_query>
     
     <output_format>
@@ -139,9 +146,10 @@ export async function expandQuery(query: string): Promise<{ refinedQuery: string
     </output_format>
     
     **지침:**
-    1. **Refined Query**: 불주제어(은/는/이/가 등)를 제거하거나, 검색 의도를 명확히 하는 문장으로 변환하세요. (예: "배포가 안돼" -> "AWS CDK 배포 실패 원인 해결")
-    2. **Keywords**: 명사 위주의 핵심 단어 3~5개를 추출하세요. 기술 용어는 영어 원문을 포함하는 것이 좋습니다. (예: "CDK", "Deployment", "Error", "Log")
-    3. 오직 유효한 JSON 객체만 출력하세요.
+    1. **Context Awareness**: <chat_history>를 참고하여 <user_query>의 모호한 대명사(그거, 이거, 아까 말한 거 등)를 구체적인 대상으로 치환하세요. (예: History "CDK 에러", Query "그거 해결법" -> Refined "CDK 에러 해결 방법")
+    2. **Refined Query**: 불주제어(은/는/이/가 등)를 제거하거나, 검색 의도를 명확히 하는 문장으로 변환하세요.
+    3. **Keywords**: 명사 위주의 핵심 단어 3~5개를 추출하세요. 기술 용어는 영어 원문을 포함하는 것이 좋습니다.
+    4. 오직 유효한 JSON 객체만 출력하세요.
     
     Assistant:`;
 

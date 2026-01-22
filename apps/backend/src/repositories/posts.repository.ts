@@ -144,17 +144,19 @@ export async function findAllPosts({ limit, cursor, isAdmin, excludeIds, categor
     queryCommandInput.ExpressionAttributeValues[':category'] = category;
   }
 
+  // [Fix] 삭제된 게시물은 관리자 여부와 관계없이 조회되지 않아야 합니다. (휴지통 기능이 생기기 전까지)
+  filters.push('isDeleted = :false');
+  queryCommandInput.ExpressionAttributeValues[':false'] = false;
+
   if (!isAdmin) {
     filters.push('#status = :published');
     filters.push('#visibility = :public');
-    filters.push('isDeleted = :false');
 
     expressionAttributeNames['#status'] = 'status';
     expressionAttributeNames['#visibility'] = 'visibility';
 
     queryCommandInput.ExpressionAttributeValues[':published'] = 'published';
     queryCommandInput.ExpressionAttributeValues[':public'] = 'public';
-    queryCommandInput.ExpressionAttributeValues[':false'] = false;
   }
 
   if (excludeIds && excludeIds.size > 0) {

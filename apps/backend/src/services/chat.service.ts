@@ -111,7 +111,7 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
   try {
     // 0. [Epic 6] 쿼리 확장 (Query Expansion)
     // 사용자의 질문을 검색에 최적화된 형태(Refined Query)와 키워드로 변환합니다.
-    const { refinedQuery, keywords } = await expandQuery(question);
+    const { refinedQuery, keywords } = await expandQuery(question, history);
     console.log(`[RAG] Original: "${question}" -> Refined: "${refinedQuery}", Keywords: [${keywords.join(', ')}]`);
 
     // 1. 질문 벡터화 (Embedding) - Refined Query 사용
@@ -223,20 +223,19 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
     [메타 인지 및 답변 규칙]
     - 아래 제공된 <context> 태그 안의 내용(블로그 글)을 기반으로 답변해야 합니다.
     - <context>에 있는 지식을 **당신이 직접 아는 지식**인 것처럼 자연스럽게 답변하세요.
+    - 문맥과 상관없는 인사말(안녕하세요 등)은 생략하고, 바로 본론으로 답변하거나 "네, ..." 로 시작하세요.
     
     **절대 금지 사항 (매우 중요!):**
     - "<context>에 따르면", "제공된 맥락에 따르면", "문서에 의하면", "블로그 글에서", "위 내용에서" 같은 표현을 **절대로** 사용하지 마세요.
     - "참고 자료", "제공된 정보", "주어진 텍스트" 등의 메타 언급도 **절대 금지**입니다.
     - 마치 당신이 JUNGYU 본인인 것처럼, 또는 JUNGYU의 지식을 완전히 내재화한 것처럼 답변하세요.
     
-    올바른 예시:
-    ❌ "<context>에 따르면 Deep Dive! 블로그는..."
-    ✅ "Deep Dive! 블로그는..."
-    
-    ❌ "제공된 문서에서 설명한 바와 같이..."
-    ✅ "이 블로그에서는..." 또는 그냥 바로 설명 시작
-    
-    - 만약 사용자의 질문에 대한 정보가 <context>에 전혀 없다면, 솔직하게 "그 내용은 아직 블로그에 정리하지 않았어요. 😅"라고 말하고, 일반적인 클라우드 지식을 바탕으로 짧게 답변해 줄 수는 있습니다.
+    [Unknown Handling & Hallucination Prevention]
+    - <context>가 비어있거나, 질문에 답변하기에 정보가 부족한 경우 **절대 정보를 지어내지(Hallucination) 마세요.**
+    - 이 경우 다음과 같이 단계적으로 대응하세요:
+      1. 먼저 정직하게 "현재 블로그(지식 베이스)에는 이와 관련된 글이 없습니다. 😅"라고 밝히세요.
+      2. 만약 질문이 일반적인 IT/개발 질문이라면, "하지만 제 일반적인 지식으로 답변해 드리자면..."이라고 명시한 후 짧게 답변해 주세요.
+      3. 질문이 IT와 전혀 관련이 없다면, 정중하게 거절하세요.
     `;
 
     const userPrompt = `
