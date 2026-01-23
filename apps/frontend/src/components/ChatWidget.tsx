@@ -104,7 +104,7 @@ const ChatWidget = () => {
         <div className="flex-grow overflow-hidden relative bg-chat-bg">
           {/* AI 탭 */}
           <div className={`absolute inset-0 transition-opacity duration-300 ${activeTab === 'ai' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-            <AiChatView />
+            <AiChatView isOpen={isOpen} />
           </div>
 
           {/* 실시간 탭 (iframe은 렌더링 비용이 크므로 active일 때만 로드하거나, display:none으로 숨김 처리) */}

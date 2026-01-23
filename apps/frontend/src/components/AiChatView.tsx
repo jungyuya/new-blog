@@ -6,8 +6,50 @@ import { api } from '@/utils/api';
 import MessageList from './chat-widget/MessageItem';
 import MessageItem, { ChatMessage } from './chat-widget/MessageItem';
 import MessageInput from './chat-widget/MessageInput';
+import { RANDOM_FAQ_POOL } from '../constants/chat';
 
-const AiChatView = () => {
+// Step 1.9: FAQ 항목을 배열로 관리하여 확장성 확보
+const FAQ_ITEMS = [
+  {
+    text: "기술 스택 알려줘",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+      </svg>
+    )
+  },
+  {
+    text: "이 블로그는 뭐야?",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  },
+  {
+    text: "AWS 비용 절감 팁",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  },
+  {
+    text: "오늘의 추천 질문 🎲",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  }
+];
+
+interface AiChatViewProps {
+  isOpen: boolean;
+}
+
+const AiChatView = ({ isOpen }: AiChatViewProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -19,6 +61,23 @@ const AiChatView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [quota, setQuota] = useState<{ remaining: number; total: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Step 1.10: 클릭한 FAQ 칩 추적 및 페이드아웃 상태
+  const [clickedChipIndex, setClickedChipIndex] = useState<number | null>(null);
+
+  // Step 1.4: FAQ 섹션 진입 애니메이션 지연을 위한 상태
+  const [showFAQ, setShowFAQ] = useState(false);
+
+  // FAQ 섹션 표시 지연 (채팅 위젯이 열릴 때 300ms 후)
+  useEffect(() => {
+    if (isOpen) {
+      setShowFAQ(false); // 먼저 숨김
+      const timer = setTimeout(() => setShowFAQ(true), 300);
+      return () => clearTimeout(timer);
+    } else {
+      setShowFAQ(false);
+    }
+  }, [isOpen]);
 
   // 쿼터 조회
   useEffect(() => {
@@ -145,18 +204,82 @@ const AiChatView = () => {
 
         {/* 추천 질문 (초기 상태에서만 표시) */}
         {messages.length === 1 && (
-          <div className="flex flex-col gap-2 mt-4 animate-fade-in-up">
-            <p className="text-xs text-gray-400 ml-2 mb-1">자주 묻는 질문</p>
-            <div className="flex flex-wrap gap-2">
-              {["기술 스택 알려줘 🛠️", "이 블로그는 뭐야? 🤔", "AWS 비용 절감 팁 💰"].map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => handleSendMessage(chip)}
-                  className="bg-white border border-gray-200 text-gray-600 text-xs px-3 py-2 rounded-full hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors shadow-sm text-left"
-                >
-                  {chip}
-                </button>
-              ))}
+          <div className={`mt-4 max-w-2xl mx-auto transition-all duration-500 ${showFAQ ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} ${clickedChipIndex !== null ? 'opacity-0' : ''}`}>
+            {/* Glassmorphism 컨테이너 - Option 1+3 하이브리드 */}
+            <div className="bg-gradient-to-br from-blue-50/60 via-cyan-50/40 to-purple-50/20 rounded-3xl p-6 md:p-8 relative overflow-hidden border border-white/50 shadow-2xl shadow-blue-500/20">
+              {/* 애니메이션 배경 레이어 (선택적) */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/5 to-cyan-400/5 animate-pulse blur-2xl" />
+
+              {/* 실제 컨텐츠 */}
+              <div className="relative z-10">
+
+                {/* Step 1.12: 섹션 제목 시각적 강조 */}
+                <div className="flex items-center gap-3 mb-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-6 h-6 text-blue-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                  <h3 className="text-base md:text-lg text-gray-700 dark:text-gray-300 font-bold">
+                    자주 묻는 질문
+                  </h3>
+                </div>
+
+                {/* Step 1.14: 그리드 레이아웃 균형 - 2×2 그리드 */}
+                <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
+                  {/* Step 1.5-1.8 & 1.9-1.10: FAQ 항목 배열 사용 및 클릭 피드백 */}
+                  {FAQ_ITEMS.map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        // Step 1.10: 클릭 시 펄스 애니메이션 및 페이드 아웃
+                        setClickedChipIndex(idx);
+                        // 짧은 지연 후 메시지 전송 (애니메이션 시간 확보)
+                        setTimeout(() => {
+                          let questionToSend = item.text;
+                          // 4번째 카드(인덱스 3)인 경우 랜덤 질문 선택
+                          if (idx === 3) {
+                            const randomIndex = Math.floor(Math.random() * RANDOM_FAQ_POOL.length);
+                            questionToSend = RANDOM_FAQ_POOL[randomIndex];
+                          }
+                          handleSendMessage(questionToSend);
+                          // 메시지 전송 후 상태 초기화
+                          setTimeout(() => setClickedChipIndex(null), 100);
+                        }, 150);
+                      }}
+                      className={`group w-full
+                        backdrop-blur-md 
+                        border-2 
+                        rounded-2xl p-5 
+                        shadow-lg 
+                        transition-all duration-300 
+                        ring-1 ring-inset ring-white/30
+                        text-left space-y-3
+                        ${clickedChipIndex === idx ? 'animate-pulse' : ''}
+                        ${idx === 3
+                          ? 'bg-gradient-to-br from-white/80 via-purple-50/30 to-pink-50/30 border-purple-100 hover:border-purple-300/50 hover:shadow-purple-500/10'
+                          : 'bg-white/70 border-white/60 hover:bg-white/90 hover:border-blue-300/50 hover:shadow-blue-500/10 hover:shadow-xl hover:shadow-blue-500/20'
+                        }
+                        hover:scale-[1.02]`}
+                    >
+                      {/* 상단: 아이콘 박스 + 화살표 */}
+                      <div className="flex items-center justify-between">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-md shadow-blue-500/30 group-hover:shadow-lg group-hover:shadow-blue-500/40 transition-all duration-300">
+                          <span className="text-white text-lg">{item.icon}</span>
+                        </div>
+                        <svg className="w-5 h-5 text-blue-400/60 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                      <p className="text-base font-semibold text-gray-700 leading-snug">{item.text}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -81,9 +81,10 @@ cdk.context.json
 /apps/frontend/src/components/icons/_build/
 
 
-# 26-01-20
+# 26-01-24
 # 모든 .md 파일 무시
 *.md
 
-# README.md는 예외로 허용
+# README.md, RAG_README.md는 예외로 허용
 !README.md
+!RAG_README.md

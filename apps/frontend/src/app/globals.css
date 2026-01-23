@@ -737,6 +737,11 @@ body {
   }
 }
 
+/* FAQ 섹션 진입 애니메이션 지연 */
+.delay-300 {
+  animation-delay: 300ms;
+}
+
 /* Next.js Dev Indicator 숨기기 */
 #__next-build-watcher,
 #__next-build-indicator {
