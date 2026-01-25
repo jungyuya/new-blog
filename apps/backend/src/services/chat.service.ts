@@ -181,7 +181,10 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
 
     console.log(`[RAG] Total hits: ${hits.length}, Relevant hits (score >= ${SIMILARITY_THRESHOLD}): ${relevantHits.length}`);
 
-    const contexts = relevantHits.map((hit: any) => hit._source.content).join('\n\n');
+    // [수정] Context Injection: LLM이 출처를 알 수 있도록 제목을 포함
+    const contexts = relevantHits.map((hit: any) =>
+      `[출처: ${hit._source.title}]\n${hit._source.content}`
+    ).join('\n\n---\n\n');
 
     // 출처 정보 추출 (필터링된 관련 결과만 사용)
     const sourcesMap = new Map<string, { title: string, url: string }>();
@@ -209,7 +212,7 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
       };
     }
 
-    // 3. 답변 생성 - Claude 3 Haiku
+    // 3. 답변 생성 프롬프팅 - Claude 3 Haiku
     const systemPrompt = `
     당신은 블로그 관리자인 준규의 기술 블로그를 담당하는 AI 어시스턴트입니다.
     당신의 이름은 'JUNGYU' 페르소나를 따르지만, 본체는 아니고 친절한 안내자 역할을 합니다.
@@ -221,7 +224,12 @@ export async function generateAnswer(question: string, history?: { role: 'user' 
     - 답변은 간결하고 핵심 위주로 작성하되, 필요하다면 상세한 설명도 덧붙여주세요.
 
     [메타 인지 및 답변 규칙]
-    - 아래 제공된 <context> 태그 안의 내용(블로그 글)을 기반으로 답변해야 합니다.
+    - 아래 제공된 <context> 태그 안의 내용은 **\`[출처: 제목]\`** 형식으로 구분되어 있습니다.
+    - 질문이 특정 프로젝트(예: 블로그, 채팅 서비스 등)에 관한 것이라면, **해당하는 \`[출처]\`의 내용을 우선적으로 신뢰**하여 답변하세요.
+    - **중요: 제목 매핑 규칙**
+      - **\`[출처: Welcome to the Deep Dive!]\`**는 이 블로그 프로젝트(Deep Dive)의 전체 기술 스택, 아키텍처, 소개를 담고 있습니다. "블로그 기술 스택", "블로그 아키텍처" 질문 시 이 출처를 최우선으로 참고하세요.
+      - **\`[출처: RAG ...]\`** 또는 **\`[출처: 채팅 ...]\`** 등의 제목은 해당 기능(채팅 서비스)에 대한 세부 구현 내용입니다.
+    - 서로 다른 출처의 정보가 충돌할 경우(예: 백엔드 언어가 Node.js vs Go), 질문의 맥락에 더 적합한 출처의 정보를 선택하세요.
     - <context>에 있는 지식을 **당신이 직접 아는 지식**인 것처럼 자연스럽게 답변하세요.
     - 문맥과 상관없는 인사말(안녕하세요 등)은 생략하고, 바로 본론으로 답변하거나 "네, ..." 로 시작하세요.
     
