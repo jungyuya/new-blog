@@ -7,41 +7,38 @@ import MessageList from './chat-widget/MessageItem';
 import MessageItem, { ChatMessage } from './chat-widget/MessageItem';
 import MessageInput from './chat-widget/MessageInput';
 import { RANDOM_FAQ_POOL } from '../constants/chat';
+import { Code2, MessageCircle, TrendingDown, Dices } from 'lucide-react';
 
-// Step 1.9: FAQ 항목을 배열로 관리하여 확장성 확보
+// FAQ 항목을 배열로 관리하여 확장성 확보
 const FAQ_ITEMS = [
   {
     text: "블로그의 기술 스택 알려줘!",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-      </svg>
-    )
+    icon: Code2,
+    gradient: "from-blue-500 to-cyan-400",
+    hoverGlow: "group-hover:shadow-blue-500/40",
+    bgAccent: "from-blue-50/50 to-cyan-50/30"
   },
   {
     text: "실시간 채팅 서비스는 뭐야?",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    )
+    icon: MessageCircle,
+    gradient: "from-emerald-500 to-teal-400",
+    hoverGlow: "group-hover:shadow-emerald-500/40",
+    bgAccent: "from-emerald-50/50 to-teal-50/30"
   },
   {
     text: "AWS 비용 절감한 사례 보여줘.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    )
+    icon: TrendingDown,
+    gradient: "from-amber-500 to-orange-400",
+    hoverGlow: "group-hover:shadow-amber-500/40",
+    bgAccent: "from-amber-50/50 to-orange-50/30"
   },
   {
     text: "오늘의 추천 질문 🎲",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    )
+    icon: Dices,
+    gradient: "from-amber-400 via-yellow-300 to-amber-500",
+    hoverGlow: "group-hover:shadow-amber-400/50",
+    bgAccent: "from-amber-50/60 via-yellow-50/40 to-orange-50/30",
+    isSpecial: true
   }
 ];
 
@@ -231,53 +228,52 @@ const AiChatView = ({ isOpen }: AiChatViewProps) => {
 
                 {/* Step 1.14: 그리드 레이아웃 균형 - 2×2 그리드 */}
                 <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
-                  {/* Step 1.5-1.8 & 1.9-1.10: FAQ 항목 배열 사용 및 클릭 피드백 */}
-                  {FAQ_ITEMS.map((item, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        // Step 1.10: 클릭 시 펄스 애니메이션 및 페이드 아웃
-                        setClickedChipIndex(idx);
-                        // 짧은 지연 후 메시지 전송 (애니메이션 시간 확보)
-                        setTimeout(() => {
-                          let questionToSend = item.text;
-                          // 4번째 카드(인덱스 3)인 경우 랜덤 질문 선택
-                          if (idx === 3) {
-                            const randomIndex = Math.floor(Math.random() * RANDOM_FAQ_POOL.length);
-                            questionToSend = RANDOM_FAQ_POOL[randomIndex];
+                  {/* FAQ 카드 - Lucide 아이콘 + 중앙 정렬 디자인 */}
+                  {FAQ_ITEMS.map((item, idx) => {
+                    const IconComponent = item.icon;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setClickedChipIndex(idx);
+                          setTimeout(() => {
+                            let questionToSend = item.text;
+                            if (idx === 3) {
+                              const randomIndex = Math.floor(Math.random() * RANDOM_FAQ_POOL.length);
+                              questionToSend = RANDOM_FAQ_POOL[randomIndex];
+                            }
+                            handleSendMessage(questionToSend);
+                            setTimeout(() => setClickedChipIndex(null), 100);
+                          }, 150);
+                        }}
+                        className={`group w-full relative overflow-hidden
+                          backdrop-blur-md 
+                          rounded-2xl p-5 
+                          shadow-lg 
+                          transition-all duration-300 ease-out
+                          text-center
+                          ${clickedChipIndex === idx ? 'scale-95 opacity-80' : ''}
+                          ${'isSpecial' in item && item.isSpecial
+                            ? 'bg-gradient-to-br from-amber-50/80 via-yellow-50/60 to-orange-50/40 border-2 border-amber-300/60 shadow-amber-200/50 hover:border-amber-400/80 hover:shadow-xl hover:shadow-amber-300/40'
+                            : `bg-gradient-to-br ${item.bgAccent} bg-white/70 border border-white/60 hover:bg-white/90 hover:border-white/80 hover:shadow-xl ${item.hoverGlow}`
                           }
-                          handleSendMessage(questionToSend);
-                          // 메시지 전송 후 상태 초기화
-                          setTimeout(() => setClickedChipIndex(null), 100);
-                        }, 150);
-                      }}
-                      className={`group w-full
-                        backdrop-blur-md 
-                        border-2 
-                        rounded-2xl p-5 
-                        shadow-lg 
-                        transition-all duration-300 
-                        ring-1 ring-inset ring-white/30
-                        text-left space-y-3
-                        ${clickedChipIndex === idx ? 'animate-pulse' : ''}
-                        ${idx === 3
-                          ? 'bg-gradient-to-br from-white/80 via-purple-50/30 to-pink-50/30 border-purple-100 hover:border-purple-300/50 hover:shadow-purple-500/10'
-                          : 'bg-white/70 border-white/60 hover:bg-white/90 hover:border-blue-300/50 hover:shadow-blue-500/10 hover:shadow-xl hover:shadow-blue-500/20'
-                        }
-                        hover:scale-[1.02]`}
-                    >
-                      {/* 상단: 아이콘 박스 + 화살표 */}
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-md shadow-blue-500/30 group-hover:shadow-lg group-hover:shadow-blue-500/40 transition-all duration-300">
-                          <span className="text-white text-lg">{item.icon}</span>
+                          hover:scale-[1.03] hover:-translate-y-1`}
+                      >
+                        {/* 황금 카드 미묘한 빛 효과 */}
+                        {'isSpecial' in item && item.isSpecial && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-200/20 to-transparent -skew-x-12 animate-shimmer pointer-events-none" />
+                        )}
+                        {/* 중앙 아이콘 박스 */}
+                        <div className="relative flex justify-center mb-4">
+                          <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg ${item.hoverGlow} group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 ${'isSpecial' in item && item.isSpecial ? 'ring-2 ring-amber-300/50 ring-offset-2 ring-offset-amber-50/50' : ''}`}>
+                            <IconComponent className={`w-7 h-7 ${'isSpecial' in item && item.isSpecial ? 'text-amber-900' : 'text-white'}`} strokeWidth={2} />
+                          </div>
                         </div>
-                        <svg className="w-5 h-5 text-blue-400/60 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                      <p className="text-base font-semibold text-gray-700 leading-snug">{item.text}</p>
-                    </button>
-                  ))}
+                        {/* 중앙 정렬 텍스트 */}
+                        <p className={`text-sm font-semibold leading-relaxed ${'isSpecial' in item && item.isSpecial ? 'text-amber-800' : 'text-gray-700'}`}>{item.text}</p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

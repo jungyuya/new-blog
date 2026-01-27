@@ -906,3 +906,20 @@ body {
 #__next-build-indicator {
   display: none !important;
 }
+
+/* ================================================================ */
+/* 황금 카드 Shimmer 애니메이션 (FAQ 랜덤 질문 카드용)               */
+/* ================================================================ */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+  }
+
+  100% {
+    transform: translateX(200%) skewX(-12deg);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s ease-in-out infinite;
+}
