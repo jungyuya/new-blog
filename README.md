@@ -65,7 +65,7 @@
 - **실시간 동기화**: NoSQL(DynamoDB)은 복잡한 검색에 취약합니다. 이를 해결하기 위해 DynamoDB Stream을 활용하여, 글이 작성되거나 수정되는 순간 그 변경사항을 감지하고 즉시 OpenSearch로 복제하는 파이프라인을 구축했습니다. 덕분에 사용자는 글 작성 직후 바로 검색 결과를 확인할 수 있도록 구현하였습니다.
 - **역할 분리**: '데이터 저장(DynamoDB)'과 '데이터 검색(OpenSearch)'의 역할을 물리적으로 분리했습니다. 검색 트래픽이 급증해도 메인 데이터베이스의 성능에는 전혀 영향을 주지 않는 안정적인 구조입니다.
 - **오류 대비**: 네트워크 오류 등으로 동기화가 실패할 경우를 대비해 SQS Dead-Letter Queue(DLQ)를 설치했습니다. 실패한 데이터는 사라지지 않고 별도로 보관되어, 나중에 자동으로 재처리할 수 있도록 데이터 유실을 원천 차단했습니다.
-- **한글 검색 최적화**: 단순한 단어 일치가 아니라, OpenSearch의 Nori(노리) 형태소 분석기를 도입하여 한글의 특성을 고려한 정확하고 자연스러운 검색 결과를 제공합니다.
+- **한글 검색 최적화**: 단순한 단어 일치가 아니라, OpenSearch의 **은전한닢(Seunjeon)** 형태소 분석기를 도입하여 한글의 특성을 고려한 정확하고 자연스러운 검색 결과를 제공합니다.
 
 ---
 
@@ -78,7 +78,7 @@
 | **Backend** | **Hono** | AWS Lambda 환경 최적화를 위해 Express 대비 가벼운 초경량 프레임워크 채택 |
 | | **AWS SDK v3** | 모듈 단위 import를 통해 Lambda 배포 패키지 크기 최소화 |
 | **Database** | **Amazon DynamoDB** | Single Table Design으로 NoSQL 성능 극대화, GSI를 활용한 다양한 조회 패턴 구현 |
-| | **Amazon OpenSearch** | DynamoDB 검색 한계 보완, 'Nori' 형태소 분석기를 통한 한글 검색 정확도 향상 |
+| | **Amazon OpenSearch** | DynamoDB 검색 한계 보완, '은전한닢(Seunjeon)' 형태소 분석기를 통한 한글 검색 정확도 향상 |
 | **Infra** | **AWS CDK** | TypeScript로 인프라 정의(IaC), AWS 리소스를 코드로 안전하게 관리 |
 | | **GitHub Actions** | 배포 전 과정 자동화, EC2 기반 Self-hosted Runner 구축으로 빌드 속도 최적화 |
 | | **Docker** | Next.js 컨테이너화로 환경 일관성 보장, Multi-stage build를 통한 이미지 경량화 |

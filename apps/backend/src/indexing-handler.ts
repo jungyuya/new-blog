@@ -143,9 +143,9 @@ async function ensureIndexExists() {
           "index.knn": true,
           "analysis": {
             "analyzer": {
-              "nori_analyzer": {
+              "korean_analyzer": {
                 "type": "custom",
-                "tokenizer": "nori_tokenizer"
+                "tokenizer": "seunjeon_tokenizer"
               }
             }
           }
@@ -161,10 +161,10 @@ async function ensureIndexExists() {
                 space_type: "cosine"
               }
             },
-            content: { type: "text", analyzer: "nori_analyzer" },
-            title: { type: "text", analyzer: "nori_analyzer" },
+            content: { type: "text", analyzer: "korean_analyzer" },
+            title: { type: "text", analyzer: "korean_analyzer" },
             tags: { type: "keyword" },
-            category: { type: "keyword" }, 
+            category: { type: "keyword" },
             status: { type: "keyword" },
             visibility: { type: "keyword" },
             postId: { type: "keyword" },

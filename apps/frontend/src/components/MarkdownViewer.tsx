@@ -13,6 +13,7 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { materialDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CSSProperties } from 'react';
 import { useTheme } from 'next-themes';
+import CodeBlock from './CodeBlock'; // [신규] CodeBlock 컴포넌트 import
 
 // 목차 import
 import TableOfContents from './TableOfContents'; // [신규] TableOfContents 컴포넌트 import
@@ -30,6 +31,10 @@ import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import docker from 'react-syntax-highlighter/dist/esm/languages/prism/docker';
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
+import go from 'react-syntax-highlighter/dist/esm/languages/prism/go';
+import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
+import rust from 'react-syntax-highlighter/dist/esm/languages/prism/rust';
 
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
@@ -51,6 +56,10 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('json', json);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 SyntaxHighlighter.registerLanguage('docker', docker);
+SyntaxHighlighter.registerLanguage('sql', sql);
+SyntaxHighlighter.registerLanguage('go', go);
+SyntaxHighlighter.registerLanguage('java', java);
+SyntaxHighlighter.registerLanguage('rust', rust);
 
 // 코드하이라이터 영역 끝
 
@@ -102,23 +111,18 @@ export default function MarkdownViewer({ content, headings }: MarkdownViewerProp
                     code(props: ComponentProps<'code'>) {
                         const { children, className, ...rest } = props;
                         const match = /language-(\w+)/.exec(className || '');
-                        return match ? (
-                            <div className={theme === 'dark' && mounted ? 'bg-gray-900/50 rounded-lg border border-gray-700 p-1' : ''}>
-                                <SyntaxHighlighter
-                                    style={materialDark as { [key: string]: CSSProperties }}
-                                    customStyle={{
-                                        border: 'none',
-                                    }}
-                                    language={match[1]}
-                                    PreTag="div"
-                                >
-                                    {String(children).replace(/\n$/, '')}
-                                </SyntaxHighlighter>
-                            </div>
-                        ) : (
-                            <code {...rest} className={className}>
+                        // inline prop이 react-markdown 최신 버전에서 제대로 전달되지 않을 수 있으므로
+                        // match 여부나 node 속성을 확인할 수 있지만, 여기서는 match 유무와 상위 로직에 의존
+                        const isInline = !match;
+
+                        return (
+                            <CodeBlock
+                                className={className}
+                                inline={isInline}
+                                {...rest}
+                            >
                                 {children}
-                            </code>
+                            </CodeBlock>
                         );
                     },
                     img: ({ ...props }) => {

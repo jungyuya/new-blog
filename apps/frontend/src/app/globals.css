@@ -218,16 +218,175 @@ body {
   h1, h2 태그에 적용하는 밑줄(border-bottom)을 제거합니다.
   !important를 사용하여 다른 모든 스타일보다 우선 적용되도록 합니다.
 */
+
+/* ========== 기본 폰트 크기 (원래대로 유지) ========== */
 .toastui-editor-contents,
 .prose {
   font-size: 1.015rem !important;
-  /* 18px forced */
+  /* 기존 크기 유지 */
   line-height: 1.8 !important;
 }
 
+/* ========== 제목 크기 명확화 (Stage 1) ========== */
 .toastui-editor-contents h1,
-.toastui-editor-contents h2 {
+.prose h1 {
+  font-size: 2.25rem !important;
+  /* 36px */
+  font-weight: 700 !important;
+  margin-top: 2rem !important;
+  margin-bottom: 1rem !important;
   border-bottom: none !important;
+}
+
+.toastui-editor-contents h2,
+.prose h2 {
+  font-size: 1.875rem !important;
+  /* 30px */
+  font-weight: 600 !important;
+  margin-top: 1.75rem !important;
+  margin-bottom: 0.875rem !important;
+  border-bottom: none !important;
+}
+
+.toastui-editor-contents h3,
+.prose h3 {
+  font-size: 1.6rem !important;
+  /* 25.6px - Slightly increased for better distinction */
+  font-weight: 600 !important;
+  margin-top: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.toastui-editor-contents h4,
+.prose h4 {
+  font-size: 1.15rem !important;
+  /* 18.4px - Reduced size */
+  font-weight: 700 !important;
+  /* Bold weight */
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.625rem !important;
+}
+
+/* ========== 인라인 코드 (기존 색상 복원) ========== */
+.prose.toastui-editor-dark code:not(pre code),
+.toastui-editor-contents.toastui-editor-dark code:not(pre code) {
+  color: #C8EEFF !important;
+  /* 기존 다크모드 색상 */
+}
+
+/* ========== 테이블 스타일 (GitHub inspired + Deep Dive custom) ========== */
+.toastui-editor-contents table,
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2rem 0;
+  font-size: 0.925rem;
+  line-height: 1.6;
+  display: block;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+@media (min-width: 768px) {
+
+  .toastui-editor-contents table,
+  .prose table {
+    display: table;
+  }
+}
+
+/* 테이블 헤더 - Deep Dive 블루그레이 */
+.toastui-editor-contents thead,
+.prose thead {
+  background: linear-gradient(to bottom, #e0f2fe, #bae6fd);
+  border-bottom: 2px solid #0284c7;
+}
+
+.toastui-editor-dark thead {
+  background: linear-gradient(to bottom, #1e3a5f, #1e293b) !important;
+  border-bottom: 2px solid #38bdf8 !important;
+}
+
+/* 테이블 셀 */
+.toastui-editor-contents th,
+.toastui-editor-contents td,
+.prose th,
+.prose td {
+  padding: 0.875rem 1.125rem;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.toastui-editor-dark th,
+.toastui-editor-dark td {
+  border-color: #334155 !important;
+}
+
+/* 테이블 헤더 셀 */
+.toastui-editor-contents th,
+.prose th {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #0c4a6e;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.toastui-editor-dark th {
+  color: #7dd3fc !important;
+}
+
+/* 테이블 본문 - 줄무늬 */
+.toastui-editor-contents tbody tr:nth-child(even),
+.prose tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.toastui-editor-dark tbody tr:nth-child(even) {
+  background-color: #1e293b !important;
+}
+
+.toastui-editor-contents tbody tr:nth-child(odd),
+.prose tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.toastui-editor-dark tbody tr:nth-child(odd) {
+  background-color: #0f172a !important;
+}
+
+/* 테이블 호버 효과 */
+.toastui-editor-contents tbody tr:hover,
+.prose tbody tr:hover {
+  background-color: #e0f2fe !important;
+  transition: background-color 0.15s ease-in-out;
+  cursor: default;
+}
+
+.toastui-editor-dark tbody tr:hover {
+  background-color: #1e3a5f !important;
+}
+
+/* 테이블 데이터 셀 텍스트 */
+.toastui-editor-contents td,
+.prose td {
+  color: #334155;
+}
+
+.toastui-editor-dark td {
+  color: #cbd5e1 !important;
+}
+
+/* 모바일 스크롤 힌트 */
+@media (max-width: 767px) {
+
+  .toastui-editor-contents table,
+  .prose table {
+    box-shadow:
+      inset -2px 0 0 rgba(14, 165, 233, 0.4),
+      0 1px 3px rgba(0, 0, 0, 0.12);
+  }
 }
 
 /* ================================================================ */

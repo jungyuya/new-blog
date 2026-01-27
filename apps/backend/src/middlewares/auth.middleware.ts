@@ -4,8 +4,8 @@ import { getCookie } from 'hono/cookie';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 
-import type { AppEnv, UserContext } from '../lib/types'; // [수정] UserContext import
-import { ddbDocClient } from '../lib/dynamodb'; // [신규] ddbDocClient import
+import type { AppEnv, UserContext } from '../lib/types'; // UserContext import
+import { ddbDocClient } from '../lib/dynamodb'; // ddbDocClient import
 
 const USER_POOL_ID = process.env.USER_POOL_ID!;
 const USER_POOL_CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
