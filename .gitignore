@@ -88,3 +88,8 @@ cdk.context.json
 # README.md, RAG_README.md는 예외로 허용
 !README.md
 !RAG_README.md
+
+# 이력서 관련 폴더
+.Resume
+new-blog/.Resume
+new-blog/.md

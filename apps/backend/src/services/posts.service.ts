@@ -48,6 +48,19 @@ export async function getPostDetails(
     }
   }
 
+  // --- [프로필 동기화] 작성자의 최신 프로필을 조회하여 병합합니다. ---
+  // 이를 통해 프로필 변경 시 기존 게시물에도 즉시 반영됩니다.
+  const { Item: authorProfile } = await ddbDocClient.send(new GetCommand({
+    TableName: process.env.TABLE_NAME!,
+    Key: { PK: `USER#${post.authorId}`, SK: 'PROFILE' },
+  }));
+
+  if (authorProfile) {
+    post.authorNickname = authorProfile.nickname || post.authorNickname;
+    post.authorBio = authorProfile.bio ?? post.authorBio;
+    post.authorAvatarUrl = authorProfile.avatarUrl ?? post.authorAvatarUrl;
+  }
+
   // --- [핵심 수정] 조회수 증가는 더 이상 응답을 기다리지 않습니다. ---
   // 이 함수는 내부적으로 await하지 않으므로, 즉시 다음 코드로 넘어갑니다.
   postsRepository.incrementViewCount(postId);
@@ -129,19 +142,32 @@ export async function getFeaturedPosts(userGroups?: string[]) {
   const isAdmin = userGroups?.includes('Admins') ?? false;
 
   // 1. [데이터 조회] 사이트 설정과 'featured' 태그 게시물 목록을 병렬로 가져옵니다.
-  const [config, featuredItems] = await Promise.all([
+  const [config, featuredTagItems] = await Promise.all([
     postsRepository.findSiteConfig(),
     postsRepository.findPostsByTag('featured', isAdmin),
   ]);
 
   const heroPostId = config?.heroPostId;
 
-  // 2. [데이터 필터링 및 가공] Hero 게시물과 Editor's Picks를 분리하고 필터링합니다.
+  // 2. [핵심 수정] TAG 아이템에는 authorId가 없으므로, 실제 POST 아이템을 조회합니다.
+  // 먼저 postId 목록을 추출합니다.
+  const featuredPostIds = featuredTagItems.map(p => p.postId);
+
+  // 실제 POST 아이템들을 조회합니다 (authorId 포함)
+  const featuredItems: Post[] = [];
+  for (const postId of featuredPostIds) {
+    const post = await postsRepository.findPostById(postId);
+    if (post && !post.isDeleted) {
+      featuredItems.push(post);
+    }
+  }
+
+  // 3. [데이터 필터링 및 가공] Hero 게시물과 Editor's Picks를 분리하고 필터링합니다.
   let heroPostItem: Post | null = null;
   if (heroPostId) {
-    // 'featured' 태그 목록에 Hero 게시물이 포함되어 있을 수 있으므로, DB를 다시 조회하는 대신 목록에서 찾습니다.
+    // 조회된 목록에서 Hero 게시물을 찾습니다.
     heroPostItem = featuredItems.find(p => p.postId === heroPostId) || null;
-    // 만약 featured 태그 목록에 없다면 (태그가 제거된 경우 등), DB에서 직접 조회합니다.
+    // 만약 featured 태그 목록에 없다면, DB에서 직접 조회합니다.
     if (!heroPostItem) {
       heroPostItem = await postsRepository.findPostById(heroPostId);
     }
@@ -151,7 +177,7 @@ export async function getFeaturedPosts(userGroups?: string[]) {
     .filter(p => p.postId !== heroPostId) // Hero 게시물 제외
     .slice(0, 8); // 최대 8개만 선택
 
-  // 3. [데이터 보강] 보강이 필요한 모든 게시물 목록을 준비합니다.
+  // 4. [데이터 보강] 보강이 필요한 모든 게시물 목록을 준비합니다.
   const postsToEnrich = [...editorPicksItems];
   if (heroPostItem) {
     postsToEnrich.push(heroPostItem);
@@ -161,20 +187,37 @@ export async function getFeaturedPosts(userGroups?: string[]) {
     return { heroPost: null, editorPicks: [] };
   }
 
-  // 4. 댓글 수를 한 번에 조회하고, 각 게시물에 보강합니다.
+  // 5. 댓글 수를 한 번에 조회하고, 각 게시물에 보강합니다.
   const postIds = postsToEnrich.map(p => p.postId);
   const commentCounts = await postsRepository.findCommentCounts(postIds);
+
+  // --- [프로필 동기화] 작성자 프로필 일괄 조회 ---
+  // 현재는 작성자가 1명이므로 1회 조회로 최적화됩니다.
+  const authorIds = [...new Set(postsToEnrich.map(p => p.authorId).filter(Boolean))];
+  const authorProfiles: Record<string, any> = {};
+
+  for (const authorId of authorIds) {
+    const { Item } = await ddbDocClient.send(new GetCommand({
+      TableName: process.env.TABLE_NAME!,
+      Key: { PK: `USER#${authorId}`, SK: 'PROFILE' },
+    }));
+    if (Item) authorProfiles[authorId] = Item;
+  }
 
   const enrich = (post: Post): Post & { commentCount: number } => ({
     ...post,
     commentCount: commentCounts[post.postId] || 0,
     likeCount: post.likeCount || 0,
+    // 최신 프로필로 덮어쓰기
+    authorNickname: authorProfiles[post.authorId]?.nickname || post.authorNickname,
+    authorBio: authorProfiles[post.authorId]?.bio ?? post.authorBio,
+    authorAvatarUrl: authorProfiles[post.authorId]?.avatarUrl ?? post.authorAvatarUrl,
   });
 
   const enrichedHeroPost = heroPostItem ? enrich(heroPostItem) : null;
   const enrichedEditorPicks = editorPicksItems.map(enrich);
 
-  // 5. 최종 데이터 구조로 반환합니다.
+  // 6. 최종 데이터 구조로 반환합니다.
   return {
     heroPost: enrichedHeroPost,
     editorPicks: enrichedEditorPicks,
@@ -239,8 +282,28 @@ export async function getLatestPosts({ limit, cursor, userGroups, category = 'po
     excludeIds: excludeIds.length > 0 ? new Set(excludeIds) : undefined,
   });
 
-  // 서비스 계층에서는 더 이상 비효율적인 필터링을 할 필요가 없습니다.
-  return { posts, nextCursor };
+  // --- [프로필 동기화] 작성자 프로필 일괄 조회 ---
+  // 현재는 작성자가 1명이므로 1회 조회로 최적화됩니다.
+  const authorIds = [...new Set(posts.map(p => p.authorId))];
+  const authorProfiles: Record<string, any> = {};
+
+  for (const authorId of authorIds) {
+    const { Item } = await ddbDocClient.send(new GetCommand({
+      TableName: process.env.TABLE_NAME!,
+      Key: { PK: `USER#${authorId}`, SK: 'PROFILE' },
+    }));
+    if (Item) authorProfiles[authorId] = Item;
+  }
+
+  // 각 게시물에 최신 프로필 적용
+  const enrichedPosts = posts.map(post => ({
+    ...post,
+    authorNickname: authorProfiles[post.authorId]?.nickname || post.authorNickname,
+    authorBio: authorProfiles[post.authorId]?.bio ?? post.authorBio,
+    authorAvatarUrl: authorProfiles[post.authorId]?.avatarUrl ?? post.authorAvatarUrl,
+  }));
+
+  return { posts: enrichedPosts, nextCursor };
 }
 
 const CreatePostSchema = z.object({
