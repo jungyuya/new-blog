@@ -22,12 +22,10 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* MainLayout: Header, Footer, Providers 등을 포함 */}
+        {/* MainLayout: Header, Footer, Providers, ChatWidget 등을 관리 */}
         <MainLayout>
           {children}
         </MainLayout>
-        
-        <ChatWidget />
       </body>
     </html>
   );

@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // [추가]
+import Link from 'next/link';
 
 export default function Login() {
   const router = useRouter();
@@ -33,40 +33,82 @@ export default function Login() {
     }
   };
 
-return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
-        {/* [복원] 모든 스타일 클래스를 포함한 input 태그 */}
-        <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-          className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
-        />
-      </div>
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-        {/* [복원] 모든 스타일 클래스를 포함한 input 태그 */}
-        <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)}
-          className="block w-full px-3 py-2 mt-1 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
-        />
-      </div>
-      {error && (
-        <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-400">{error}</div>
-      )}
-      <div>
-        <button type="submit" disabled={isSubmitting}
-          className="flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 dark:disabled:bg-gray-600"
-        >
-          {isSubmitting ? '로그인 중...' : '로그인'}
-        </button>
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-2">
+        <h3 className="text-2xl font-bold text-white">Welcome Back!</h3>
+        <p className="text-blue-100/60 text-sm">Please enter your credentials to access the portal.</p>
       </div>
 
-      {/* [유지] 회원가입 안내 링크 */}
-      <div className="text-center text-sm">
-        <span className="text-gray-600 dark:text-gray-400">아직 계정이 없으신가요? </span>
-        <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-          회원가입
-        </Link>
-      </div>
-    </form>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-blue-200/70 mb-1.5 ml-1">
+            Email Address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all backdrop-blur-sm"
+            placeholder="admin@deepdive.com"
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-blue-200/70 mb-1.5 ml-1">
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all backdrop-blur-sm"
+            placeholder="••••••••"
+          />
+        </div>
+
+        {error && (
+          <div className="p-3 text-sm text-red-200 bg-red-500/20 border border-red-500/30 rounded-xl backdrop-blur-md animate-pulse">
+            {error}
+          </div>
+        )}
+
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="liquid group relative flex justify-center w-full px-4 py-3.5 text-sm font-bold text-white bg-blue-600/80 hover:bg-blue-500 border border-blue-400/30 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+          >
+            <span className="relative z-10 flex items-center">
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Authenticating...
+                </>
+              ) : (
+                'Access System'
+              )}
+            </span>
+          </button>
+        </div>
+
+        <div className="text-center text-sm pt-2">
+          <span className="text-blue-100/50">시스템 계정이 없으신가요? </span>
+          <Link href="/signup" className="font-bold text-blue-400 hover:text-blue-300 transition-colors underline-offset-4 hover:underline">
+            가입 요청
+          </Link>
+        </div>
+      </form>
+    </div>
   );
 }

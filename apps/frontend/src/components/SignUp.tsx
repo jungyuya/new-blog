@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { api } from '@/utils/api';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function SignUp() {
     const router = useRouter();
@@ -36,43 +37,86 @@ export default function SignUp() {
     };
 
     return (
-        <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-                {/* [수정] 1. 라벨에 다크 모드 색상 적용 */}
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    E-mail
-                </label>
-                {/* [수정] 2. input에 다크 모드 스타일 적용 */}
-                <input
-                    id="email" name="email" type="email" autoComplete="email" required
-                    value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
-                />
+        <div className="space-y-6">
+            <div className="text-center space-y-2">
+                <h3 className="text-2xl font-bold text-white">Create Account</h3>
+                <p className="text-blue-100/60 text-sm">Join the portal and start your deep dive journey.</p>
             </div>
-            <div>
-                {/* 라벨에 다크 모드 색상 적용 */}
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Password
-                </label>
-                {/* [수정] 2. input에 다크 모드 스타일 적용 */}
-                <input
-                    id="password" name="password" type="password" autoComplete="new-password" required
-                    value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-400 dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
-                />
-            </div>
-            <div>
-                {/* [수정] 3. 버튼의 비활성화 상태에 다크 모드 스타일 적용 */}
-                <button
-                    type="submit" disabled={isLoading}
-                    className="w-full px-4 py-2 font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400 dark:disabled:bg-gray-600"
-                >
-                    {isLoading ? '가입하는 중...' : '가입하기'}
-                </button>
-            </div>
-            {/* [수정] 4. 성공/에러 메시지에 다크 모드 색상 적용 */}
-            {error && <p className="text-sm text-center text-red-600 dark:text-red-400">{error}</p>}
-            {success && <p className="text-sm text-center text-green-600 dark:text-green-400">{success}</p>}
-        </form>
+
+            <form className="space-y-5" onSubmit={handleSubmit}>
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-blue-200/70 mb-1.5 ml-1">
+                        Email Address
+                    </label>
+                    <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all backdrop-blur-sm"
+                        placeholder="your@email.com"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-blue-200/70 mb-1.5 ml-1">
+                        Password
+                    </label>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all backdrop-blur-sm"
+                        placeholder="••••••••"
+                    />
+                </div>
+
+                {error && (
+                    <div className="p-3 text-sm text-red-200 bg-red-500/20 border border-red-500/30 rounded-xl backdrop-blur-md">
+                        {error}
+                    </div>
+                )}
+                {success && (
+                    <div className="p-3 text-sm text-green-200 bg-green-500/20 border border-green-500/30 rounded-xl backdrop-blur-md">
+                        {success}
+                    </div>
+                )}
+
+                <div className="pt-2">
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="liquid group relative flex justify-center w-full px-4 py-3.5 text-sm font-bold text-white bg-blue-600/80 hover:bg-blue-500 border border-blue-400/30 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                    >
+                        <span className="relative z-10 flex items-center">
+                            {isLoading ? (
+                                <>
+                                    <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Processing...
+                                </>
+                            ) : (
+                                'Register Account'
+                            )}
+                        </span>
+                    </button>
+                </div>
+
+                <div className="text-center text-sm pt-2">
+                    <span className="text-blue-100/50">이미 계정이 있으신가요? </span>
+                    <Link href="/login" className="font-bold text-blue-400 hover:text-blue-300 transition-colors underline-offset-4 hover:underline">
+                        로그인
+                    </Link>
+                </div>
+            </form>
+        </div>
     );
 }
