@@ -13,21 +13,23 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         {/* 라이트 모드 배경 */}
         <div className="dark:hidden absolute inset-0">
           <Image
-            src="/auth-bg.png"
+            src="/auth-bg.webp"
             alt="Auth Background Light"
             fill
             className="object-cover"
             priority
+            unoptimized={true}
           />
         </div>
         {/* 다크 모드 배경 */}
         <div className="hidden dark:block absolute inset-0">
           <Image
-            src="/auth-bg2.png"
+            src="/auth-bg2.webp"
             alt="Auth Background Dark"
             fill
             className="object-cover"
             priority
+            unoptimized={true}
           />
         </div>
         {/* 고도화된 다크 그라데이션 오버레이 */}
