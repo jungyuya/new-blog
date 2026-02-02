@@ -1,187 +1,32 @@
 // 파일 위치: apps/frontend/src/components/AiChatView.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { api } from '@/utils/api';
-import MessageList from './chat-widget/MessageItem';
-import MessageItem, { ChatMessage } from './chat-widget/MessageItem';
+import React, { useEffect } from 'react';
+import MessageItem from './chat-widget/MessageItem';
 import MessageInput from './chat-widget/MessageInput';
-import { RANDOM_FAQ_POOL } from '../constants/chat';
-import { Code2, MessageCircle, TrendingDown, Dices } from 'lucide-react';
-
-// FAQ 항목을 배열로 관리하여 확장성 확보
-const FAQ_ITEMS = [
-  {
-    text: "블로그의 기술 스택 알려줘!",
-    icon: Code2,
-    gradient: "from-blue-500 to-cyan-400",
-    hoverGlow: "group-hover:shadow-blue-500/40",
-    bgAccent: "from-blue-50/50 to-cyan-50/30"
-  },
-  {
-    text: "실시간 채팅 서비스는 뭐야?",
-    icon: MessageCircle,
-    gradient: "from-emerald-500 to-teal-400",
-    hoverGlow: "group-hover:shadow-emerald-500/40",
-    bgAccent: "from-emerald-50/50 to-teal-50/30"
-  },
-  {
-    text: "AWS 비용 절감한 사례 보여줘.",
-    icon: TrendingDown,
-    gradient: "from-amber-500 to-orange-400",
-    hoverGlow: "group-hover:shadow-amber-500/40",
-    bgAccent: "from-amber-50/50 to-orange-50/30"
-  },
-  {
-    text: "오늘의 추천 질문 🎲",
-    icon: Dices,
-    gradient: "from-amber-400 via-yellow-300 to-amber-500",
-    hoverGlow: "group-hover:shadow-amber-400/50",
-    bgAccent: "from-amber-50/60 via-yellow-50/40 to-orange-50/30",
-    isSpecial: true
-  }
-];
+import { FAQ_ITEMS, RANDOM_FAQ_POOL } from '@/constants/chat';
+import { useChat } from '@/hooks/useChat';
 
 interface AiChatViewProps {
   isOpen: boolean;
 }
 
 const AiChatView = ({ isOpen }: AiChatViewProps) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: '안녕하세요! 블로그에 대해 궁금한 점이 있으신가요? 무엇이든 물어보세요.',
-      timestamp: new Date(),
-    },
-  ]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [quota, setQuota] = useState<{ remaining: number; total: number } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const {
+    messages,
+    isLoading,
+    quota,
+    clickedChipIndex,
+    setClickedChipIndex,
+    showFAQ,
+    messagesEndRef,
+    handleSendMessage
+  } = useChat(isOpen);
 
-  // Step 1.10: 클릭한 FAQ 칩 추적 및 페이드아웃 상태
-  const [clickedChipIndex, setClickedChipIndex] = useState<number | null>(null);
-
-  // Step 1.4: FAQ 섹션 진입 애니메이션 지연을 위한 상태
-  const [showFAQ, setShowFAQ] = useState(false);
-
-  // FAQ 섹션 표시 지연 (채팅 위젯이 열릴 때 300ms 후)
+  // Code Splitting 검증용 로그
   useEffect(() => {
-    if (isOpen) {
-      setShowFAQ(false); // 먼저 숨김
-      const timer = setTimeout(() => setShowFAQ(true), 300);
-      return () => clearTimeout(timer);
-    } else {
-      setShowFAQ(false);
-    }
-  }, [isOpen]);
-
-  // 쿼터 조회
-  useEffect(() => {
-    fetchQuota();
+    console.log('[AiChatView] Component Loaded! (Code Splitting Verified)');
   }, []);
-
-  const fetchQuota = async () => {
-    try {
-      const res = await fetch('/api/chat/quota');
-      if (res.ok) {
-        const data = await res.json();
-        setQuota(data);
-      }
-    } catch (e) {
-      console.error('Failed to fetch quota', e);
-    }
-  };
-
-  const handleSendMessage = async (content: string) => {
-    // 1. 사용자 메시지 추가
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
-
-    try {
-      // 대화 히스토리 준비
-      const history = messages
-        .filter(m => m.id !== 'welcome' && !m.content.startsWith('죄송합니다. 오류가 발생했습니다.'))
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-      // API 호출
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: content, history }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-
-        // 가드레일 차단
-        if (res.status === 400 && errorData.error === 'GUARDRAIL_BLOCKED') {
-          const errorMsg: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: `⚠️ ${errorData.message || '부적절한 질문이 감지되었습니다. 정중한 표현을 사용해주세요.'}`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMsg]);
-          setIsLoading(false);
-          return;
-        }
-
-        // 쿼터 초과
-        if (res.status === 429 && errorData.error === 'QUOTA_EXCEEDED') {
-          const errorMsg: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: '⚠️ 오늘의 질문 횟수를 모두 사용했습니다. 내일 다시 시도해주세요.',
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMsg]);
-          setIsLoading(false);
-          return;
-        }
-
-        throw new Error('Failed to get answer');
-      }
-
-      // 응답 처리
-      const data = await res.json();
-
-      // AI 답변 추가
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.answer,
-        timestamp: new Date(),
-        sources: data.sources,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-
-      // 쿼터 갱신
-      fetchQuota();
-
-    } catch (error: any) {
-      const errorMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `죄송합니다. 오류가 발생했습니다. (${error.message})`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 스크롤 자동 이동
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   return (
     <div className="flex flex-col h-full bg-chat-bg">

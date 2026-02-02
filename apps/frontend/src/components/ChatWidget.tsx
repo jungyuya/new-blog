@@ -2,13 +2,20 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import AiChatView from './AiChatView';
+import dynamic from 'next/dynamic';
+
+const AiChatView = dynamic(() => import('./AiChatView'), {
+  loading: () => null, // 초기 로딩 시 아무것도 보여주지 않음 (채팅창이 닫혀 있으므로)
+  ssr: false, // 클라이언트 전용 기능이므로 SSR 불필요
+});
 
 const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
+  // [Code Splitting] 최초 한 번이라도 열렸는지 추적하여, 그 전까지는 AiChatView를 로드하지 않음
+  const [hasOpened, setHasOpened] = useState(false);
 
   // 탭 상태 관리 ('ai' | 'live')
   const [activeTab, setActiveTab] = useState<'ai' | 'live'>('ai');
@@ -23,8 +30,15 @@ const ChatWidget = () => {
   }, []);
 
   const toggleChat = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen) {
+    const nextState = !isOpen;
+    setIsOpen(nextState);
+
+    // 처음 열릴 때 hasOpened를 true로 설정하여 AiChatView 로딩 트리거
+    if (nextState && !hasOpened) {
+      setHasOpened(true);
+    }
+
+    if (!nextState) {
       setShowGreeting(false);
       // setIsExpanded는 초기값(true)을 유지하도록 제거
     }
@@ -104,7 +118,8 @@ const ChatWidget = () => {
         <div className="flex-grow overflow-hidden relative bg-chat-bg">
           {/* AI 탭 */}
           <div className={`absolute inset-0 transition-opacity duration-300 ${activeTab === 'ai' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-            <AiChatView isOpen={isOpen} />
+            {/* hasOpened가 true일 때만 AiChatView 렌더링 (Code Splitting 효과) */}
+            {(isOpen || hasOpened) && <AiChatView isOpen={isOpen} />}
           </div>
 
           {/* 실시간 탭 (iframe은 렌더링 비용이 크므로 active일 때만 로드하거나, display:none으로 숨김 처리) */}

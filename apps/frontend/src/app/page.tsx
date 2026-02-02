@@ -1,20 +1,14 @@
 // 파일 위치: apps/frontend/src/app/page.tsx
 import { Suspense } from 'react';
-import { api } from "@/utils/api";
-import PostList from "@/components/PostList";
-import FeaturedSection from "@/components/FeaturedSection";
+import CategoryDropdown from '@/components/CategoryDropdown';
+import FeaturedSectionContainer from '@/components/FeaturedSectionContainer';
+import PostListContainer from '@/components/PostListContainer';
+import DebouncedSkeleton from '@/components/DebouncedSkeleton';
 import FeaturedPostSkeleton from '@/components/FeaturedPostSkeleton';
 import TagFilterSkeleton from '@/components/TagFilterSkeleton';
-import CategoryDropdown from '@/components/CategoryDropdown';
+import PostCardSkeleton from '@/components/PostCardSkeleton';
 
 export const dynamic = 'force-dynamic';
-
-const HomePageSkeleton = () => (
-  <>
-    <FeaturedPostSkeleton />
-    <TagFilterSkeleton />
-  </>
-);
 
 export default async function HomePage({
   searchParams,
@@ -29,46 +23,46 @@ export default async function HomePage({
   if (category === 'post') pageTitle = '회고록';
   if (category === 'learning') pageTitle = '학습 노트';
 
-  try {
-    const [featuredData, initialLatestPostsData] = await Promise.all([
-      api.fetchFeaturedPosts(),
-      api.fetchLatestPosts(12, null, category)
-    ]);
+  // [Streaming SSR]
+  // 기존의 Promise.all 직렬 로딩을 제거하고, 각 섹션을 Suspense로 감싸 병렬 로딩합니다.
+  // DebouncedSkeleton을 사용하여 즉각적인 응답(Warm Start) 시 깜빡임을 방지합니다.
 
-    const { heroPost, editorPicks } = featuredData;
-
-    return (
-      <div>
-        <Suspense fallback={<HomePageSkeleton />}>
-          {/* 전체 보기일 때만 Featured 섹션을 보여줄지, 항상 보여줄지 결정해야 함. 
-              사용자 경험상 '전체'일 때만 보여주는 것이 깔끔할 수 있으나, 
-              일단은 항상 보여주되 필요하면 조건부 렌더링으로 변경 가능. */}
-          {!category && <FeaturedSection heroPost={heroPost} editorPicks={editorPicks} />}
+  return (
+    <div>
+      {/* Featured Section (Hero + Editor Picks + Tags) */}
+      {!category && (
+        <Suspense
+          fallback={
+            <DebouncedSkeleton>
+              <FeaturedPostSkeleton />
+              <TagFilterSkeleton />
+            </DebouncedSkeleton>
+          }
+        >
+          <FeaturedSectionContainer />
         </Suspense>
+      )}
 
-        <div className="flex justify-between items-center mb-8 mt-12 border-b border-gray-200 dark:border-gray-800 pb-4">
-          <h1 className="text-3xl font-bold dark:text-gray-100">{pageTitle}</h1>
-          <CategoryDropdown />
-        </div>
+      {/* Page Title & Category Dropdown */}
+      <div className="flex justify-between items-center mb-8 mt-12 border-b border-gray-200 dark:border-gray-800 pb-4">
+        <h1 className="text-3xl font-bold dark:text-gray-100">{pageTitle}</h1>
+        <CategoryDropdown />
+      </div>
 
-        <PostList
-          fallbackData={initialLatestPostsData}
-          initialCategory={category}
-        />
-      </div>
-    );
-  } catch (err) {
-    console.error("Failed to fetch posts on server:", err);
-    console.log(err)
-    const error = "게시물 목록을 불러오는 데 실패했습니다.";
-    return (
-      <div>
-        <div className="flex justify-between items-center mb-8 mt-12 border-b border-gray-200 dark:border-gray-800 pb-4">
-          <h1 className="text-3xl font-bold dark:text-gray-100">{pageTitle}</h1>
-          <CategoryDropdown />
-        </div>
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
-  }
+      {/* Post List */}
+      <Suspense
+        fallback={
+          <DebouncedSkeleton>
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <PostCardSkeleton key={`skeleton-${i}`} />
+              ))}
+            </div>
+          </DebouncedSkeleton>
+        }
+      >
+        <PostListContainer initialCategory={category} />
+      </Suspense>
+    </div>
+  );
 }

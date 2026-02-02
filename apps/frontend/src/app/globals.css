@@ -7,6 +7,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* 라이트 모드(기본값)를 위한 CSS 변수 */
+/* 라이트 모드(기본값)를 위한 CSS 변수 */
 :root {
   --color-text: #111827;
   /* Tailwind gray-900 */
@@ -14,16 +15,38 @@
   /* Tailwind gray-50 */
   --color-bg-end: #ffffff;
   /* White */
+
+  /* [Design System] Semantic Colors (HSL) */
+  --primary: 217 91% 60%;
+  /* blue-500 #3b82f6 */
+  --primary-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 60%;
+  /* red-500 */
+  --destructive-foreground: 0 0% 98%;
+
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
 }
 
-/* 다크 모드를 위한 CSS 변수 (직관적인 hex 코드 사용) */
+/* 다크 모드를 위한 CSS 변수 */
 html.dark {
   --color-text: #e5e7eb;
-  /* 기본 텍스트 색상 (Tailwind gray-200) */
+
   --color-bg-start: #292929;
-  /* 배경 시작 색상 (어두운 회색) */
+
   --color-bg-end: #02060a;
-  /* 배경 끝 색상 (거의 검은색) */
+
+  /* [Design System] Semantic Colors (HSL) - Dark */
+  --primary: 217 91% 60%;
+  /* blue-500 (다크에서도 유지) */
+  --primary-foreground: 0 0% 100%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
 }
 
 /* body 스타일이 새로운 변수를 직접 사용하도록 변경 */

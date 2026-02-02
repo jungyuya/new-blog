@@ -16,8 +16,20 @@ const config: Config = {
         foreground: 'var(--foreground)',
         'header-bg': 'var(--header-bg)',
         'header-text': 'var(--header-text)',
-        // 필요에 따라 다른 커스텀 색상도 추가할 수 있습니다.
-        // 예: border: 'var(--border-color)',
+
+        // [Design System] Semantic Colors
+        primary: {
+          DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
+          foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive) / <alpha-value>)',
+          foreground: 'hsl(var(--destructive-foreground) / <alpha-value>)',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
+          foreground: 'hsl(var(--muted-foreground) / <alpha-value>)',
+        },
       },
     },
   },

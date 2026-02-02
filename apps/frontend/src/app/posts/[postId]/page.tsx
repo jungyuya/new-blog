@@ -69,32 +69,27 @@ export async function generateMetadata(
   }
 }
 
+// [Streaming SSR] PostDetailContainer가 데이터를 가져옵니다.
+import PostDetailContainer from "@/components/PostDetailContainer";
+import DebouncedSkeleton from "@/components/DebouncedSkeleton";
+import PostDetailSkeleton from "@/components/PostDetailSkeleton";
+import { Suspense } from 'react';
+
 export default async function PostDetailPage({ params }: Props) {
-  try {
-    const { postId } = await params;
-    const { post, prevPost, nextPost } = await api.fetchPostById(postId);
-    
-    if (!post) {
-      notFound();
-    }
+  // params를 await하여 postId 추출
+  const { postId } = await params;
 
-    const headings = generateToc(post.content || '');
-
-    // --- [핵심 수정] 전체 레이아웃을 2단 구조로 변경합니다. ---
-    return (
-      <div className="sm:px-6 lg:px-8 py-8">
-        <PostDetailView 
-          post={post} 
-          prevPost={prevPost} 
-          nextPost={nextPost} 
-          postId={postId}
-          headings={headings}
-        />
-      </div>
-    ); 
-  } catch (error) {
-    const awaitedParams = await params;
-    console.error(`Failed to fetch post ${awaitedParams.postId}:`, error);
-    notFound();
-  }
+  return (
+    <div className="sm:px-6 lg:px-8 py-8">
+      <Suspense
+        fallback={
+          <DebouncedSkeleton>
+            <PostDetailSkeleton />
+          </DebouncedSkeleton>
+        }
+      >
+        <PostDetailContainer postId={postId} />
+      </Suspense>
+    </div>
+  );
 }

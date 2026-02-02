@@ -7,7 +7,7 @@ import { Post } from '@/utils/api';
 import FeaturedPostCard from './FeaturedPostCard';
 import PostCard from './PostCard';
 import TagFilter from './TagFilter';
-import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
+import { ArrowLeft as ArrowLeftIcon, ArrowRight as ArrowRightIcon } from 'lucide-react';
 
 interface FeaturedSectionProps {
   heroPost: Post | null;
