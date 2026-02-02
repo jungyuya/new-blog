@@ -6,9 +6,9 @@ const path = require('path');
 let nextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../../'),
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // typescript: {
+  //   ignoreBuildErrors: false,
+  // },
   experimental: {
     serverExternalPackages: ['import-in-the-middle', 'require-in-the-middle'],
   },

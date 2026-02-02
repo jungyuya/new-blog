@@ -10,7 +10,7 @@ const ChatWidget = () => {
   const [showGreeting, setShowGreeting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // [신규] 탭 상태 관리 ('ai' | 'live')
+  // 탭 상태 관리 ('ai' | 'live')
   const [activeTab, setActiveTab] = useState<'ai' | 'live'>('ai');
 
   useEffect(() => {
