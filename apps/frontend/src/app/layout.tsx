@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import MainLayout from "@/components/MainLayout"; // [신규] MainLayout 클라이언트 컴포넌트 import
+import MainLayout from "@/components/MainLayout"; // MainLayout 클라이언트 컴포넌트 import
 import ChatWidget from '../components/ChatWidget'; // [추가]
 
 
