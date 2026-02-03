@@ -11,7 +11,7 @@ export default function ErrorTestPage() {
     return (
         <div className="p-8 text-center">
             <h1 className="text-2xl font-bold mb-4">에러 테스트 페이지</h1>
-            <p>잠시 후 에러가 발생합니다...</p>
+            <p>잠시 후 에러가 발생합니다..</p>
         </div>
     );
 }
