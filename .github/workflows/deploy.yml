@@ -278,7 +278,7 @@ jobs:
           fi
           echo "✅ Home page is accessible (Status: 200)."
           echo "🔬 [Test 2/2] Checking for versioned static asset..."
-          ASSET_PATH=$(curl -sS "$URL" | grep -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' | head -n 1)
+          ASSET_PATH=$(curl -sS "$URL" | grep -m 1 -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' | head -n 1)
           if [ -z "$ASSET_PATH" ]; then
             echo "::error::Smoke test failed! Could not find a versioned asset path in the HTML source."
             curl -sS --fail "$URL" | head -n 30
