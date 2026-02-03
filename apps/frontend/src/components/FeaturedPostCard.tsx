@@ -15,7 +15,7 @@ export default function FeaturedPostCard({ post }: FeaturedPostCardProps) {
   return (
     <Link
       href={`/posts/${post.postId}`}
-      // [롤백] 기존 스타일 유지 (반응형 패딩 등은 유용하므로 유지하되 Motion/Gradient 제거)
+      // 기존 스타일 유지 (반응형 패딩 등은 유용하므로 유지하되 Motion/Gradient 제거)
       // aspect-video md:aspect-[3.2/1] min-h-[256px] sm:min-h-0 유지
       className="group relative block w-full aspect-video md:aspect-[3.2/1] min-h-[256px] sm:min-h-0 overflow-hidden rounded-lg shadow-lg"
     >
