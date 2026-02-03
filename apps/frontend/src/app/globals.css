@@ -78,6 +78,13 @@ body {
   /* 클릭 가능하다는 것을 알려주는 커서 모양 */
 }
 
+/* [A-1] 수동 지정 크기 존중: width/height 속성이 있으면 max 제한 해제 */
+.prose img[width],
+.prose img[height] {
+  max-width: none;
+  max-height: none;
+}
+
 /* ================================================================ */
 /* Custom Styles for yet-another-react-lightbox Plugins           */
 /* ================================================================ */

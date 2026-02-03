@@ -69,7 +69,7 @@ export async function generateMetadata(
   }
 }
 
-// [Streaming SSR] PostDetailContainer가 데이터를 가져옵니다.
+// [SSR with Suspense] PostDetailContainer가 데이터를 가져옵니다. (실제 Streaming 아님)
 import PostDetailContainer from "@/components/PostDetailContainer";
 import DebouncedSkeleton from "@/components/DebouncedSkeleton";
 import PostDetailSkeleton from "@/components/PostDetailSkeleton";

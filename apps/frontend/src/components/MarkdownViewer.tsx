@@ -125,15 +125,45 @@ export default function MarkdownViewer({ content, headings }: MarkdownViewerProp
                             </CodeBlock>
                         );
                     },
-                    img: ({ ...props }) => {
-                        const imageIndex = imageSources.findIndex(slide => slide.src === props.src);
+                    img: ({ src, alt, ...props }) => {
+                        const imageIndex = imageSources.findIndex(slide => slide.src === src);
+
+                        // Alt 텍스트에서 크기 파싱: "설명|300" 또는 "설명|300x200" 형식 지원
+                        // 예: ![설명|300](url) → width="300"
+                        // 예: ![설명|300x200](url) → width="300" height="200"
+                        const sizeMatch = alt?.match(/^(.+?)\|(\d+)(?:x(\d+))?$/);
+
+                        if (sizeMatch) {
+                            const [, realAlt, width, height] = sizeMatch;
+                            return (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={src}
+                                    alt={realAlt || '블로그 이미지'}
+                                    width={width}
+                                    height={height || undefined}
+                                    style={{
+                                        width: `${width}px`,
+                                        height: height ? `${height}px` : 'auto',
+                                        maxWidth: '95%',  // 페이지 너비를 벗어나지 않도록 제한
+                                        maxHeight: 'none',
+                                    }}
+                                    onClick={() => setIndex(imageIndex)}
+                                    className="cursor-pointer"
+                                    {...props}
+                                />
+                            );
+                        }
+
+                        // 기존 동작: 크기 미지정 시 기본 렌더링
                         return (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                {...props}
+                                src={src}
+                                alt={alt || '블로그 이미지'}
                                 onClick={() => setIndex(imageIndex)}
                                 className="cursor-pointer"
-                                alt={props.alt || '블로그 이미지'}
+                                {...props}
                             />
                         );
                     },

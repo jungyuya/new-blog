@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import MainLayout from "@/components/MainLayout"; // MainLayout 클라이언트 컴포넌트 import
 import ChatWidget from '../components/ChatWidget'; // [추가]
+import KakaoInit from "@/components/KakaoInit"; // [추가] KakaoInit 컴포넌트 import
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -26,6 +27,8 @@ export default function RootLayout({
         <MainLayout>
           {children}
         </MainLayout>
+        {/* Kakao SDK Load & Init */}
+        <KakaoInit />
       </body>
     </html>
   );

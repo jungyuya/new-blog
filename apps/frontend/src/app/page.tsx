@@ -1,6 +1,6 @@
 // 파일 위치: apps/frontend/src/app/page.tsx
 import { Suspense } from 'react';
-import CategoryDropdown from '@/components/CategoryDropdown';
+import CategoryTabs from '@/components/CategoryTabs';
 import FeaturedSectionContainer from '@/components/FeaturedSectionContainer';
 import PostListContainer from '@/components/PostListContainer';
 import DebouncedSkeleton from '@/components/DebouncedSkeleton';
@@ -23,9 +23,9 @@ export default async function HomePage({
   if (category === 'post') pageTitle = '회고록';
   if (category === 'learning') pageTitle = '학습 노트';
 
-  // [Streaming SSR]
-  // 기존의 Promise.all 직렬 로딩을 제거하고, 각 섹션을 Suspense로 감싸 병렬 로딩합니다.
-  // DebouncedSkeleton을 사용하여 즉각적인 응답(Warm Start) 시 깜빡임을 방지합니다.
+  // [SSR with Suspense]
+  // Suspense로 로딩 상태를 핸들링합니다. DebouncedSkeleton으로 빠른 응답 시 깜빡임을 방지합니다.
+  // 참고: 실제 Streaming SSR이 아닌 일반 SSR로 동작합니다 (Container 컴포넌트 내부에서 await).
 
   return (
     <div>
@@ -43,10 +43,10 @@ export default async function HomePage({
         </Suspense>
       )}
 
-      {/* Page Title & Category Dropdown */}
+      {/* Page Title & Category Tabs */}
       <div className="flex justify-between items-center mb-8 mt-12 border-b border-gray-200 dark:border-gray-800 pb-4">
         <h1 className="text-3xl font-bold dark:text-gray-100">{pageTitle}</h1>
-        <CategoryDropdown />
+        <CategoryTabs />
       </div>
 
       {/* Post List */}

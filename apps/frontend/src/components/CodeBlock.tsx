@@ -51,12 +51,16 @@ export default function CodeBlock({ inline, className, children, ...props }: Cod
     const effectiveTheme = mounted ? theme : 'light';
     const style = effectiveTheme === 'dark' ? catppuccinMocha : catppuccinLatte;
 
+    const [showToast, setShowToast] = useState(false);
+
     const handleCopy = async (e: React.MouseEvent) => {
         e.stopPropagation(); // 접기/펴기 클릭 이벤트 전파 방지
         try {
             await navigator.clipboard.writeText(codeString);
             setCopied(true);
+            setShowToast(true);
             setTimeout(() => setCopied(false), 2000);
+            setTimeout(() => setShowToast(false), 2500);
         } catch (err) {
             console.error('Failed to copy code', err);
         }
@@ -67,69 +71,88 @@ export default function CodeBlock({ inline, className, children, ...props }: Cod
     };
 
     return (
-        <div className="font-mono my-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-[#eff1f5] dark:bg-[#1e1e2e]">
-            {/* Header */}
-            <div
-                className="flex justify-between items-center px-4 py-2 bg-[#e6e9ef] dark:bg-[#181825] border-b border-gray-200 dark:border-gray-700 cursor-pointer select-none"
-                onClick={toggleExpand}
-                title={isExpanded ? "접기" : "펼치기"}
-            >
-                {/* Left: Language Label & Expand Icon */}
-                <div className="flex items-center gap-2">
-                    <span className="text-gray-500 dark:text-gray-400 transition-transform duration-200">
-                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </span>
-                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                        {language || 'text'}
-                    </span>
+        <>
+            <div className="font-mono my-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-[#eff1f5] dark:bg-[#1e1e2e]">
+                {/* Header */}
+                <div
+                    className="flex justify-between items-center px-4 py-2 bg-[#e6e9ef] dark:bg-[#181825] border-b border-gray-200 dark:border-gray-700 cursor-pointer select-none"
+                    onClick={toggleExpand}
+                    title={isExpanded ? "접기" : "펼치기"}
+                >
+                    {/* Left: Language Label & Expand Icon */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-gray-500 dark:text-gray-400 transition-transform duration-200">
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </span>
+                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                            {language || 'text'}
+                        </span>
+                    </div>
+
+                    {/* Right: Copy Button */}
+                    <button
+                        onClick={handleCopy}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-xs text-gray-600 dark:text-gray-400"
+                        aria-label="Copy code"
+                    >
+                        {copied ? (
+                            <>
+                                <Check size={14} className="text-green-500" />
+                                <span className="text-green-600 dark:text-green-400">Copied!</span>
+                            </>
+                        ) : (
+                            <>
+                                <Copy size={14} />
+                                <span>Copy</span>
+                            </>
+                        )}
+                    </button>
                 </div>
 
-                {/* Right: Copy Button */}
-                <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-xs text-gray-600 dark:text-gray-400"
-                    aria-label="Copy code"
-                >
-                    {copied ? (
-                        <>
-                            <Check size={14} className="text-green-500" />
-                            <span className="text-green-600 dark:text-green-400">Copied!</span>
-                        </>
-                    ) : (
-                        <>
-                            <Copy size={14} />
-                            <span>Copy</span>
-                        </>
-                    )}
-                </button>
+                {/* Code Body */}
+                {isExpanded && (
+                    <div className="relative animate-in slide-in-from-top-2 duration-200">
+                        <SyntaxHighlighter
+                            style={style as any}
+                            language={language}
+                            PreTag="div"
+                            showLineNumbers={lineCount > 3} // 3줄 초과 시 라인 넘버 표시
+                            lineNumberStyle={{
+                                minWidth: '2.5em',
+                                paddingRight: '1em',
+                                textAlign: 'right',
+                                color: effectiveTheme === 'dark' ? '#6c7086' : '#9ca0b0'
+                            }}
+                            customStyle={{
+                                margin: 0,
+                                padding: '1.5rem', // 넉넉한 패딩
+                                background: 'transparent', // 배경색은 부모 div가 담당
+                                fontSize: '0.9rem',
+                                lineHeight: '1.6',
+                            }}
+                        >
+                            {codeString}
+                        </SyntaxHighlighter>
+                    </div>
+                )}
             </div>
 
-            {/* Code Body */}
-            {isExpanded && (
-                <div className="relative animate-in slide-in-from-top-2 duration-200">
-                    <SyntaxHighlighter
-                        style={style as any}
-                        language={language}
-                        PreTag="div"
-                        showLineNumbers={lineCount > 3} // 3줄 초과 시 라인 넘버 표시
-                        lineNumberStyle={{
-                            minWidth: '2.5em',
-                            paddingRight: '1em',
-                            textAlign: 'right',
-                            color: effectiveTheme === 'dark' ? '#6c7086' : '#9ca0b0'
-                        }}
-                        customStyle={{
-                            margin: 0,
-                            padding: '1.5rem', // 넉넉한 패딩
-                            background: 'transparent', // 배경색은 부모 div가 담당
-                            fontSize: '0.9rem',
-                            lineHeight: '1.6',
-                        }}
+            {/* [A-4] Toast 알림 - 화면 하단 고정 */}
+            {
+                showToast && (
+                    <div
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 
+                           px-4 py-2 rounded-lg shadow-lg
+                           bg-green-600 text-white text-sm font-medium
+                           animate-in slide-in-from-bottom-4 duration-300"
                     >
-                        {codeString}
-                    </SyntaxHighlighter>
-                </div>
-            )}
-        </div>
+                        <div className="flex items-center gap-2">
+                            <Check size={16} />
+                            <span>코드가 복사되었습니다!</span>
+                        </div>
+                    </div>
+                )
+            }
+        </>
     );
 }

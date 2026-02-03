@@ -1,7 +1,7 @@
 // 파일 위치: apps/frontend/src/components/PostUtilButtons.tsx
 'use client';
 
-import React, { useState } from 'react'; 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Post, AdjacentPost, api } from '@/utils/api';
@@ -66,35 +66,97 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
     const [summary, setSummary] = useState('');
     const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
+    // [신규] 공유 메뉴 상태 관리
+    const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+    const toggleShareMenu = () => setIsShareMenuOpen(!isShareMenuOpen);
+
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const { likeCount, isLiked, handleLike, isPending } = useLike(post);
     const handleCopyLink = () => {
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(window.location.href)
-                .then(() => {
-                    setCopyStatus('copied');
-                    setTimeout(() => setCopyStatus('idle'), 2000);
-                })
-                .catch(err => {
-                    console.error('Failed to copy link: ', err);
-                    alert('링크 복사에 실패했습니다. 다시 시도해주세요.');
+        const copyToClipboard = (text: string) => {
+            if (navigator.clipboard) {
+                return navigator.clipboard.writeText(text);
+            } else {
+                return new Promise<void>((resolve, reject) => {
+                    try {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    }
                 });
-        } else {
-            try {
-                const textArea = document.createElement('textarea');
-                textArea.value = window.location.href;
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
+            }
+        };
+
+        copyToClipboard(window.location.href)
+            .then(() => {
                 setCopyStatus('copied');
-                setTimeout(() => setCopyStatus('idle'), 2000);
-            } catch (err) {
-                console.error('Fallback copy failed: ', err);
-                alert('링크 복사에 실패했습니다. 브라우저가 이 기능을 지원하지 않을 수 있습니다.');
+                setTimeout(() => {
+                    setCopyStatus('idle');
+                    setIsShareMenuOpen(false); // 복사 완료 후 메뉴 닫기
+                }, 2000);
+            })
+            .catch(err => {
+                console.error('Failed to copy link: ', err);
+                alert('링크 복사에 실패했습니다.');
+            });
+    };
+
+    // [신규] 카카오톡 공유 핸들러 (분리됨)
+    const handleKakaoShare = () => {
+        const Kakao = (window as any).Kakao;
+
+        // SDK가 로드되지 않았거나 초기화되지 않은 경우 처리
+        if (!Kakao || !Kakao.isInitialized()) {
+            // 키가 있다면 초기화 시도
+            if (process.env.NEXT_PUBLIC_KAKAO_API_KEY) {
+                try {
+                    // SDK가 로드되었으나 초기화가 안 된 경우 (window.Kakao 존재)
+                    if (Kakao) {
+                        Kakao.init(process.env.NEXT_PUBLIC_KAKAO_API_KEY);
+                    } else {
+                        // SDK 스크립트 자체가 로드되지 않음
+                        alert('카카오톡 SDK가 로드되지 않았습니다. 새로고침 후 다시 시도해주세요.');
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Kakao init check failed', e);
+                    // 이미 초기화 된 경우 에러 무시하고 넘어감
+                }
+            } else {
+                alert('카카오톡 공유를 위한 API 키 설정이 필요합니다.');
+                return;
             }
         }
+
+        Kakao.Share.sendDefault({
+            objectType: 'feed',
+            content: {
+                title: post.title,
+                description: post.summary || '이 글을 공유해보세요!',
+                imageUrl: post.thumbnailUrl || 'https://blog.kakaocdn.net/dn/bE8tYf/btsHw5yJc3Q/M3K9vK9l7X5i4x7u9q8w/img.png',
+                link: {
+                    mobileWebUrl: window.location.href,
+                    webUrl: window.location.href,
+                },
+            },
+            buttons: [
+                {
+                    title: '글 보러가기',
+                    link: {
+                        mobileWebUrl: window.location.href,
+                        webUrl: window.location.href,
+                    },
+                },
+            ],
+        });
+        setIsShareMenuOpen(false); // 공유 창이 뜨면 메뉴 닫기
     };
 
     const handleSummaryClick = async () => {
@@ -143,20 +205,84 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
             <div className="my-12 pt-8 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
+                        {/* [UX 변경] 공유 메뉴 (팝업 형태) */}
                         <div className="relative">
                             <button
-                                onClick={handleCopyLink}
-                                // [수정] 2. 기본 아이콘 버튼에 다크 모드 스타일 적용
+                                onClick={toggleShareMenu}
                                 className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
-                                aria-label="Share post"
+                                aria-label="Share post options"
+                                aria-expanded={isShareMenuOpen}
                             >
                                 <ShareIcon />
                             </button>
-                            {copyStatus === 'copied' && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap">
-                                    ✓ Copied!
-                                </div>
-                            )}
+
+                            {/* 말풍선 팝업 메뉴 */}
+                            <AnimatePresence>
+                                {isShareMenuOpen && (
+                                    <>
+                                        {/* 외부 클릭 감지용 투명 오버레이 */}
+                                        <div
+                                            className="fixed inset-0 z-10"
+                                            onClick={() => setIsShareMenuOpen(false)}
+                                        />
+
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-20 w-max bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-2 flex items-center gap-2"
+                                        >
+                                            {/* 말풍선 화살표 */}
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1.5 border-8 border-transparent border-t-white dark:border-t-gray-800" />
+
+                                            {/* 링크 복사 버튼 */}
+                                            <button
+                                                onClick={handleCopyLink}
+                                                className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group min-w-[60px]"
+                                            >
+                                                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full group-hover:bg-gray-200 dark:group-hover:bg-gray-600 transition-colors">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                    </svg>
+                                                </div>
+                                                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">링크 복사</span>
+                                            </button>
+
+                                            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+
+                                            {/* 카카오톡 공유 버튼 */}
+                                            <button
+                                                onClick={handleKakaoShare}
+                                                className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group min-w-[60px]"
+                                            >
+                                                <div className="p-1 bg-[#FEE500] rounded-full group-hover:bg-[#fdd835] transition-colors">
+                                                    <img
+                                                        src="https://developers.kakao.com/assets/img/about/logos/kakaotalksharing/kakaotalk_sharing_btn_small.png"
+                                                        alt="Kakao"
+                                                        className="w-7 h-7"
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">카카오톡</span>
+                                            </button>
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+
+                            {/* 복사 완료 토스트 (공유 버튼 근처에 표시) */}
+                            <AnimatePresence>
+                                {copyStatus === 'copied' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-md shadow-lg whitespace-nowrap z-30"
+                                    >
+                                        ✓ 링크가 복사되었습니다
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         {/* GitHub 링크 버튼 */}
@@ -173,11 +299,32 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                             </a>
                         )}
 
-                        {/* '좋아요' 버튼  */}
+                        {/* '좋아요' 버튼 (Ripple Effect 적용) */}
                         <button
-                            onClick={wrappedHandleLike}
+                            onClick={(e) => {
+                                // Ripple Effect
+                                const button = e.currentTarget;
+                                const circle = document.createElement('span');
+                                const diameter = Math.max(button.clientWidth, button.clientHeight);
+                                const radius = diameter / 2;
+
+                                circle.style.width = circle.style.height = `${diameter}px`;
+                                circle.style.left = `${e.clientX - button.getBoundingClientRect().left - radius}px`;
+                                circle.style.top = `${e.clientY - button.getBoundingClientRect().top - radius}px`;
+                                circle.classList.add('ripple');
+
+                                const ripple = button.getElementsByClassName('ripple')[0];
+                                if (ripple) {
+                                    ripple.remove();
+                                }
+
+                                button.appendChild(circle);
+
+                                // 기존 핸들러 실행
+                                wrappedHandleLike();
+                            }}
                             disabled={isPending}
-                            className={`group flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform ${isLiked
+                            className={`group relative overflow-hidden flex items-center space-x-1.5 pl-3 pr-4 py-2 rounded-full transition-all duration-200 ease-in-out transform ${isLiked
                                 ? 'text-red-500 bg-red-100 hover:bg-red-200 dark:text-red-400 dark:bg-red-900/50 dark:hover:bg-red-900'
                                 : 'text-gray-500 bg-gray-100 hover:bg-gray-200 dark:text-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600'
                                 } ${isPending ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
@@ -210,7 +357,26 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                                     </motion.span>
                                 </AnimatePresence>
                             </div>
+
+                            {/* Ripple Style */}
+                            <style jsx global>{`
+                                span.ripple {
+                                    position: absolute;
+                                    border-radius: 50%;
+                                    transform: scale(0);
+                                    animation: ripple 0.6s linear;
+                                    background-color: rgba(255, 255, 255, 0.7);
+                                }
+
+                                @keyframes ripple {
+                                    to {
+                                        transform: scale(4);
+                                        opacity: 0;
+                                    }
+                                }
+                            `}</style>
                         </button>
+
 
                         {/* --- AI 요약 버튼의 아이콘 --- */}
                         <button
@@ -221,6 +387,8 @@ export default function PostUtilButtons({ post, prevPost, nextPost }: PostUtilBu
                         >
                             <Image src="/ai-summary-icon.svg" alt="AI 요약 아이콘" width={36} height={36} />
                         </button>
+
+
 
                         {/* --- '음성으로 듣기' 버튼 --- */}
                         {post.speechUrl && (

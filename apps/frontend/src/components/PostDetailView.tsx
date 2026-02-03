@@ -40,31 +40,46 @@ export default function PostDetailView({ post, prevPost, nextPost, postId, headi
   const [activeId, setActiveId] = useState<string>('');
 
   useEffect(() => {
-    // headings가 없으면 아무 작업도 하지 않음
     if (headings.length === 0) return;
+
+    // 현재 화면에 보이는 헤딩들을 추적하는 Map
+    const visibleHeadings = new Map<string, IntersectionObserverEntry>();
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          // 가시성 상태 업데이트
           if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
+            visibleHeadings.set(entry.target.id, entry);
+          } else {
+            visibleHeadings.delete(entry.target.id);
           }
         });
+
+        // 화면에 보이는 헤딩이 있다면, 가장 위에 있는 것을 활성화
+        if (visibleHeadings.size > 0) {
+          // y 좌표(top) 기준으로 정렬하여 가장 위에 있는 헤딩 찾기
+          const sortedVisible = Array.from(visibleHeadings.values()).sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
+          );
+          setActiveId(sortedVisible[0].target.id);
+        } else {
+          // 화면에 보이는 헤딩이 없을 때의 처리 (선택적)
+          // 스크롤 방향에 따라 직전 헤딩을 유지하는 것이 자연스러움 -> 상태 유지
+        }
       },
-      // rootMargin: 화면 상단을 기준으로 -40% ~ -60% 영역에 들어왔을 때를 감지
-      // 이렇게 하면 제목이 화면 중앙 부근에 왔을 때 활성화되어 더 자연스러움
-      { rootMargin: '-40% 0px -60% 0px' }
+      {
+        // 헤더 높이 등을 고려하여 상단 영역을 감지 영역으로 설정
+        // top: -100px (헤더 여유), bottom: -60% (화면 하단 무시)
+        rootMargin: '-100px 0px -60% 0px',
+        threshold: [0, 1] // 조금이라도 보이면 감지
+      }
     );
 
-    // 모든 제목 요소들을 선택하여 관찰 시작
-    const headingElements = document.querySelectorAll(
-      'h1, h2, h3, h4, h5, h6'
-    );
+    const headingElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
     headingElements.forEach((el) => observer.observe(el));
 
-    // 컴포넌트가 언마운트될 때 observer를 정리
     return () => {
-      headingElements.forEach((el) => observer.unobserve(el));
       observer.disconnect();
     };
   }, [headings]);

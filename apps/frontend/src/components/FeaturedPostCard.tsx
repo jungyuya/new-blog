@@ -15,10 +15,11 @@ export default function FeaturedPostCard({ post }: FeaturedPostCardProps) {
   return (
     <Link
       href={`/posts/${post.postId}`}
-      // [수정] aspect-ratio를 유지하되, 모바일을 위한 최소 높이를 보장합니다.
+      // [롤백] 기존 스타일 유지 (반응형 패딩 등은 유용하므로 유지하되 Motion/Gradient 제거)
+      // aspect-video md:aspect-[3.2/1] min-h-[256px] sm:min-h-0 유지
       className="group relative block w-full aspect-video md:aspect-[3.2/1] min-h-[256px] sm:min-h-0 overflow-hidden rounded-lg shadow-lg"
     >
-      {/* 1. 배경 이미지 (변경 없음) */}
+      {/* 1. 배경 이미지 (기존 스타일 복원) */}
       <Image
         src={thumbnailUrl}
         alt={post.title}
@@ -28,11 +29,10 @@ export default function FeaturedPostCard({ post }: FeaturedPostCardProps) {
         priority
         unoptimized={true}
       />
-      {/* 2. 어두운 오버레이 (변경 없음) */}
+      {/* 2. 어두운 오버레이 (기존 스타일 복원) */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
 
-      {/* 3. 텍스트 콘텐츠 */}
-      {/* [수정] 반응형 패딩과 텍스트 크기를 적용합니다. */}
+      {/* 3. 텍스트 콘텐츠 (Motion 제거) */}
       <div className="absolute bottom-0 left-0 p-4 sm:p-6 md:p-8 lg:p-12 text-white w-full md:w-3/5 lg:w-1/2">
         <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-3 line-clamp-3">
           {post.title}
@@ -40,8 +40,8 @@ export default function FeaturedPostCard({ post }: FeaturedPostCardProps) {
         <p className="text-xs sm:text-sm md:text-base text-gray-300 mb-4 sm:mb-6 line-clamp-2 md:line-clamp-3">
           {post.summary || '요약 정보가 없습니다.'}
         </p>
-        
-        {/* [수정] 버튼 크기와 폰트 크기를 반응형으로 조정합니다. */}
+
+        {/* 버튼 스타일 (기존 스타일 복원) */}
         <div className="group liquid relative inline-flex items-center bg-transparent border-2 border-blue-400 text-blue-400 font-semibold py-2 px-4 sm:py-3 sm:px-8 rounded-xl transition-all duration-300 hover:text-white hover:border-blue-400 text-sm sm:text-base">
           <span className="relative z-10 flex items-center">
             Read More
