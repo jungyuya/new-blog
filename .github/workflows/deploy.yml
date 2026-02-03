@@ -278,7 +278,11 @@ jobs:
           fi
           echo "✅ Home page is accessible (Status: 200)."
           echo "🔬 [Test 2/2] Checking for versioned static asset..."
-          ASSET_PATH=$(curl -sS "$URL" | grep -m 1 -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' | head -n 1)
+          # [안정성 개선] curl 출력을 파일로 저장하여 Broken Pipe 및 쓰기 오류 방지
+          curl -sS -o smoke_test_index.html "$URL"
+          ASSET_PATH=$(grep -m 1 -oP '/${{ steps.set_release.outputs.release_id }}/_next/static/[^"]+' smoke_test_index.html | head -n 1 || true)
+          rm -f smoke_test_index.html
+
           if [ -z "$ASSET_PATH" ]; then
             echo "::error::Smoke test failed! Could not find a versioned asset path in the HTML source."
             curl -sS --fail "$URL" | head -n 30
