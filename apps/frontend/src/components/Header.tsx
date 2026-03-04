@@ -75,7 +75,7 @@ export default function Header() {
         <nav className="container mx-auto px-4 sm:px-6 h-[60px] flex justify-between items-center">
           <Link href="/" className="flex items-center">
             <Image
-              src="/deepdive-logo.png"
+              src="/deepdive-logo1.png"
               alt="Deep Dive!"
               width={0}
               height={0}

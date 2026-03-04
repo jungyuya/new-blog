@@ -16,6 +16,8 @@ const ChatWidget = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   // [Code Splitting] 최초 한 번이라도 열렸는지 추적하여, 그 전까지는 AiChatView를 로드하지 않음
   const [hasOpened, setHasOpened] = useState(false);
+  // [Performance] 실시간 채팅 탭이 한 번이라도 활성화되었는지 추적 (iframe 지연 로딩)
+  const [hasOpenedLiveTab, setHasOpenedLiveTab] = useState(false);
 
   // 탭 상태 관리 ('ai' | 'live')
   const [activeTab, setActiveTab] = useState<'ai' | 'live'>('ai');
@@ -102,7 +104,7 @@ const ChatWidget = () => {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('live')}
+              onClick={() => { setActiveTab('live'); setHasOpenedLiveTab(true); }}
               className={`flex-1 py-2 text-sm font-medium transition-colors relative ${activeTab === 'live' ? 'text-white' : 'text-blue-100 hover:text-white'
                 }`}
             >
@@ -122,15 +124,17 @@ const ChatWidget = () => {
             {(isOpen || hasOpened) && <AiChatView isOpen={isOpen} />}
           </div>
 
-          {/* 실시간 탭 (iframe은 렌더링 비용이 크므로 active일 때만 로드하거나, display:none으로 숨김 처리) */}
+          {/* 실시간 탭 (iframe은 렌더링 비용이 크므로 최초 탭 활성화 시에만 로드) */}
           <div className={`absolute inset-0 bg-white transition-opacity duration-300 ${activeTab === 'live' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-            {/* 탭이 한 번이라도 활성화되었을 때 로드하려면 상태 관리 필요. 여기서는 항상 렌더링하되 숨김 */}
-            <iframe
-              src="https://chat.jungyu.store"
-              title="Realtime Chat Room"
-              className="w-full h-full border-none"
-              allow="clipboard-read; clipboard-write"
-            />
+            {/* [Performance] 실시간 탭이 한 번이라도 활성화된 후에만 iframe을 렌더링합니다 */}
+            {hasOpenedLiveTab && (
+              <iframe
+                src="https://chat.jungyu.store"
+                title="Realtime Chat Room"
+                className="w-full h-full border-none"
+                allow="clipboard-read; clipboard-write"
+              />
+            )}
           </div>
         </div>
       </div>
