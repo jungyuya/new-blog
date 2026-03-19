@@ -436,8 +436,8 @@ export class BlogStack extends Stack {
     new scheduler.CfnSchedule(this, 'FrontendWarmerSchedule', {
       name: `blog-frontend-warmer-${this.stackName}`,
       description: 'Warms up the FrontendServerLambda every 10 minutes to reduce cold starts.',
-      // 'rate(10 minutes)'는 10분마다 한 번씩 실행하라는 의미입니다.
-      scheduleExpression: 'rate(10 minutes)',
+      // 'rate(5 minutes)'는 5분마다 한 번씩 실행하라는 의미입니다.
+      scheduleExpression: 'rate(5 minutes)',
       // 정확한 간격으로 실행되도록 설정합니다.
       flexibleTimeWindow: {
         mode: 'OFF',

@@ -108,7 +108,7 @@
 ### Case 4: Lambda Cold Start 최적화
 - **상황**: 초기 페이지 로드 시 TTFB가 4초 이상 소요되는 성능 저하 발생.
 - **분석**: AWS X-Ray 분산 추적을 도입하여 트랜잭션을 분석한 결과, 병목 구간이 Docker 컨테이너 이미지 로딩임을 데이터로 규명.
-- **해결**: Multi-stage build를 적용하여 불필요한 레이어를 제거하고, EventBridge Scheduler를 통해 10분 주기로 핑을 보내 실행 환경을 유지하는 Keep-Warm 전략 적용.
+- **해결**: Multi-stage build를 적용하여 불필요한 레이어를 제거하고, EventBridge Scheduler를 통해 5분 주기로 핑을 보내 실행 환경을 유지하는 Keep-Warm 전략 적용.
 
 ---
 
