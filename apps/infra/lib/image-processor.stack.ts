@@ -39,7 +39,7 @@ export class ImageProcessorStack extends Stack {
             code: lambda.Code.fromAsset(path.join(projectRoot, 'out', 'sharp-layer.zip')),
 
             compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
-            compatibleArchitectures: [lambda.Architecture.ARM_64],
+            compatibleArchitectures: [lambda.Architecture.X86_64],
         });
 
         // =================================================================
@@ -50,7 +50,7 @@ export class ImageProcessorStack extends Stack {
 
             functionName: `image-processor-func-${this.stackName}`,
             runtime: lambda.Runtime.NODEJS_20_X,
-            architecture: lambda.Architecture.ARM_64,
+            architecture: lambda.Architecture.X86_64,
 
             // Lambda 함수의 소스 코드 진입점은 독립 프로젝트를 가리킵니다.
             entry: path.join(projectRoot, 'apps', 'image-processor', 'src', 'index.ts'),

@@ -286,7 +286,7 @@ export class BlogStack extends Stack {
       entry: path.join(projectRoot, 'apps', 'backend', 'src', 'index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64,
       memorySize: 2048,
       timeout: Duration.seconds(60),
       environment: {
@@ -407,7 +407,7 @@ export class BlogStack extends Stack {
       code: lambda.DockerImageCode.fromEcr(ecrRepository, { tagOrDigest: imageTag.valueAsString }),
       memorySize: 2048,
       timeout: Duration.seconds(60),
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64,
       environment: {
         AWS_LAMBDA_EXEC_WRAPPER: '/opt/extensions/lambda-adapter',
         PORT: '3000',
@@ -592,7 +592,7 @@ export class BlogStack extends Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       role: speechSynthesisLambdaRole, // Step 2.4에서 만든 역할 할당
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64,
       memorySize: 256,
       timeout: Duration.seconds(30),
       environment: {
@@ -616,7 +616,7 @@ export class BlogStack extends Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       role: updateSpeechUrlLambdaRole, // Step 2.4에서 만든 역할 할당
-      architecture: lambda.Architecture.ARM_64,
+      architecture: lambda.Architecture.X86_64,
       memorySize: 128,
       timeout: Duration.seconds(15),
       environment: {
