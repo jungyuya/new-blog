@@ -1,28 +1,20 @@
 // 파일 위치: apps/backend/src/search-handler.ts
+// [변경] OpenSearch → DynamoDB Scan 기반 키워드 검색으로 전환
 
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { Client } from '@opensearch-project/opensearch';
-import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws';
+import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { unmarshall } from '@aws-sdk/util-dynamodb';
 
-const opensearchClient = new Client({
-  ...AwsSigv4Signer({
-    region: process.env.AWS_REGION!,
-    service: 'es',
-  }),
-  node: process.env.OPENSEARCH_ENDPOINT!,
-});
+const client = new DynamoDBClient({ region: process.env.AWS_REGION });
+const TABLE_NAME = process.env.TABLE_NAME || process.env.DYNAMODB_TABLE_NAME!;
 
-const INDEX_NAME = 'posts';
-
-// [수정] OpenSearch 문서 타입 정의 확장
-interface PostDocument {
+interface SearchResult {
   postId: string;
-  parentPostId?: string; // 원본 글 ID (청킹된 경우 존재)
   title: string;
   content: string;
   thumbnailUrl?: string;
-  status: 'published' | 'draft';
-  visibility: 'public' | 'private';
+  status: string;
+  visibility: string;
   tags?: string[];
 }
 
@@ -33,57 +25,51 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     return { statusCode: 400, body: JSON.stringify({ message: 'Search query(q) is required.' }) };
   }
 
+  if (query.length < 2) {
+    return { statusCode: 400, body: JSON.stringify({ message: '검색어는 2글자 이상이어야 합니다.' }) };
+  }
+
   try {
-    const response = await opensearchClient.search({
-      index: INDEX_NAME,
-      body: {
-        query: {
-          bool: {
-            must: [
-              {
-                simple_query_string: {
-                  query: query,
-                  fields: ['title^3', 'content', 'tags^2'],
-                  default_operator: 'AND',
-                },
-              },
-            ],
-            filter: [
-              { term: { status: 'published' } },
-              { term: { visibility: 'public' } },
-              { term: { isDeleted: false } }
-            ],
-          },
-        },
-        _source: ['postId', 'parentPostId', 'title', 'content', 'thumbnailUrl', 'status', 'visibility', 'tags'] // 필요한 필드만 가져옴
+    const result = await client.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      // 제목 또는 요약(summary)에 검색어가 포함된 게시물만 필터링
+      FilterExpression:
+        '(contains(#title, :kw) OR contains(#summary, :kw)) AND #status = :pub AND #visibility = :pub_v AND attribute_not_exists(#deleted)',
+      ExpressionAttributeNames: {
+        '#title': 'title',
+        '#summary': 'summary',
+        '#status': 'status',
+        '#visibility': 'visibility',
+        '#deleted': 'isDeleted',
       },
-    });
+      ExpressionAttributeValues: {
+        ':kw': { S: query },
+        ':pub': { S: 'published' },
+        ':pub_v': { S: 'public' },
+      },
+      ProjectionExpression: 'postId, title, summary, thumbnailUrl, #status, #visibility, tags',
+    }));
 
-    const hits = response.body.hits.hits;
-
-    // [핵심 수정] 검색 결과 매핑 및 중복 제거
-    const searchResults = hits.map((hit: any) => {
-      const source = hit._source as PostDocument;
-      return {
-        // parentPostId가 있으면 그것을 진짜 postId로 사용
-        postId: source.parentPostId || source.postId,
-        title: source.title,
-        // content는 너무 길 수 있으므로 앞부분만 자르거나 그대로 사용 (선택 사항)
-        content: source.content.substring(0, 200) + '...',
-        thumbnailUrl: source.thumbnailUrl,
-        status: source.status,
-        visibility: source.visibility,
-        tags: source.tags
-      };
-    });
-
-    // [중복 제거] 같은 글의 여러 청크가 검색될 수 있으므로, postId 기준으로 중복을 제거합니다.
-    const uniqueResults = Array.from(new Map(searchResults.map((item: any) => [item.postId, item])).values());
+    const posts = (result.Items ?? [])
+      .map(item => unmarshall(item))
+      .filter(item => item.postId); // postId 없는 항목 제거 (SK 기반 데이터 혼입 방지)
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Search successful', query, results: uniqueResults }),
+      body: JSON.stringify({
+        message: 'Search successful',
+        query,
+        results: posts.map(p => ({
+          postId: p.postId,
+          title: p.title,
+          content: p.summary ? p.summary.substring(0, 200) : '',
+          thumbnailUrl: p.thumbnailUrl,
+          status: p.status,
+          visibility: p.visibility,
+          tags: p.tags,
+        })),
+      }),
     };
   } catch (error) {
     console.error('Error during search:', error);

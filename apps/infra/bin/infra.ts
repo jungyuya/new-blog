@@ -2,7 +2,6 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { BlogStack } from '../lib/blog-stack';
-import { CiCdStack } from '../lib/cicd-stack';
 // [추가] ImageProcessorStack을 import 합니다.
 import { ImageProcessorStack } from '../lib/image-processor.stack';
 
@@ -18,12 +17,6 @@ const env = {
 const blogStack = new BlogStack(app, 'BlogInfraStack', {
   env: env,
   description: 'Stack for the main blog application infrastructure (Frontend, Backend, DB, etc.)',
-});
-
-// 2. CI/CD 지원 인프라를 정의하는 스택
-new CiCdStack(app, 'CiCdStack', {
-  env: env,
-  description: 'Stack for the CI/CD support infrastructure (EC2 Self-Hosted Runner)',
 });
 
 // 3. [신규 추가] ImageProcessorStack을 생성하고, blogStack의 의존성을 주입합니다.

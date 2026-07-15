@@ -30,7 +30,7 @@ export async function generateMetadata(
       };
     }
 
-    const imageUrl = post.thumbnailUrl || 'https://blog.jungyu.store/default-thumbnail.webp';
+    const imageUrl = post.thumbnailUrl || 'https://blog.jungyu.xyz/default-thumbnail.webp';
 
     return {
       title: post.title,
@@ -38,7 +38,7 @@ export async function generateMetadata(
       openGraph: {
         title: post.title,
         description: post.summary,
-        url: `https://blog.jungyu.store/posts/${postId}`,
+        url: `https://blog.jungyu.xyz/posts/${postId}`,
         siteName: 'JUNGYU\'s Blog',
         images: [
           {

@@ -73,7 +73,7 @@ if (IS_PROD) {
 
 // --- Global Middlewares ---
 app.use('*', cors({
-  origin: ['http://localhost:3000', 'https://blog.jungyu.store'],
+  origin: ['http://localhost:3000', 'https://blog.jungyu.xyz'],
   credentials: true,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],

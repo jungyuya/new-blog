@@ -89,8 +89,8 @@ class InfraStack extends aws_cdk_lib_1.Stack {
             oAuth: {
                 flows: { authorizationCodeGrant: true },
                 scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
-                callbackUrls: ['http://localhost:3000', `https://blog.jungyu.store`],
-                logoutUrls: ['http://localhost:3000', `https://blog.jungyu.store`],
+                callbackUrls: ['http://localhost:3000', 'https://blog.jungyu.xyz'],
+                logoutUrls: ['http://localhost:3000', 'https://blog.jungyu.xyz'],
             },
         });
         // --- 1.2. DynamoDB Table (데이터 저장소) ---
@@ -145,7 +145,7 @@ class InfraStack extends aws_cdk_lib_1.Stack {
         const httpApi = new aws_apigatewayv2_1.HttpApi(this, 'BlogHttpApiGateway', {
             apiName: `BlogHttpApi-${this.stackName}`,
             corsPreflight: {
-                allowOrigins: ['http://localhost:3000', `https://blog.jungyu.store`],
+                allowOrigins: ['http://localhost:3000', 'https://blog.jungyu.xyz'],
                 allowMethods: [aws_apigatewayv2_1.CorsHttpMethod.GET, aws_apigatewayv2_1.CorsHttpMethod.POST, aws_apigatewayv2_1.CorsHttpMethod.PUT, aws_apigatewayv2_1.CorsHttpMethod.DELETE, aws_apigatewayv2_1.CorsHttpMethod.OPTIONS],
                 allowHeaders: ['Content-Type', 'Authorization'],
                 allowCredentials: true,

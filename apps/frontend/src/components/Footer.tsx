@@ -28,7 +28,7 @@ const ArchitectureIcon = () => (
 
 export default function Footer() {
   const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL;
-  const homeUrl = "https://jungyu.store";
+  const homeUrl = "https://jungyu.xyz";
 
   return (
     <footer className="bg-gray-50 border-t border-gray-100 dark:bg-stone-950 dark:border-t dark:border-gray-900">

@@ -6,7 +6,7 @@
 
 프론트엔드와 백엔드를 독립적인 Lambda 함수로 분리하고, 이벤트 기반 아키텍처를 도입하여 확장성과 안정성을 극대화했습니다. 또한, 인프라를 포함한 모든 요소를 코드로 관리하며 DevOps의 철학을 실천했습니다.
 
-- **BLOG URL**: [https://blog.jungyu.store](https://blog.jungyu.store)
+- **BLOG URL**: [https://blog.jungyu.xyz](https://blog.jungyu.xyz)
 - **Repo**: [https://github.com/jungyuya/new-blog](https://github.com/jungyuya/new-blog)
 
 ---

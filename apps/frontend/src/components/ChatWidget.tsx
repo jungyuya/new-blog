@@ -129,7 +129,7 @@ const ChatWidget = () => {
             {/* [Performance] 실시간 탭이 한 번이라도 활성화된 후에만 iframe을 렌더링합니다 */}
             {hasOpenedLiveTab && (
               <iframe
-                src="https://chat.jungyu.store"
+                src="https://chat.jungyu.xyz"
                 title="Realtime Chat Room"
                 className="w-full h-full border-none"
                 allow="clipboard-read; clipboard-write"
