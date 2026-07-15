@@ -265,7 +265,7 @@ jobs:
           set -euo pipefail
           echo "Waiting 15 seconds for CloudFront to propagate..."
           sleep 15
-          URL="https://blog.jungyu.store"
+          URL="https://blog.jungyu.xyz"
           echo "🔬 [Test 1/2] Checking home page status at ${URL}"
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
           if [ "$HTTP_STATUS" -ne 200 ]; then
